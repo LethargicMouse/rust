@@ -1,6 +1,6 @@
 use crate::{
-    link::ast::{Call, Expr},
-    qbe::ir::{Stmt, Tmp},
+    link::ast::{BinOp, Binary, Call, Expr},
+    qbe::ir::{self, Stmt, Tmp},
 };
 
 pub fn gen_stmts(expr: Expr) -> Vec<Stmt> {
@@ -28,6 +28,7 @@ impl GenStmts {
             Expr::Unit => self.unit(),
             Expr::Call(call) => self.call(call),
             Expr::Int(n) => self.int(n),
+            Expr::Binary(binary) => self.binary(binary),
         }
     }
 
@@ -52,5 +53,16 @@ impl GenStmts {
         let res = self.next_tmp;
         self.next_tmp += 1;
         res
+    }
+
+    fn binary(&mut self, binary: Binary<'_>) -> u32 {
+        let left = self.expr(*binary.left);
+        let right = self.expr(*binary.right);
+        let op = match binary.op {
+            BinOp::Plus => ir::BinOp::Add,
+        };
+        let tmp = self.next_tmp();
+        self.result.push(Stmt::Bin(tmp, op, left, right));
+        tmp
     }
 }

@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{Ast, Call, Expr},
+    ast::*,
     lex::lexeme::Lexeme::{self, *},
     parse::{Fail, Parse},
 };
@@ -18,13 +18,39 @@ impl<'a> Parse<'a> {
         Ok(Ast { expr })
     }
 
-    fn expr(&mut self) -> Result<Expr<'a>, Fail> {
+    fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
             Self::unit,
             |p| Ok(Expr::Int(p.int()?)),
             |p| Ok(Expr::Call(p.call()?)),
             |_| Ok(Expr::Unit),
         ])
+    }
+
+    fn expr(&mut self) -> Result<Expr<'a>, Fail> {
+        let mut expr = self.expr_1()?;
+        while let Some((op, right)) = self.maybe(|p| p.bin_postfix()) {
+            expr = Binary {
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            }
+            .into()
+        }
+        Ok(expr)
+    }
+
+    fn bin_postfix(&mut self) -> Result<(BinOp, Expr<'a>), Fail> {
+        let op = self.bin_op()?;
+        let expr = self.expr_1()?;
+        Ok((op, expr))
+    }
+
+    fn bin_op(&mut self) -> Result<BinOp, Fail> {
+        self.either(&[|p| {
+            p.expect(Plus)?;
+            Ok(BinOp::Plus)
+        }])
     }
 
     fn call(&mut self) -> Result<Call<'a>, Fail> {

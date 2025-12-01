@@ -10,7 +10,7 @@ impl<'a> Parse<'a> {
         Err(Fail)
     }
 
-    fn maybe<T>(&mut self, f: Parser<'a, T>) -> Option<T> {
+    pub fn maybe<T>(&mut self, f: Parser<'a, T>) -> Option<T> {
         let before = self.cursor;
         f(self).inspect_err(|_| self.cursor = before).ok()
     }

@@ -46,3 +46,12 @@ fn is_name_first_char(c: u8) -> bool {
 fn is_name_char(c: u8) -> bool {
     is_name_first_char(c) || c.is_ascii_digit()
 }
+
+pub const LIST: LexList = &[
+    (b"fn", Fun),
+    (b"(", ParL),
+    (b")", ParR),
+    (b"{", CurL),
+    (b"}", CurR),
+    (b"+", Plus),
+];

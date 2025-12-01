@@ -6,9 +6,12 @@ use std::fmt::Display;
 
 use crate::{
     die::Mortal,
-    link::lex::lexeme::{
-        LIST, LexList,
-        Lexeme::{self, *},
+    link::lex::{
+        lexeme::{
+            LexList,
+            Lexeme::{self, *},
+        },
+        lexers::LIST,
     },
     location::Location,
     source::Source,
