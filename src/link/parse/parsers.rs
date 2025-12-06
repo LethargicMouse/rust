@@ -13,7 +13,7 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         self.expect(ParR)?;
         self.expect(CurL)?;
-        let expr = self.expr()?;
+        let expr = self.maybe(Self::expr).unwrap_or(Expr::Unit);
         self.expect(CurR)?;
         Ok(Ast { expr })
     }
@@ -21,10 +21,10 @@ impl<'a> Parse<'a> {
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
             Self::unit,
-            |p| Ok(Expr::Int(p.int()?)),
+            |p| Ok(Expr::Int(p.int_()?)),
             |p| Ok(Expr::Call(p.call()?)),
-            |_| Ok(Expr::Unit),
         ])
+        .or_else(|_| self.fail("expression"))
     }
 
     fn expr(&mut self) -> Result<Expr<'a>, Fail> {
@@ -54,7 +54,7 @@ impl<'a> Parse<'a> {
     }
 
     fn call(&mut self) -> Result<Call<'a>, Fail> {
-        let name = self.name()?;
+        let name = self.name_()?;
         self.expect(ParL)?;
         let arg = Box::new(self.expr()?);
         self.expect(ParR)?;
@@ -62,35 +62,39 @@ impl<'a> Parse<'a> {
     }
 
     fn unit(&mut self) -> Result<Expr<'a>, Fail> {
-        self.expect(ParL)?;
+        self.expect_(ParL)?;
         self.expect(ParR)?;
         Ok(Expr::Unit)
     }
 
     fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
+        self.expect_(lexeme).or_else(|_| self.fail(lexeme.show()))
+    }
+
+    fn expect_(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
         if self.tokens[self.cursor].lexeme == lexeme {
             self.cursor += 1;
             Ok(())
         } else {
-            self.fail(lexeme.show())
+            Err(Fail)
         }
     }
 
-    fn name(&mut self) -> Result<&'a str, Fail> {
+    fn name_(&mut self) -> Result<&'a str, Fail> {
         if let Name(n) = self.tokens[self.cursor].lexeme {
             self.cursor += 1;
             Ok(n)
         } else {
-            self.fail("name")
+            Err(Fail)
         }
     }
 
-    fn int(&mut self) -> Result<i32, Fail> {
+    fn int_(&mut self) -> Result<i32, Fail> {
         if let Int(n) = self.tokens[self.cursor].lexeme {
             self.cursor += 1;
             Ok(n)
         } else {
-            self.fail("int")
+            Err(Fail)
         }
     }
 }

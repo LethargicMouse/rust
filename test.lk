@@ -1,3 +1,3 @@
 fn main() {
-    exit(113 + 10)
+    puts(r"blah blah")
   }

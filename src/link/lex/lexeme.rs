@@ -11,6 +11,7 @@ pub enum Lexeme<'a> {
     CurR,
     Int(i32),
     Plus,
+    RawStr(&'a str),
 }
 
 impl Lexeme<'_> {
@@ -25,6 +26,7 @@ impl Lexeme<'_> {
             CurR => "`}`",
             Int(_) => "<int>",
             Plus => "`+`",
+            RawStr(_) => "<raw str>",
         }
     }
 }

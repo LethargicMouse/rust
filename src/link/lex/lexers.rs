@@ -1,6 +1,13 @@
-use crate::link::lex::{
-    Lex, Token,
-    lexeme::{LexList, Lexeme::*},
+use crate::{
+    die,
+    link::lex::{
+        Lex, Token,
+        error::Unclosed,
+        lexeme::{
+            LexList,
+            Lexeme::{self, *},
+        },
+    },
 };
 
 impl<'a> Lex<'a> {
@@ -12,6 +19,28 @@ impl<'a> Lex<'a> {
             let int = str::from_utf8(res).unwrap().parse().unwrap();
             let lexeme = Int(int);
             Some(self.token(lexeme, res.len()))
+        }
+    }
+
+    pub fn raw_string(&mut self) -> Option<Token<'a>> {
+        self.skip();
+        if self.source.code[self.cursor..].starts_with(b"r\"") {
+            self.cursor += 2;
+            let start = self.cursor + 2;
+            while self.cursor != self.source.code.len() && self.source.code[self.cursor] != b'\"' {
+                self.cursor += 1;
+            }
+            if self.cursor == self.source.code.len() {
+                self.cursor = start - 2;
+                die(Unclosed(self.location(1)))
+            }
+            let res = &self.source.code[start..self.cursor];
+            let lexeme = Lexeme::RawStr(str::from_utf8(res).unwrap());
+            self.cursor -= res.len() + 4;
+            let tok = self.token(lexeme, res.len() + 5);
+            Some(tok)
+        } else {
+            None
         }
     }
 

@@ -1,8 +1,8 @@
+mod error;
+use error::Error;
 mod helpers;
 pub mod lexeme;
 mod lexers;
-
-use std::fmt::Display;
 
 use crate::{
     die::Mortal,
@@ -37,6 +37,7 @@ impl<'a> Lex<'a> {
         while self.cursor < self.source.code.len() {
             let tok = self
                 .list(list)
+                .or_else(|| self.raw_string())
                 .or_else(|| self.name())
                 .or_else(|| self.int())
                 .or_die_with(|_| self.error());
@@ -46,14 +47,6 @@ impl<'a> Lex<'a> {
         self.cursor -= 1;
         res.push(self.token(Eof, 1));
         res
-    }
-}
-
-struct Error<'a>(Location<'a>);
-
-impl Display for Error<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "! error lexing {}\n--! unexpected token", self.0)
     }
 }
 
