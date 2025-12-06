@@ -1,5 +1,5 @@
 use crate::{
-    link::ast::{BinOp, Binary, Call, Expr},
+    link::ast::{BinOp, Binary, Call, Expr, Literal},
     qbe::ir::{self, Stmt, Tmp},
 };
 
@@ -25,11 +25,17 @@ impl GenStmts {
 
     fn expr(&mut self, expr: Expr) -> Tmp {
         match expr {
-            Expr::Unit => self.unit(),
+            Expr::Literal(l) => self.literal(l),
             Expr::Call(call) => self.call(call),
-            Expr::Int(n) => self.int(n),
             Expr::Binary(binary) => self.binary(binary),
-            Expr::RawStr(s) => self.raw_str(s),
+        }
+    }
+
+    fn literal(&mut self, literal: Literal) -> Tmp {
+        match literal {
+            Literal::Unit => self.unit(),
+            Literal::Int(n) => self.int(n),
+            Literal::RawStr(s) => self.raw_str(s),
         }
     }
 

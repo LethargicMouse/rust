@@ -16,7 +16,7 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         self.expect(ParR)?;
         self.expect(CurL)?;
-        let expr = self.maybe(Self::expr).unwrap_or(Expr::Unit);
+        let expr = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
         self.expect(CurR)?;
         Ok(Ast { expr })
     }

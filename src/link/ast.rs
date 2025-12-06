@@ -2,12 +2,22 @@ pub struct Ast<'a> {
     pub expr: Expr<'a>,
 }
 
-pub enum Expr<'a> {
+pub enum Literal<'a> {
     Unit,
-    Call(Call<'a>),
     Int(i32),
-    Binary(Binary<'a>),
     RawStr(&'a str),
+}
+
+pub enum Expr<'a> {
+    Call(Call<'a>),
+    Binary(Binary<'a>),
+    Literal(Literal<'a>),
+}
+
+impl<'a> From<Literal<'a>> for Expr<'a> {
+    fn from(v: Literal<'a>) -> Self {
+        Self::Literal(v)
+    }
 }
 
 impl<'a> From<Binary<'a>> for Expr<'a> {

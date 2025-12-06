@@ -1,14 +1,22 @@
 use crate::link::{
-    ast::Expr,
+    ast::Literal,
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
 
 impl<'a> Parse<'a> {
-    pub fn unit_(&mut self) -> Result<Expr<'a>, Fail> {
+    pub fn literal_(&mut self) -> Result<Literal<'a>, Fail> {
+        self.either(&[
+            Self::unit_,
+            |p| Ok(Literal::Int(p.int_()?)),
+            |p| Ok(Literal::RawStr(p.raw_str_()?)),
+        ])
+    }
+
+    pub fn unit_(&mut self) -> Result<Literal<'a>, Fail> {
         self.expect_(ParL)?;
         self.expect(ParR)?;
-        Ok(Expr::Unit)
+        Ok(Literal::Unit)
     }
 
     pub fn name_(&mut self) -> Result<&'a str, Fail> {
