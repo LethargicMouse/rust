@@ -7,6 +7,7 @@ pub enum Expr<'a> {
     Call(Call<'a>),
     Int(i32),
     Binary(Binary<'a>),
+    RawStr(&'a str),
 }
 
 impl<'a> From<Binary<'a>> for Expr<'a> {

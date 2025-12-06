@@ -29,6 +29,7 @@ impl GenStmts {
             Expr::Call(call) => self.call(call),
             Expr::Int(n) => self.int(n),
             Expr::Binary(binary) => self.binary(binary),
+            Expr::RawStr(s) => self.raw_str(s),
         }
     }
 
@@ -64,5 +65,9 @@ impl GenStmts {
         let tmp = self.next_tmp();
         self.result.push(Stmt::Bin(tmp, op, left, right));
         tmp
+    }
+
+    fn raw_str(&mut self, _raw_str: &'_ str) -> u32 {
+        todo!()
     }
 }

@@ -2,15 +2,13 @@ mod error;
 use error::Error;
 mod helpers;
 pub mod lexeme;
+pub use lexeme::Lexeme;
 mod lexers;
 
 use crate::{
     die::Mortal,
     link::lex::{
-        lexeme::{
-            LexList,
-            Lexeme::{self, *},
-        },
+        lexeme::{LexList, Lexeme::*},
         lexers::LIST,
     },
     location::Location,
