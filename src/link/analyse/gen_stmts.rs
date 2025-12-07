@@ -1,26 +1,27 @@
 use crate::{
     link::ast::{BinOp, Binary, Call, Expr, Literal},
-    qbe::ir::{self, Stmt, Tmp},
+    qbe::ir::{self, Stmt, Tmp, Value},
 };
 
-pub fn gen_stmts(expr: Expr) -> Vec<Stmt> {
-    let mut gen_stmts = GenStmts::new();
-    let tmp = gen_stmts.expr(expr);
-    gen_stmts.result.push(Stmt::Ret(tmp));
-    gen_stmts.result
-}
-
-struct GenStmts {
+pub struct GenStmts<'a> {
+    consts: &'a mut Vec<String>,
     result: Vec<Stmt>,
     next_tmp: Tmp,
 }
 
-impl GenStmts {
-    fn new() -> Self {
+impl<'a> GenStmts<'a> {
+    pub fn new(consts: &'a mut Vec<String>) -> Self {
         Self {
+            consts,
             result: Vec::new(),
             next_tmp: 1,
         }
+    }
+
+    pub fn run(mut self, expr: Expr) -> Vec<Stmt> {
+        let tmp = self.expr(expr);
+        self.result.push(Stmt::Ret(tmp));
+        self.result
     }
 
     fn expr(&mut self, expr: Expr) -> Tmp {
@@ -52,7 +53,7 @@ impl GenStmts {
 
     fn int(&mut self, n: i32) -> Tmp {
         let tmp = self.next_tmp();
-        self.result.push(Stmt::Copy(tmp, n));
+        self.result.push(Stmt::Copy(tmp, Value::Int(n)));
         tmp
     }
 
@@ -62,7 +63,7 @@ impl GenStmts {
         res
     }
 
-    fn binary(&mut self, binary: Binary<'_>) -> u32 {
+    fn binary(&mut self, binary: Binary) -> Tmp {
         let left = self.expr(*binary.left);
         let right = self.expr(*binary.right);
         let op = match binary.op {
@@ -73,7 +74,11 @@ impl GenStmts {
         tmp
     }
 
-    fn raw_str(&mut self, _raw_str: &'_ str) -> u32 {
-        todo!()
+    fn raw_str(&mut self, raw_str: &str) -> Tmp {
+        self.consts.push(raw_str.into());
+        let tmp = self.next_tmp();
+        self.result
+            .push(Stmt::Copy(tmp, Value::Const(self.consts.len() as u16)));
+        tmp
     }
 }

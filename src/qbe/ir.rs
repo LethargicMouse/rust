@@ -1,11 +1,15 @@
 use std::fmt::Display;
 
 pub struct IR {
+    pub consts: Vec<String>,
     pub stmts: Vec<Stmt>,
 }
 
 impl Display for IR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, c) in self.consts.iter().enumerate() {
+            writeln!(f, "data $s{} = {{ b \"{c}\" 0 }}", i + 1)?;
+        }
         write!(f, "export function w $main() {{\n@start")?;
         for stmt in &self.stmts {
             write!(f, "\n  {stmt}")?;
@@ -18,7 +22,7 @@ pub type Tmp = u32;
 
 pub enum Stmt {
     Ret(Tmp),
-    Copy(Tmp, i32),
+    Copy(Tmp, Value),
     Call(Tmp, String, Tmp),
     Bin(Tmp, BinOp, Tmp, Tmp),
 }
@@ -42,6 +46,20 @@ impl Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BinOp::Add => write!(f, "add"),
+        }
+    }
+}
+
+pub enum Value {
+    Int(i32),
+    Const(u16),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(n) => write!(f, "{n}"),
+            Value::Const(n) => write!(f, "$s{n}"),
         }
     }
 }
