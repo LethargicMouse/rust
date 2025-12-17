@@ -55,6 +55,12 @@ pub enum Value {
     Const(u16),
 }
 
+impl From<i32> for Value {
+    fn from(v: i32) -> Self {
+        Self::Int(v)
+    }
+}
+
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

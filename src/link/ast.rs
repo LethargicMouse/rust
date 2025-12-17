@@ -1,5 +1,6 @@
 pub struct Ast<'a> {
-    pub expr: Expr<'a>,
+    pub stmts: Vec<Expr<'a>>,
+    pub ret: Expr<'a>,
 }
 
 pub enum Literal<'a> {

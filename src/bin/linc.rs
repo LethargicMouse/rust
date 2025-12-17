@@ -6,7 +6,7 @@ use std::{
 use russ::{
     die::{Mortal, die},
     file::{self},
-    link::{analyse, lex, parse},
+    link::{analyse, generate, lex, parse},
     process::{self, call},
     qbe::ir::IR,
     source::{Source, read_source},
@@ -100,7 +100,8 @@ fn run_out() {
 fn process(source: Source) -> IR {
     let tokens = lex(&source);
     let ast = parse(tokens);
-    analyse(ast)
+    let asg = analyse(ast);
+    generate(&asg)
 }
 
 fn dump(ir: IR) {

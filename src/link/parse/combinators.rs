@@ -14,4 +14,12 @@ impl<'a> Parse<'a> {
         let before = self.cursor;
         f(self).inspect_err(|_| self.cursor = before).ok()
     }
+
+    pub fn many<T>(&mut self, f: Parser<'a, T>) -> Vec<T> {
+        let mut res = Vec::new();
+        while let Some(t) = self.maybe(f) {
+            res.push(t)
+        }
+        res
+    }
 }

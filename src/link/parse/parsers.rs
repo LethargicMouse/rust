@@ -16,9 +16,14 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         self.expect(ParR)?;
         self.expect(CurL)?;
-        let expr = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
+        let stmts = self.many(|p| {
+            let expr = p.expr()?;
+            p.expect(Semicolon)?;
+            Ok(expr)
+        });
+        let ret = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
         self.expect(CurR)?;
-        Ok(Ast { expr })
+        Ok(Ast { stmts, ret })
     }
 
     fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {

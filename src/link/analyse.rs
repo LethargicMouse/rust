@@ -1,34 +1,57 @@
-mod gen_stmts;
-
-use crate::{
-    link::{
-        analyse::gen_stmts::GenStmts,
-        ast::{Ast, Expr},
-    },
-    qbe::ir::{IR, Stmt},
+use crate::link::{
+    Asg, asg,
+    ast::{Ast, BinOp, Binary, Call, Expr, Literal},
 };
 
-pub fn analyse(ast: Ast) -> IR {
+pub fn analyse(ast: Ast) -> Asg {
     Analyse::new().run(ast)
 }
 
-struct Analyse {
-    consts: Vec<String>,
-}
+struct Analyse {}
 
-impl Analyse {
+impl<'a> Analyse {
     fn new() -> Self {
-        let consts = Vec::new();
-        Self { consts }
+        Self {}
     }
 
-    fn run(mut self, ast: Ast) -> IR {
-        let stmts = self.gen_stmts(ast.expr);
-        let consts = self.consts;
-        IR { stmts, consts }
+    fn run(self, ast: Ast) -> Asg {
+        let stmts = ast.stmts.into_iter().map(|e| self.expr(e)).collect();
+        let ret = self.expr(ast.ret);
+        Asg { stmts, ret }
     }
 
-    fn gen_stmts(&mut self, expr: Expr) -> Vec<Stmt> {
-        GenStmts::new(&mut self.consts).run(expr)
+    fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {
+        match expr {
+            Expr::Call(call) => asg::Expr::Call(self.call(call)),
+            Expr::Binary(binary) => asg::Expr::Binary(self.binary(binary)),
+            Expr::Literal(literal) => asg::Expr::Literal(self.literal(literal)),
+        }
+    }
+
+    fn call(&self, call: Call<'a>) -> asg::Call<'a> {
+        let arg = Box::new(self.expr(*call.arg));
+        let name = call.name;
+        asg::Call { arg, name }
+    }
+
+    fn binary(&self, binary: Binary<'a>) -> asg::Binary<'a> {
+        let left = Box::new(self.expr(*binary.left));
+        let right = Box::new(self.expr(*binary.right));
+        let op = self.bin_op(binary.op);
+        asg::Binary { left, op, right }
+    }
+
+    fn bin_op(&self, bin_op: BinOp) -> asg::BinOp {
+        match bin_op {
+            BinOp::Plus => asg::BinOp::Add,
+        }
+    }
+
+    fn literal(&self, literal: Literal<'a>) -> asg::Literal<'a> {
+        match literal {
+            Literal::Unit => asg::Literal::Int(0),
+            Literal::Int(i) => asg::Literal::Int(i),
+            Literal::RawStr(s) => asg::Literal::Str(s),
+        }
     }
 }
