@@ -1,6 +1,6 @@
 use crate::link::{
     Asg, asg,
-    ast::{Ast, BinOp, Binary, Call, Expr, Literal},
+    ast::{Ast, BinOp, Binary, Call, Expr, Fun, Literal},
 };
 
 pub fn analyse(ast: Ast) -> Asg {
@@ -15,9 +15,18 @@ impl<'a> Analyse {
     }
 
     fn run(self, ast: Ast) -> Asg {
-        let stmts = ast.stmts.into_iter().map(|e| self.expr(e)).collect();
-        let ret = self.expr(ast.ret);
-        Asg { stmts, ret }
+        let funs = ast
+            .funs
+            .into_iter()
+            .map(|(n, f)| (n, self.fun(f)))
+            .collect();
+        Asg { funs }
+    }
+
+    fn fun(&self, fun: Fun<'a>) -> asg::Fun<'a> {
+        let stmts = fun.stmts.into_iter().map(|e| self.expr(e)).collect();
+        let ret = self.expr(fun.ret);
+        asg::Fun { stmts, ret }
     }
 
     fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {

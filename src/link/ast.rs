@@ -1,4 +1,8 @@
 pub struct Ast<'a> {
+    pub funs: Vec<(&'a str, Fun<'a>)>,
+}
+
+pub struct Fun<'a> {
     pub stmts: Vec<Expr<'a>>,
     pub ret: Expr<'a>,
 }

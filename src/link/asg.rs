@@ -1,4 +1,10 @@
+use std::collections::HashMap;
+
 pub struct Asg<'a> {
+    pub funs: HashMap<&'a str, Fun<'a>>,
+}
+
+pub struct Fun<'a> {
     pub stmts: Vec<Expr<'a>>,
     pub ret: Expr<'a>,
 }

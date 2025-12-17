@@ -2,15 +2,29 @@ use std::fmt::Display;
 
 pub struct IR {
     pub consts: Vec<String>,
-    pub stmts: Vec<Stmt>,
+    pub funs: Vec<Fun>,
 }
 
 impl Display for IR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, c) in self.consts.iter().enumerate() {
-            writeln!(f, "data $s{} = {{ b \"{c}\" 0 }}", i + 1)?;
+            writeln!(f, "\ndata $s{} = {{ b \"{c}\" 0 }}", i + 1)?;
         }
-        write!(f, "export function w $main() {{\n@start")?;
+        for fun in &self.funs {
+            write!(f, "{fun}")?;
+        }
+        Ok(())
+    }
+}
+
+pub struct Fun {
+    pub name: String,
+    pub stmts: Vec<Stmt>,
+}
+
+impl Display for Fun {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "export function w ${}() {{\n@start", self.name)?;
         for stmt in &self.stmts {
             write!(f, "\n  {stmt}")?;
         }

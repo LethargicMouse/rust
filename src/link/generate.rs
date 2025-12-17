@@ -9,30 +9,50 @@ pub fn generate(asg: &Asg) -> IR {
 
 struct Generate<'a> {
     consts: Vec<String>,
-    stmts: Vec<Stmt>,
     asg: &'a Asg<'a>,
-    tmp: Tmp,
 }
 
 impl<'a> Generate<'a> {
     fn new(asg: &'a Asg<'a>) -> Self {
-        Self {
-            consts: Vec::new(),
-            stmts: Vec::new(),
-            tmp: 0,
-            asg,
-        }
+        let consts = Vec::new();
+        Self { consts, asg }
     }
 
     fn run(mut self) -> IR {
-        for stmt in &self.asg.stmts {
+        let funs = self.asg.funs.iter().map(|(n, f)| self.fun(n, f)).collect();
+        let consts = self.consts;
+        IR { consts, funs }
+    }
+
+    fn fun(&mut self, name: &str, fun: &Fun) -> ir::Fun {
+        let stmts = GenStmts::new(self).run(&fun.stmts, &fun.ret);
+        let name = name.into();
+        ir::Fun { name, stmts }
+    }
+}
+
+struct GenStmts<'a, 'b> {
+    sup: &'b mut Generate<'a>,
+    stmts: Vec<Stmt>,
+    tmp: Tmp,
+}
+
+impl<'a, 'b> GenStmts<'a, 'b> {
+    fn new(sup: &'b mut Generate<'a>) -> Self {
+        Self {
+            stmts: Vec::new(),
+            tmp: 0,
+            sup,
+        }
+    }
+
+    fn run(mut self, stmts: &Vec<Expr>, ret: &Expr) -> Vec<Stmt> {
+        for stmt in stmts {
             self.expr(stmt);
         }
-        let tmp = self.expr(&self.asg.ret);
+        let tmp = self.expr(ret);
         self.stmts.push(Stmt::Ret(tmp));
-        let consts = self.consts;
-        let stmts = self.stmts;
-        IR { consts, stmts }
+        self.stmts
     }
 
     fn expr(&mut self, expr: &Expr) -> Tmp {
@@ -91,7 +111,7 @@ impl<'a> Generate<'a> {
     }
 
     fn new_const(&mut self, s: &str) -> u16 {
-        self.consts.push(s.into());
-        self.consts.len() as u16
+        self.sup.consts.push(s.into());
+        self.sup.consts.len() as u16
     }
 }
