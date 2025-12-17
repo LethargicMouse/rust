@@ -19,12 +19,17 @@ impl Display for IR {
 
 pub struct Fun {
     pub name: String,
+    pub params: Vec<Tmp>,
     pub stmts: Vec<Stmt>,
 }
 
 impl Display for Fun {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "export function w ${}() {{\n@start", self.name)?;
+        write!(f, "export function w ${}(", self.name)?;
+        for param in &self.params {
+            write!(f, "w %t{param},")?;
+        }
+        write!(f, ") {{\n@start")?;
         for stmt in &self.stmts {
             write!(f, "\n  {stmt}")?;
         }

@@ -13,6 +13,7 @@ pub enum Lexeme<'a> {
     Plus,
     RawStr(&'a str),
     Semicolon,
+    Comma,
 }
 
 impl Lexeme<'_> {
@@ -29,6 +30,7 @@ impl Lexeme<'_> {
             Plus => "`+`",
             RawStr(_) => "<raw str>",
             Semicolon => ";",
+            Comma => ",",
         }
     }
 }

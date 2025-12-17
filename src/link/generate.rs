@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     link::asg::*,
     qbe::ir::{self, IR, Stmt, Tmp, Value},
@@ -24,35 +26,64 @@ impl<'a> Generate<'a> {
         IR { consts, funs }
     }
 
-    fn fun(&mut self, name: &str, fun: &Fun) -> ir::Fun {
-        let stmts = GenStmts::new(self).run(&fun.stmts, &fun.ret);
-        let name = name.into();
-        ir::Fun { name, stmts }
+    fn fun(&mut self, name: &str, fun: &Fun<'a>) -> ir::Fun {
+        GenFun::new(self).run(name, fun)
     }
 }
 
-struct GenStmts<'a, 'b> {
+struct Context<'a, T> {
+    sup: HashMap<&'a str, T>,
+}
+
+impl<'a, T> Context<'a, T> {
+    fn new() -> Self {
+        let sup = HashMap::new();
+        Self { sup }
+    }
+
+    fn get(&self, key: &str) -> Option<&T> {
+        self.sup.get(key)
+    }
+
+    fn insert(&mut self, key: &'a str, value: T) {
+        self.sup.insert(key, value);
+    }
+}
+
+struct GenFun<'a, 'b> {
     sup: &'b mut Generate<'a>,
     stmts: Vec<Stmt>,
     tmp: Tmp,
+    context: Context<'a, Tmp>,
 }
 
-impl<'a, 'b> GenStmts<'a, 'b> {
+impl<'a, 'b> GenFun<'a, 'b> {
     fn new(sup: &'b mut Generate<'a>) -> Self {
         Self {
             stmts: Vec::new(),
+            context: Context::new(),
             tmp: 0,
             sup,
         }
     }
 
-    fn run(mut self, stmts: &Vec<Expr>, ret: &Expr) -> Vec<Stmt> {
-        for stmt in stmts {
+    fn run(mut self, name: &str, fun: &Fun<'a>) -> ir::Fun {
+        let name = name.into();
+        let params = fun.params.iter().map(|_| self.next_tmp()).collect();
+        for (param, &tmp) in fun.params.iter().zip(&params) {
+            self.context.insert(param, tmp);
+        }
+        for stmt in &fun.stmts {
             self.expr(stmt);
         }
-        let tmp = self.expr(ret);
+        let tmp = self.expr(&fun.ret);
         self.stmts.push(Stmt::Ret(tmp));
-        self.stmts
+        let stmts = self.stmts;
+        ir::Fun {
+            name,
+            params,
+            stmts,
+        }
     }
 
     fn expr(&mut self, expr: &Expr) -> Tmp {
@@ -60,7 +91,12 @@ impl<'a, 'b> GenStmts<'a, 'b> {
             Expr::Call(call) => self.call(call),
             Expr::Binary(binary) => self.binary(binary),
             Expr::Literal(literal) => self.literal(literal),
+            Expr::Var(name) => self.var(name),
         }
+    }
+
+    fn var(&self, name: &str) -> Tmp {
+        *self.context.get(name).unwrap()
     }
 
     fn call(&mut self, call: &Call) -> Tmp {

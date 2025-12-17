@@ -6,8 +6,12 @@ use crate::link::{
 
 impl<'a> Parse<'a> {
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
-        self.either(&[|p| Ok(p.literal_()?.into()), |p| Ok(Expr::Call(p.call_()?))])
-            .or_else(|_| self.fail("expression"))
+        self.either(&[
+            |p| Ok(p.literal_()?.into()),
+            |p| Ok(Expr::Call(p.call_()?)),
+            |p| Ok(Expr::Var(p.name_()?)),
+        ])
+        .or_else(|_| self.fail("expression"))
     }
 
     pub fn expr(&mut self) -> Result<Expr<'a>, Fail> {

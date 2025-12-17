@@ -24,9 +24,10 @@ impl<'a> Analyse {
     }
 
     fn fun(&self, fun: Fun<'a>) -> asg::Fun<'a> {
+        let params = fun.params;
         let stmts = fun.stmts.into_iter().map(|e| self.expr(e)).collect();
         let ret = self.expr(fun.ret);
-        asg::Fun { stmts, ret }
+        asg::Fun { params, stmts, ret }
     }
 
     fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {
@@ -34,6 +35,7 @@ impl<'a> Analyse {
             Expr::Call(call) => asg::Expr::Call(self.call(call)),
             Expr::Binary(binary) => asg::Expr::Binary(self.binary(binary)),
             Expr::Literal(literal) => asg::Expr::Literal(self.literal(literal)),
+            Expr::Var(name) => asg::Expr::Var(name),
         }
     }
 

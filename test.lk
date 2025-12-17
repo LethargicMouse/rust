@@ -1,7 +1,8 @@
 fn main() {
-    f(r"hello")
+    f(r"hello", r"ma boi");
   }
 
-fn f(s) {
-    puts(s)
+fn f(a, b) {
+    puts(a);
+    puts(b);
   }

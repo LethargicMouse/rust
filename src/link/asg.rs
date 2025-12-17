@@ -5,6 +5,7 @@ pub struct Asg<'a> {
 }
 
 pub struct Fun<'a> {
+    pub params: Vec<&'a str>,
     pub stmts: Vec<Expr<'a>>,
     pub ret: Expr<'a>,
 }
@@ -13,6 +14,7 @@ pub enum Expr<'a> {
     Call(Call<'a>),
     Binary(Binary<'a>),
     Literal(Literal<'a>),
+    Var(&'a str),
 }
 
 pub struct Binary<'a> {
