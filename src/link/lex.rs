@@ -1,12 +1,10 @@
 mod error;
-use error::Error;
 mod helpers;
 pub mod lexeme;
 pub use lexeme::Lexeme;
 mod lexers;
 
 use crate::{
-    die::Mortal,
     link::lex::{
         lexeme::{LexList, Lexeme::*},
         lexers::LIST,
@@ -38,7 +36,7 @@ impl<'a> Lex<'a> {
                 .or_else(|| self.raw_str())
                 .or_else(|| self.name())
                 .or_else(|| self.int())
-                .or_die_with(|_| self.error());
+                .unwrap_or_else(|| self.unknown());
             res.push(tok);
             self.skip();
         }

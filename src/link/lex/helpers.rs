@@ -1,13 +1,9 @@
 use crate::{
-    link::lex::{Error, Lex, Token, lexeme::Lexeme},
+    link::lex::{Lex, Token, lexeme::Lexeme},
     location::Location,
 };
 
 impl<'a> Lex<'a> {
-    pub fn error(&'_ self) -> Error<'_> {
-        Error(self.location(1))
-    }
-
     pub fn location(&self, len: usize) -> Location<'a> {
         let source = self.source;
         let start = self.source.poses[self.cursor];

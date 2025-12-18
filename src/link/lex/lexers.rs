@@ -66,6 +66,10 @@ impl<'a> Lex<'a> {
         }
         None
     }
+
+    pub fn unknown(&mut self) -> Token<'a> {
+        self.token(Unknown, 1)
+    }
 }
 
 fn is_name_first_char(c: u8) -> bool {
@@ -87,4 +91,5 @@ pub const LIST: LexList = &[
     (b",", Comma),
     (b"[", BraL),
     (b"]", BraR),
+    (b"if", If),
 ];

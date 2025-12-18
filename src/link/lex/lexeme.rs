@@ -16,6 +16,8 @@ pub enum Lexeme<'a> {
     Comma,
     BraL,
     BraR,
+    If,
+    Unknown,
 }
 
 impl Lexeme<'_> {
@@ -31,10 +33,12 @@ impl Lexeme<'_> {
             Int(_) => "<int>",
             Plus => "`+`",
             RawStr(_) => "<raw str>",
-            Semicolon => ";",
-            Comma => ",",
-            BraL => "[",
-            BraR => "]",
+            Semicolon => "`;`",
+            Comma => "`,`",
+            BraL => "`[`",
+            BraR => "`]`",
+            Unknown => "<?>",
+            If => "`if`",
         }
     }
 }
