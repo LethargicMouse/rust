@@ -1,17 +1,54 @@
 use crate::link::{
-    ast::{BinOp, Binary, Call, Expr},
+    ast::{BinOp, Binary, Call, Expr, Get, If, Postfix},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
 
 impl<'a> Parse<'a> {
-    fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
+    fn expr_2(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
             |p| Ok(p.literal_()?.into()),
+            |p| Ok(Expr::If(p.if_expr()?)),
             |p| Ok(Expr::Call(p.call_()?)),
             |p| Ok(Expr::Var(p.name_()?)),
         ])
         .or_else(|_| self.fail("expression"))
+    }
+
+    fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
+        let mut res = self.expr_2()?;
+        while let Some(postfix) = self.maybe(Self::postfix) {
+            match postfix {
+                Postfix::Get(index) => {
+                    res = Get {
+                        from: Box::new(res),
+                        index: Box::new(index),
+                    }
+                    .into()
+                }
+            }
+        }
+        Ok(res)
+    }
+
+    fn postfix(&mut self) -> Result<Postfix<'a>, Fail> {
+        self.either(&[|p| {
+            p.expect_(BraL)?;
+            let expr = p.expr()?;
+            p.expect_(BraR)?;
+            Ok(Postfix::Get(expr))
+        }])
+    }
+
+    fn if_expr(&mut self) -> Result<If<'a>, Fail> {
+        self.expect_(If)?;
+        let condition = Box::new(self.expr()?);
+        self.expect(Do)?;
+        let then_expr = Box::new(self.expr()?);
+        Ok(If {
+            condition,
+            then_expr,
+        })
     }
 
     pub fn expr(&mut self) -> Result<Expr<'a>, Fail> {

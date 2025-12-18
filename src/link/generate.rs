@@ -54,6 +54,7 @@ struct GenFun<'a, 'b> {
     sup: &'b mut Generate<'a>,
     stmts: Vec<Stmt>,
     tmp: Tmp,
+    label: u16,
     context: Context<'a, Tmp>,
 }
 
@@ -64,12 +65,13 @@ impl<'a, 'b> GenFun<'a, 'b> {
             context: Context::new(),
             tmp: 0,
             sup,
+            label: 0,
         }
     }
 
     fn run(mut self, name: &str, fun: &Fun<'a>) -> ir::Fun {
         let name = name.into();
-        let params = fun.params.iter().map(|_| self.next_tmp()).collect();
+        let params = fun.params.iter().map(|_| self.new_tmp()).collect();
         for (param, &tmp) in fun.params.iter().zip(&params) {
             self.context.insert(param, tmp);
         }
@@ -92,7 +94,33 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Binary(binary) => self.binary(binary),
             Expr::Literal(literal) => self.literal(literal),
             Expr::Var(name) => self.var(name),
+            Expr::If(if_expr) => self.if_expr(if_expr),
+            Expr::Deref(expr) => self.deref(expr),
         }
+    }
+
+    fn deref(&mut self, expr: &Expr) -> Tmp {
+        let expr = self.expr(expr);
+        let tmp = self.new_tmp();
+        self.stmts.push(Stmt::Load(tmp, expr));
+        tmp
+    }
+
+    fn if_expr(&mut self, if_expr: &If) -> Tmp {
+        let condition = self.expr(&if_expr.condition);
+        let then_label = self.new_label();
+        let else_label = self.new_label();
+        self.stmts
+            .push(Stmt::Jnz(condition, then_label, else_label));
+        self.stmts.push(Stmt::Label(then_label));
+        let _ = self.expr(&if_expr.then_expr);
+        self.stmts.push(Stmt::Label(else_label));
+        self.int(0)
+    }
+
+    fn new_label(&mut self) -> u16 {
+        self.label += 1;
+        self.label
     }
 
     fn var(&self, name: &str) -> Tmp {
@@ -102,12 +130,12 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn call(&mut self, call: &Call) -> Tmp {
         let name = call.name.into();
         let args = call.args.iter().map(|e| self.expr(e)).collect();
-        let tmp = self.next_tmp();
+        let tmp = self.new_tmp();
         self.stmts.push(ir::Call { tmp, name, args }.into());
         tmp
     }
 
-    fn next_tmp(&mut self) -> Tmp {
+    fn new_tmp(&mut self) -> Tmp {
         self.tmp += 1;
         self.tmp
     }
@@ -116,7 +144,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let left = self.expr(&binary.left);
         let right = self.expr(&binary.right);
         let op = self.bin_op(&binary.op);
-        let tmp = self.next_tmp();
+        let tmp = self.new_tmp();
         self.stmts.push(Stmt::Bin(tmp, op, left, right));
         tmp
     }
@@ -124,6 +152,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn bin_op(&self, bin_op: &BinOp) -> ir::BinOp {
         match bin_op {
             BinOp::Add => ir::BinOp::Add,
+            BinOp::Multiply => ir::BinOp::Multiply,
         }
     }
 
@@ -135,14 +164,14 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn int(&mut self, n: i32) -> Tmp {
-        let tmp = self.next_tmp();
+        let tmp = self.new_tmp();
         self.stmts.push(Stmt::Copy(tmp, Type::Word, n.into()));
         tmp
     }
 
     fn str(&mut self, s: &str) -> Tmp {
         let c = self.new_const(s);
-        let tmp = self.next_tmp();
+        let tmp = self.new_tmp();
         self.stmts
             .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
         tmp

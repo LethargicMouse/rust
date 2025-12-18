@@ -1,6 +1,6 @@
 use crate::link::{
     Asg, asg,
-    ast::{Ast, BinOp, Binary, Call, Expr, Fun, Literal},
+    ast::{Ast, BinOp, Binary, Call, Expr, Fun, Get, If, Literal},
 };
 
 pub fn analyse(ast: Ast) -> Asg {
@@ -32,10 +32,41 @@ impl<'a> Analyse {
 
     fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {
         match expr {
-            Expr::Call(call) => asg::Expr::Call(self.call(call)),
-            Expr::Binary(binary) => asg::Expr::Binary(self.binary(binary)),
-            Expr::Literal(literal) => asg::Expr::Literal(self.literal(literal)),
+            Expr::Call(call) => self.call(call).into(),
+            Expr::Binary(binary) => self.binary(binary).into(),
+            Expr::Literal(literal) => self.literal(literal).into(),
             Expr::Var(name) => asg::Expr::Var(name),
+            Expr::If(if_expr) => self.if_expr(if_expr).into(),
+            Expr::Get(get) => self.get(get),
+        }
+    }
+
+    fn get(&self, get: Get<'a>) -> asg::Expr<'a> {
+        let from = self.expr(*get.from);
+        let index = self.expr(*get.index);
+        asg::Expr::Deref(Box::new(
+            asg::Binary {
+                left: Box::new(from),
+                right: Box::new(
+                    asg::Binary {
+                        left: Box::new(index),
+                        right: Box::new(asg::Literal::Int(8).into()),
+                        op: asg::BinOp::Multiply,
+                    }
+                    .into(),
+                ),
+                op: asg::BinOp::Add,
+            }
+            .into(),
+        ))
+    }
+
+    fn if_expr(&self, if_expr: If<'a>) -> asg::If<'a> {
+        let condition = Box::new(self.expr(*if_expr.condition));
+        let then_expr = Box::new(self.expr(*if_expr.then_expr));
+        asg::If {
+            condition,
+            then_expr,
         }
     }
 

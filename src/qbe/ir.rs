@@ -57,10 +57,13 @@ impl Display for Type {
 }
 
 pub enum Stmt {
+    Load(Tmp, Tmp),
     Ret(Tmp),
     Copy(Tmp, Type, Value),
     Call(Call),
     Bin(Tmp, BinOp, Tmp, Tmp),
+    Jnz(Tmp, u16, u16),
+    Label(u16),
 }
 
 impl From<Call> for Stmt {
@@ -76,6 +79,9 @@ impl Display for Stmt {
             Stmt::Copy(tmp, typ, val) => write!(f, "%t{tmp} ={typ} copy {val}"),
             Stmt::Call(c) => write!(f, "{c}"),
             Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =w {bin_op} %t{l}, %t{r}"),
+            Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
+            Stmt::Label(l) => write!(f, "@l{l}"),
+            Stmt::Load(t, l) => write!(f, "%t{t} =l loadl %t{l}"),
         }
     }
 }
@@ -98,12 +104,14 @@ impl Display for Call {
 
 pub enum BinOp {
     Add,
+    Multiply,
 }
 
 impl Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BinOp::Add => write!(f, "add"),
+            BinOp::Multiply => write!(f, "mul"),
         }
     }
 }
