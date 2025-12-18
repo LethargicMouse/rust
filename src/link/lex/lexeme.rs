@@ -18,6 +18,7 @@ pub enum Lexeme<'a> {
     BraR,
     If,
     Do,
+    Equal,
     Unknown,
 }
 
@@ -41,6 +42,7 @@ impl Lexeme<'_> {
             Unknown => "<?>",
             If => "`if`",
             Do => "`do`",
+            Equal => "`==`",
         }
     }
 }
