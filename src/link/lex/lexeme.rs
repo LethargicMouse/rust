@@ -9,7 +9,7 @@ pub enum Lexeme<'a> {
     ParR,
     CurL,
     CurR,
-    Int(i32),
+    Int(i64),
     Plus,
     RawStr(&'a str),
     Semicolon,

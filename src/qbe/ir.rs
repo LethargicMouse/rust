@@ -78,7 +78,7 @@ impl Display for Stmt {
             Stmt::Ret(t) => write!(f, "ret %t{t}"),
             Stmt::Copy(tmp, typ, val) => write!(f, "%t{tmp} ={typ} copy {val}"),
             Stmt::Call(c) => write!(f, "{c}"),
-            Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =w {bin_op} %t{l}, %t{r}"),
+            Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =l {bin_op} %t{l}, %t{r}"),
             Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
             Stmt::Label(l) => write!(f, "@l{l}"),
             Stmt::Load(t, l) => write!(f, "%t{t} =l loadl %t{l}"),
@@ -94,7 +94,7 @@ pub struct Call {
 
 impl Display for Call {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "%t{} =w call ${}(", self.tmp, self.name)?;
+        write!(f, "%t{} =l call ${}(", self.tmp, self.name)?;
         for arg in &self.args {
             write!(f, "l %t{arg},")?;
         }
@@ -105,6 +105,7 @@ impl Display for Call {
 pub enum BinOp {
     Add,
     Multiply,
+    Equal,
 }
 
 impl Display for BinOp {
@@ -112,17 +113,18 @@ impl Display for BinOp {
         match self {
             BinOp::Add => write!(f, "add"),
             BinOp::Multiply => write!(f, "mul"),
+            BinOp::Equal => write!(f, "ceql"),
         }
     }
 }
 
 pub enum Value {
-    Int(i32),
+    Int(i64),
     Const(u16),
 }
 
-impl From<i32> for Value {
-    fn from(v: i32) -> Self {
+impl From<i64> for Value {
+    fn from(v: i64) -> Self {
         Self::Int(v)
     }
 }

@@ -71,10 +71,16 @@ impl<'a> Parse<'a> {
     }
 
     fn bin_op_(&mut self) -> Result<BinOp, Fail> {
-        self.either(&[|p| {
-            p.expect_(Plus)?;
-            Ok(BinOp::Plus)
-        }])
+        self.either(&[
+            |p| {
+                p.expect_(Plus)?;
+                Ok(BinOp::Plus)
+            },
+            |p| {
+                p.expect_(Equal)?;
+                Ok(BinOp::Equal)
+            },
+        ])
     }
 
     fn call_(&mut self) -> Result<Call<'a>, Fail> {

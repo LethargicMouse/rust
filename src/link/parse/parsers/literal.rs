@@ -32,7 +32,7 @@ impl<'a> Parse<'a> {
         }
     }
 
-    pub fn int_(&mut self) -> Result<i32, Fail> {
+    pub fn int_(&mut self) -> Result<i64, Fail> {
         if let Int(n) = self.next() {
             self.cursor += 1;
             Ok(n)

@@ -86,6 +86,7 @@ impl<'a> Analyse {
     fn bin_op(&self, bin_op: BinOp) -> asg::BinOp {
         match bin_op {
             BinOp::Plus => asg::BinOp::Add,
+            BinOp::Equal => asg::BinOp::Equal,
         }
     }
 

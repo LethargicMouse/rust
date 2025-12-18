@@ -57,6 +57,7 @@ pub struct Binary<'a> {
 pub enum BinOp {
     Add,
     Multiply,
+    Equal,
 }
 
 pub struct Call<'a> {
@@ -65,6 +66,6 @@ pub struct Call<'a> {
 }
 
 pub enum Literal<'a> {
-    Int(i32),
+    Int(i64),
     Str(&'a str),
 }

@@ -153,6 +153,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         match bin_op {
             BinOp::Add => ir::BinOp::Add,
             BinOp::Multiply => ir::BinOp::Multiply,
+            BinOp::Equal => ir::BinOp::Equal,
         }
     }
 
@@ -163,9 +164,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
         }
     }
 
-    fn int(&mut self, n: i32) -> Tmp {
+    fn int(&mut self, n: i64) -> Tmp {
         let tmp = self.new_tmp();
-        self.stmts.push(Stmt::Copy(tmp, Type::Word, n.into()));
+        self.stmts.push(Stmt::Copy(tmp, Type::Long, n.into()));
         tmp
     }
 

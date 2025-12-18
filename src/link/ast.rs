@@ -10,7 +10,7 @@ pub struct Fun<'a> {
 
 pub enum Literal<'a> {
     Unit,
-    Int(i32),
+    Int(i64),
     RawStr(&'a str),
 }
 
@@ -59,6 +59,7 @@ pub struct Binary<'a> {
 
 pub enum BinOp {
     Plus,
+    Equal,
 }
 
 pub enum Postfix<'a> {
