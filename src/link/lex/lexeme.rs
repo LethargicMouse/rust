@@ -14,6 +14,8 @@ pub enum Lexeme<'a> {
     RawStr(&'a str),
     Semicolon,
     Comma,
+    BraL,
+    BraR,
 }
 
 impl Lexeme<'_> {
@@ -31,6 +33,8 @@ impl Lexeme<'_> {
             RawStr(_) => "<raw str>",
             Semicolon => ";",
             Comma => ",",
+            BraL => "[",
+            BraR => "]",
         }
     }
 }

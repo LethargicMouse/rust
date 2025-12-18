@@ -1,8 +1,5 @@
-fn main() {
-    f(r"hello", r"ma boi");
+fn main(argc, argv) {
+    if strcmp(argv[1], r"clean") == 0
+      do clean();
   }
 
-fn f(a, b) {
-    puts(a);
-    puts(b);
-  }
