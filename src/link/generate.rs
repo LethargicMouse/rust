@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     link::asg::*,
-    qbe::ir::{self, IR, Stmt, Tmp, Value},
+    qbe::ir::{self, IR, Stmt, Tmp, Type, Value},
 };
 
 pub fn generate(asg: &Asg) -> IR {
@@ -100,9 +100,10 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn call(&mut self, call: &Call) -> Tmp {
-        let arg = self.expr(&call.arg);
+        let name = call.name.into();
+        let args = call.args.iter().map(|e| self.expr(e)).collect();
         let tmp = self.next_tmp();
-        self.stmts.push(Stmt::Call(tmp, call.name.into(), arg));
+        self.stmts.push(ir::Call { tmp, name, args }.into());
         tmp
     }
 
@@ -135,14 +136,15 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn int(&mut self, n: i32) -> Tmp {
         let tmp = self.next_tmp();
-        self.stmts.push(Stmt::Copy(tmp, n.into()));
+        self.stmts.push(Stmt::Copy(tmp, Type::Word, n.into()));
         tmp
     }
 
     fn str(&mut self, s: &str) -> Tmp {
         let c = self.new_const(s);
         let tmp = self.next_tmp();
-        self.stmts.push(Stmt::Copy(tmp, Value::Const(c)));
+        self.stmts
+            .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
         tmp
     }
 

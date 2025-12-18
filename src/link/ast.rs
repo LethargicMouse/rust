@@ -34,8 +34,8 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
 }
 
 pub struct Call<'a> {
-    pub arg: Box<Expr<'a>>,
     pub name: &'a str,
+    pub args: Vec<Expr<'a>>,
 }
 
 pub struct Binary<'a> {

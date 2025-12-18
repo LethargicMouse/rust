@@ -43,8 +43,8 @@ impl<'a> Parse<'a> {
     fn call_(&mut self) -> Result<Call<'a>, Fail> {
         let name = self.name_()?;
         self.expect(ParL)?;
-        let arg = Box::new(self.expr()?);
+        let args = self.sep(Self::expr);
         self.expect(ParR)?;
-        Ok(Call { name, arg })
+        Ok(Call { name, args })
     }
 }

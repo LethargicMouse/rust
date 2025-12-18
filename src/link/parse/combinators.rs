@@ -1,4 +1,7 @@
-use crate::link::parse::{Parse, error::Fail, parsers::Parser};
+use crate::link::{
+    lex::Lexeme,
+    parse::{Parse, error::Fail, parsers::Parser},
+};
 
 impl<'a> Parse<'a> {
     pub fn either<T>(&mut self, fs: &[Parser<'a, T>]) -> Result<T, Fail> {
@@ -10,7 +13,7 @@ impl<'a> Parse<'a> {
         Err(Fail)
     }
 
-    pub fn maybe<T>(&mut self, f: Parser<'a, T>) -> Option<T> {
+    pub fn maybe<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, Fail>) -> Option<T> {
         let before = self.cursor;
         f(self).inspect_err(|_| self.cursor = before).ok()
     }
@@ -19,6 +22,20 @@ impl<'a> Parse<'a> {
         let mut res = Vec::new();
         while let Some(t) = self.maybe(f) {
             res.push(t)
+        }
+        res
+    }
+
+    pub fn sep<T>(&mut self, f: Parser<'a, T>) -> Vec<T> {
+        let mut res = Vec::new();
+        if let Some(t) = self.maybe(f) {
+            res.push(t);
+        }
+        while let Some(t) = self.maybe(|p| {
+            p.expect(Lexeme::Comma)?;
+            f(p)
+        }) {
+            res.push(t);
         }
         res
     }

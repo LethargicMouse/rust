@@ -40,9 +40,9 @@ impl<'a> Analyse {
     }
 
     fn call(&self, call: Call<'a>) -> asg::Call<'a> {
-        let arg = Box::new(self.expr(*call.arg));
+        let args = call.args.into_iter().map(|e| self.expr(e)).collect();
         let name = call.name;
-        asg::Call { arg, name }
+        asg::Call { name, args }
     }
 
     fn binary(&self, binary: Binary<'a>) -> asg::Binary<'a> {

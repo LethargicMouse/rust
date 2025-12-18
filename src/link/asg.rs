@@ -28,8 +28,8 @@ pub enum BinOp {
 }
 
 pub struct Call<'a> {
-    pub arg: Box<Expr<'a>>,
     pub name: &'a str,
+    pub args: Vec<Expr<'a>>,
 }
 
 pub enum Literal<'a> {

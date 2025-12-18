@@ -20,7 +20,7 @@ impl<'a> Parse<'a> {
         self.expect(Fun)?;
         let name = self.name()?;
         self.expect(ParL)?;
-        let params = self.many(Self::name);
+        let params = self.sep(Self::name);
         self.expect(ParR)?;
         self.expect(CurL)?;
         let stmts = self.many(|p| {
@@ -33,7 +33,7 @@ impl<'a> Parse<'a> {
         Ok((name, ast::Fun { params, stmts, ret }))
     }
 
-    fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
+    pub fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
         self.expect_(lexeme).or_else(|_| self.fail(lexeme.show()))
     }
 
