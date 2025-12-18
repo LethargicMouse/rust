@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{BinOp, Binary, Call, Expr, Get, If, Postfix},
+    ast::{BinOp, Binary, Call, Expr, Get, If, Postfix, Var},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -10,9 +10,15 @@ impl<'a> Parse<'a> {
             |p| Ok(p.literal_()?.into()),
             |p| Ok(Expr::If(p.if_expr()?)),
             |p| Ok(Expr::Call(p.call_()?)),
-            |p| Ok(Expr::Var(p.name_()?)),
+            |p| Ok(Expr::Var(p.var()?)),
         ])
         .or_else(|_| self.fail("expression"))
+    }
+
+    fn var(&mut self) -> Result<Var<'a>, Fail> {
+        let location = self.here();
+        let name = self.name_()?;
+        Ok(Var { name, location })
     }
 
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
@@ -84,10 +90,10 @@ impl<'a> Parse<'a> {
     }
 
     fn call_(&mut self) -> Result<Call<'a>, Fail> {
-        let name = self.name_()?;
+        let fun = self.var()?;
         self.expect_(ParL)?;
         let args = self.sep(Self::expr);
         self.expect(ParR)?;
-        Ok(Call { name, args })
+        Ok(Call { fun, args })
     }
 }

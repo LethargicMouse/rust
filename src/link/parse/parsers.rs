@@ -1,10 +1,13 @@
 mod expr;
 mod literal;
 
-use crate::link::{
-    ast::{self, Ast, Literal},
-    lex::lexeme::Lexeme::{self, *},
-    parse::{Fail, Parse},
+use crate::{
+    Location,
+    link::{
+        ast::{self, Ast, Literal},
+        lex::lexeme::Lexeme::{self, *},
+        parse::{Fail, Parse},
+    },
 };
 
 pub type Parser<'a, T> = fn(&mut Parse<'a>) -> Result<T, Fail>;
@@ -48,5 +51,9 @@ impl<'a> Parse<'a> {
 
     fn next(&self) -> Lexeme<'a> {
         self.tokens[self.cursor].lexeme
+    }
+
+    fn here(&self) -> Location<'a> {
+        self.tokens[self.cursor].location
     }
 }

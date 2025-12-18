@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use crate::{
-    link::asg::*,
+    link::{Context, asg::*},
     qbe::ir::{self, IR, Stmt, Tmp, Type, Value},
 };
 
@@ -28,25 +26,6 @@ impl<'a> Generate<'a> {
 
     fn fun(&mut self, name: &str, fun: &Fun<'a>) -> ir::Fun {
         GenFun::new(self).run(name, fun)
-    }
-}
-
-struct Context<'a, T> {
-    sup: HashMap<&'a str, T>,
-}
-
-impl<'a, T> Context<'a, T> {
-    fn new() -> Self {
-        let sup = HashMap::new();
-        Self { sup }
-    }
-
-    fn get(&self, key: &str) -> Option<&T> {
-        self.sup.get(key)
-    }
-
-    fn insert(&mut self, key: &'a str, value: T) {
-        self.sup.insert(key, value);
     }
 }
 

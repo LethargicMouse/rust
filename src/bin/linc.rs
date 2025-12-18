@@ -65,7 +65,7 @@ struct Expected(&'static str);
 
 impl Display for Expected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} expected {}", ARGS_ERROR, self.0)
+        write!(f, "{ARGS_ERROR} expected {}", self.0)
     }
 }
 
@@ -73,7 +73,7 @@ struct Unexpected(&'static str, String);
 
 impl Display for Unexpected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} unexpected {}: {}", ARGS_ERROR, self.0, self.1)
+        write!(f, "{ARGS_ERROR} unexpected {}: {}", self.0, self.1)
     }
 }
 

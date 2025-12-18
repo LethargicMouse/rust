@@ -1,29 +1,39 @@
-use crate::link::{
-    Asg, asg,
-    ast::{Ast, BinOp, Binary, Call, Expr, Fun, Get, If, Literal},
+mod error;
+
+use crate::{
+    die,
+    link::{
+        Asg, Context,
+        analyse::error::NotDeclared,
+        asg,
+        ast::{Ast, BinOp, Binary, Call, Expr, Fun, Get, If, Literal, Var},
+    },
 };
 
 pub fn analyse(ast: Ast) -> Asg {
-    Analyse::new().run(ast)
+    let funs = ast.funs.into_iter().map(|(n, f)| (n, fun(f))).collect();
+
+    Asg { funs }
 }
 
-struct Analyse {}
+pub fn fun(fun: Fun) -> asg::Fun {
+    AnalyseFun::new().run(fun)
+}
 
-impl<'a> Analyse {
+struct AnalyseFun<'a> {
+    context: Context<'a, ()>,
+}
+
+impl<'a> AnalyseFun<'a> {
     fn new() -> Self {
-        Self {}
+        let context = Context::new();
+        Self { context }
     }
 
-    fn run(self, ast: Ast) -> Asg {
-        let funs = ast
-            .funs
-            .into_iter()
-            .map(|(n, f)| (n, self.fun(f)))
-            .collect();
-        Asg { funs }
-    }
-
-    fn fun(&self, fun: Fun<'a>) -> asg::Fun<'a> {
+    fn run(mut self, fun: Fun<'a>) -> asg::Fun<'a> {
+        for param in &fun.params {
+            self.context.insert(param, ());
+        }
         let params = fun.params;
         let stmts = fun.stmts.into_iter().map(|e| self.expr(e)).collect();
         let ret = self.expr(fun.ret);
@@ -35,7 +45,7 @@ impl<'a> Analyse {
             Expr::Call(call) => self.call(call).into(),
             Expr::Binary(binary) => self.binary(binary).into(),
             Expr::Literal(literal) => self.literal(literal).into(),
-            Expr::Var(name) => asg::Expr::Var(name),
+            Expr::Var(name) => self.var(name),
             Expr::If(if_expr) => self.if_expr(if_expr).into(),
             Expr::Get(get) => self.get(get),
         }
@@ -72,8 +82,20 @@ impl<'a> Analyse {
 
     fn call(&self, call: Call<'a>) -> asg::Call<'a> {
         let args = call.args.into_iter().map(|e| self.expr(e)).collect();
-        let name = call.name;
+        let name = call.fun.name;
+        self.var(call.fun);
         asg::Call { name, args }
+    }
+
+    fn var(&self, var: Var<'a>) -> asg::Expr<'a> {
+        if self.context.get(var.name).is_none() {
+            die(NotDeclared {
+                location: var.location,
+                kind: "item",
+                name: var.name,
+            })
+        }
+        asg::Expr::Var(var.name)
     }
 
     fn binary(&self, binary: Binary<'a>) -> asg::Binary<'a> {
