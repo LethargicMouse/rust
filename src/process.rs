@@ -2,6 +2,7 @@ mod call;
 pub use call::call;
 
 use std::{
+    ffi::OsStr,
     fmt::Display,
     io,
     process::{Command, exit},
@@ -17,7 +18,7 @@ impl Display for Error<'_> {
     }
 }
 
-pub fn run(path: &str, args: &[&str]) {
+pub fn run(path: &str, args: impl IntoIterator<Item = impl AsRef<OsStr>>) {
     let status = Command::new(path)
         .args(args)
         .status()

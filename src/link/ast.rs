@@ -1,10 +1,17 @@
 use crate::Location;
 
 pub struct Ast<'a> {
-    pub funs: Vec<(&'a str, Fun<'a>)>,
+    pub funs: Vec<Fun<'a>>,
+    pub externs: Vec<&'a str>,
+}
+
+pub enum Item<'a> {
+    Fun(Fun<'a>),
+    Extern(&'a str),
 }
 
 pub struct Fun<'a> {
+    pub name: &'a str,
     pub params: Vec<&'a str>,
     pub stmts: Vec<Expr<'a>>,
     pub ret: Expr<'a>,
@@ -26,12 +33,12 @@ pub enum Expr<'a> {
     Binary(Binary<'a>),
     Literal(Literal<'a>),
     If(If<'a>),
-    Var(Var<'a>),
+    Var(NameLoc<'a>),
     Get(Get<'a>),
 }
 
-impl<'a> From<Var<'a>> for Expr<'a> {
-    fn from(v: Var<'a>) -> Self {
+impl<'a> From<NameLoc<'a>> for Expr<'a> {
+    fn from(v: NameLoc<'a>) -> Self {
         Self::Var(v)
     }
 }
@@ -55,7 +62,7 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
 }
 
 pub struct Call<'a> {
-    pub fun: Var<'a>,
+    pub fun: NameLoc<'a>,
     pub args: Vec<Expr<'a>>,
 }
 
@@ -79,7 +86,7 @@ pub struct Get<'a> {
     pub index: Box<Expr<'a>>,
 }
 
-pub struct Var<'a> {
+pub struct NameLoc<'a> {
     pub name: &'a str,
     pub location: Location<'a>,
 }

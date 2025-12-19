@@ -5,3 +5,7 @@ fn main(argc, argv) {
 
 extern strcmp;
 
+fn clean() {
+
+  }
+

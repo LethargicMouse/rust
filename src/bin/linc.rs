@@ -15,7 +15,7 @@ use russ::{
 fn main() {
     let args = get_args();
     match args.command {
-        Command::Run(path) => run(path),
+        Command::Run(path) => run(path, args.rest),
         Command::Clean => clean(),
     }
 }
@@ -24,9 +24,9 @@ fn clean() {
     call("rm", &[OUT, OUT_ASM, OUT_IR]).unwrap_or(());
 }
 
-fn run(path: String) {
+fn run(path: String, args: env::Args) {
     compile(path);
-    run_out();
+    run_out(args);
 }
 
 fn compile(path: String) {
@@ -40,10 +40,8 @@ fn get_args() -> Args {
     let mut args = args();
     args.next();
     let command = get_command(&mut args);
-    if let Some(arg) = args.next() {
-        die(Unexpected("argument", arg))
-    }
-    Args { command }
+    let rest = args;
+    Args { command, rest }
 }
 
 fn get_command(args: &mut env::Args) -> Command {
@@ -81,6 +79,7 @@ const ARGS_ERROR: &str = "! error reading args:";
 
 struct Args {
     command: Command,
+    rest: env::Args,
 }
 
 enum Command {
@@ -93,8 +92,8 @@ fn postcompile() {
     call("cc", &["-o", OUT, OUT_ASM]).or_die();
 }
 
-fn run_out() {
-    process::run(OUT, &[]);
+fn run_out(args: env::Args) {
+    process::run(OUT, args);
 }
 
 fn process(source: Source) -> IR {

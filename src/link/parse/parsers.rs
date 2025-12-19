@@ -4,7 +4,7 @@ mod literal;
 use crate::{
     Location,
     link::{
-        ast::{self, Ast, Literal},
+        ast::{self, Ast, Item, Literal},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse},
     },
@@ -14,13 +14,35 @@ pub type Parser<'a, T> = fn(&mut Parse<'a>) -> Result<T, Fail>;
 
 impl<'a> Parse<'a> {
     pub fn ast(&mut self) -> Result<Ast<'a>, Fail> {
-        let funs = self.many(Self::fun);
+        let mut funs = Vec::new();
+        let mut externs = Vec::new();
+        while let Some(item) = self.maybe(Self::item) {
+            match item {
+                Item::Fun(fun) => funs.push(fun),
+                Item::Extern(name) => externs.push(name),
+            }
+        }
         self.expect(Eof)?;
-        Ok(Ast { funs })
+        Ok(Ast { funs, externs })
     }
 
-    fn fun(&mut self) -> Result<(&'a str, ast::Fun<'a>), Fail> {
-        self.expect(Fun)?;
+    fn item(&mut self) -> Result<Item<'a>, Fail> {
+        self.either(&[
+            |p| Ok(Item::Fun(p.fun_()?)),
+            |p| Ok(Item::Extern(p.extrn_()?)),
+        ])
+        .or_else(|_| self.fail("item"))
+    }
+
+    fn extrn_(&mut self) -> Result<&'a str, Fail> {
+        self.expect_(Extern)?;
+        let name = self.name()?;
+        self.expect(Semicolon)?;
+        Ok(name)
+    }
+
+    fn fun_(&mut self) -> Result<ast::Fun<'a>, Fail> {
+        self.expect_(Fun)?;
         let name = self.name()?;
         self.expect(ParL)?;
         let params = self.sep(Self::name);
@@ -33,7 +55,12 @@ impl<'a> Parse<'a> {
         });
         let ret = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
         self.expect(CurR)?;
-        Ok((name, ast::Fun { params, stmts, ret }))
+        Ok(ast::Fun {
+            params,
+            stmts,
+            ret,
+            name,
+        })
     }
 
     pub fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {

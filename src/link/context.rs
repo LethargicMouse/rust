@@ -1,21 +1,25 @@
 use std::collections::HashMap;
 
 pub struct Context<'a, T> {
-    sup: HashMap<&'a str, T>,
+    sup: Vec<HashMap<&'a str, T>>,
 }
 
 impl<'a, T> Context<'a, T> {
     pub fn new() -> Self {
-        let sup = HashMap::new();
+        let sup = vec![HashMap::new()];
         Self { sup }
     }
 
     pub fn get(&self, key: &str) -> Option<&T> {
-        self.sup.get(key)
+        self.sup.iter().rev().map(|m| m.get(key)).find_map(|t| t)
     }
 
     pub fn insert(&mut self, key: &'a str, value: T) {
-        self.sup.insert(key, value);
+        self.sup.last_mut().unwrap().insert(key, value);
+    }
+
+    pub fn new_layer(&mut self) {
+        self.sup.push(HashMap::new());
     }
 }
 

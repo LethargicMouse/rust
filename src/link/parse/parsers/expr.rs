@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{BinOp, Binary, Call, Expr, Get, If, Postfix, Var},
+    ast::{BinOp, Binary, Call, Expr, Get, If, NameLoc, Postfix},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -15,10 +15,10 @@ impl<'a> Parse<'a> {
         .or_else(|_| self.fail("expression"))
     }
 
-    fn var(&mut self) -> Result<Var<'a>, Fail> {
+    fn var(&mut self) -> Result<NameLoc<'a>, Fail> {
         let location = self.here();
         let name = self.name_()?;
-        Ok(Var { name, location })
+        Ok(NameLoc { name, location })
     }
 
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {

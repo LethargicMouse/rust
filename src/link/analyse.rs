@@ -6,31 +6,55 @@ use crate::{
         Asg, Context,
         analyse::error::NotDeclared,
         asg,
-        ast::{Ast, BinOp, Binary, Call, Expr, Fun, Get, If, Literal, Var},
+        ast::{Ast, BinOp, Binary, Call, Expr, Fun, Get, If, Literal, NameLoc},
     },
 };
 
 pub fn analyse(ast: Ast) -> Asg {
-    let funs = ast.funs.into_iter().map(|(n, f)| (n, fun(f))).collect();
-
-    Asg { funs }
+    Analyse::new().run(ast)
 }
 
-pub fn fun(fun: Fun) -> asg::Fun {
-    AnalyseFun::new().run(fun)
-}
-
-struct AnalyseFun<'a> {
+struct Analyse<'a> {
     context: Context<'a, ()>,
 }
 
-impl<'a> AnalyseFun<'a> {
+impl<'a> Analyse<'a> {
     fn new() -> Self {
         let context = Context::new();
         Self { context }
     }
 
-    fn run(mut self, fun: Fun<'a>) -> asg::Fun<'a> {
+    fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
+        for extrn in ast.externs {
+            self.context.insert(extrn, ());
+        }
+        for fun in &ast.funs {
+            self.context.insert(fun.name, ());
+        }
+        let funs = ast
+            .funs
+            .into_iter()
+            .map(|f| (f.name, self.fun(f)))
+            .collect();
+        Asg { funs }
+    }
+
+    fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
+        AnalyseFun::new(&mut self.context).run(fun)
+    }
+}
+
+struct AnalyseFun<'a, 'b> {
+    context: &'b mut Context<'a, ()>,
+}
+
+impl<'a, 'b> AnalyseFun<'a, 'b> {
+    fn new(context: &'b mut Context<'a, ()>) -> Self {
+        context.new_layer();
+        Self { context }
+    }
+
+    fn run(self, fun: Fun<'a>) -> asg::Fun<'a> {
         for param in &fun.params {
             self.context.insert(param, ());
         }
@@ -87,7 +111,7 @@ impl<'a> AnalyseFun<'a> {
         asg::Call { name, args }
     }
 
-    fn var(&self, var: Var<'a>) -> asg::Expr<'a> {
+    fn var(&self, var: NameLoc<'a>) -> asg::Expr<'a> {
         if self.context.get(var.name).is_none() {
             die(NotDeclared {
                 location: var.location,
