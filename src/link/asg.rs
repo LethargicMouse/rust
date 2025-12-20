@@ -13,6 +13,7 @@ pub struct Fun<'a> {
 pub struct If<'a> {
     pub condition: Box<Expr<'a>>,
     pub then_expr: Box<Expr<'a>>,
+    pub else_expr: Box<Expr<'a>>,
 }
 
 pub enum Expr<'a> {

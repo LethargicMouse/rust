@@ -89,11 +89,15 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let condition = self.expr(&if_expr.condition);
         let then_label = self.new_label();
         let else_label = self.new_label();
+        let end_label = self.new_label();
         self.stmts
             .push(Stmt::Jnz(condition, then_label, else_label));
         self.stmts.push(Stmt::Label(then_label));
         let _ = self.expr(&if_expr.then_expr);
+        self.stmts.push(Stmt::Jump(end_label));
         self.stmts.push(Stmt::Label(else_label));
+        let _ = self.expr(&if_expr.else_expr);
+        self.stmts.push(Stmt::Label(end_label));
         self.int(0)
     }
 

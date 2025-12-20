@@ -64,6 +64,7 @@ pub enum Stmt {
     Bin(Tmp, BinOp, Tmp, Tmp),
     Jnz(Tmp, u16, u16),
     Label(u16),
+    Jump(u16),
 }
 
 impl From<Call> for Stmt {
@@ -82,6 +83,7 @@ impl Display for Stmt {
             Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
             Stmt::Label(l) => write!(f, "@l{l}"),
             Stmt::Load(t, l) => write!(f, "%t{t} =l loadl %t{l}"),
+            Stmt::Jump(l) => write!(f, "jmp @l{l}"),
         }
     }
 }

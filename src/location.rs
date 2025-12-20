@@ -1,6 +1,6 @@
 mod display;
 
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{
     location::display::{Line, Underline},
@@ -39,6 +39,12 @@ impl Display for Location<'_> {
             write!(f, "{}", Line(line, self.source))?;
         }
         write!(f, "{}", Underline(1, self.end.symbol))
+    }
+}
+
+impl Debug for Location<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
     }
 }
 

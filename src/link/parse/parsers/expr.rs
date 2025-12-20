@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{BinOp, Binary, Call, Expr, Get, If, NameLoc, Postfix},
+    ast::{BinOp, Binary, Call, Expr, Get, If, Literal, NameLoc, Postfix},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -8,7 +8,7 @@ impl<'a> Parse<'a> {
     fn expr_2(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
             |p| Ok(p.literal_()?.into()),
-            |p| Ok(Expr::If(p.if_expr()?)),
+            |p| Ok(Expr::If(p.if_expr_()?)),
             |p| Ok(Expr::Call(p.call_()?)),
             |p| Ok(Expr::Var(p.var()?)),
         ])
@@ -46,14 +46,22 @@ impl<'a> Parse<'a> {
         }])
     }
 
-    fn if_expr(&mut self) -> Result<If<'a>, Fail> {
+    fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
         self.expect_(If)?;
         let condition = Box::new(self.expr()?);
         self.expect(Do)?;
         let then_expr = Box::new(self.expr()?);
+        let else_expr = Box::new(
+            self.maybe(|p| {
+                p.expect(Else)?;
+                p.expr()
+            })
+            .unwrap_or(Literal::Unit.into()),
+        );
         Ok(If {
             condition,
             then_expr,
+            else_expr,
         })
     }
 

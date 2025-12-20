@@ -98,9 +98,11 @@ impl<'a, 'b> AnalyseFun<'a, 'b> {
     fn if_expr(&self, if_expr: If<'a>) -> asg::If<'a> {
         let condition = Box::new(self.expr(*if_expr.condition));
         let then_expr = Box::new(self.expr(*if_expr.then_expr));
+        let else_expr = Box::new(self.expr(*if_expr.else_expr));
         asg::If {
             condition,
             then_expr,
+            else_expr,
         }
     }
 

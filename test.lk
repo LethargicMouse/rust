@@ -1,11 +1,13 @@
+extern strcmp;
+extern system;
+extern puts;
+
 fn main(argc, argv) {
     if strcmp(argv[1], r"clean") == 0
-      do clean();
+      do clean()
+    else puts(r"! error reading args: unexpected command");
   }
-
-extern strcmp;
 
 fn clean() {
-
+    system(r"rm out.qbe out.s out")
   }
-
