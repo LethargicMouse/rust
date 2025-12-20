@@ -13,7 +13,7 @@ pub enum Item<'a> {
 pub struct Fun<'a> {
     pub name: &'a str,
     pub params: Vec<&'a str>,
-    pub body: Block<'a>,
+    pub body: Expr<'a>,
 }
 
 pub enum Literal<'a> {

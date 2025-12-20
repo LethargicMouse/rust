@@ -43,13 +43,7 @@ impl<'a> Parse<'a> {
     fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
         self.expect_(If)?;
         let condition = self.expr()?;
-        let then_expr = self.either(&[
-            |p| {
-                p.expect(Do)?;
-                p.expr()
-            },
-            |p| Ok(p.block()?.into()),
-        ])?;
+        let then_expr = self.block_or_do()?;
         let else_expr = self
             .maybe(|p| {
                 p.expect(Else)?;
@@ -63,7 +57,17 @@ impl<'a> Parse<'a> {
         })
     }
 
-    pub fn block(&mut self) -> Result<Block<'a>, Fail> {
+    pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
+        self.either(&[
+            |p| {
+                p.expect(Do)?;
+                p.expr()
+            },
+            |p| Ok(p.block()?.into()),
+        ])
+    }
+
+    fn block(&mut self) -> Result<Block<'a>, Fail> {
         self.block_().or_else(|_| self.fail(CurL.show()))
     }
 

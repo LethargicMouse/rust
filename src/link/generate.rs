@@ -54,10 +54,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         for (param, &tmp) in fun.params.iter().zip(&params) {
             self.context.insert(param, tmp);
         }
-        for stmt in &fun.stmts {
-            self.expr(stmt);
-        }
-        let tmp = self.expr(&fun.ret);
+        let tmp = self.expr(&fun.body);
         self.stmts.push(Stmt::Ret(tmp));
         let stmts = self.stmts;
         ir::Fun {

@@ -11,8 +11,7 @@ pub struct Asg<'a> {
 
 pub struct Fun<'a> {
     pub params: Vec<&'a str>,
-    pub stmts: Vec<Expr<'a>>,
-    pub ret: Expr<'a>,
+    pub body: Expr<'a>,
 }
 
 pub struct If<'a> {

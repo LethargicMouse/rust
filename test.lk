@@ -4,15 +4,17 @@ extern puts;
 extern exit;
 
 fn main(argc, argv) {
-    if argc < 2 {
-        puts(r"! error reading args: expected command");
-        exit(1);
-      }
+    if argc < 2
+      do die(r"! error reading args: expected command");
     if strcmp(argv[1], r"clean") == 0
       do clean()
     else puts(r"! error reading args: unexpected command");
   }
 
-fn clean() {
-    system(r"rm out.qbe out.s out")
+fn clean()
+  do system(r"rm out.qbe out.s out")
+
+fn die(e) {
+    puts(e);
+    exit(1)
   }

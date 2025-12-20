@@ -47,7 +47,7 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         let params = self.sep(Self::name);
         self.expect(ParR)?;
-        let body = self.block()?;
+        let body = self.block_or_do()?;
         Ok(ast::Fun { params, body, name })
     }
 

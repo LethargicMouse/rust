@@ -59,9 +59,8 @@ impl<'a, 'b> AnalyseFun<'a, 'b> {
             self.context.insert(param, ());
         }
         let params = fun.params;
-        let stmts = fun.body.stmts.into_iter().map(|e| self.expr(e)).collect();
-        let ret = self.expr(fun.body.ret);
-        asg::Fun { params, stmts, ret }
+        let body = self.expr(fun.body);
+        asg::Fun { params, body }
     }
 
     fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {
