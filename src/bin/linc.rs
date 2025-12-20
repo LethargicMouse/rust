@@ -5,6 +5,7 @@ use std::{
 
 use russ::{
     die::{Mortal, die},
+    display::colors::{Blue, Red, Reset},
     file::{self},
     link::{analyse, generate, lex, parse},
     process::{self, call},
@@ -63,7 +64,7 @@ struct Expected(&'static str);
 
 impl Display for Expected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{ARGS_ERROR} expected {}", self.0)
+        write!(f, "{ArgsError} expected {Reset}{}", self.0)
     }
 }
 
@@ -71,11 +72,21 @@ struct Unexpected(&'static str, String);
 
 impl Display for Unexpected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{ARGS_ERROR} unexpected {}: {}", self.0, self.1)
+        write!(
+            f,
+            "{ArgsError} unexpected {Reset}{}{Red}:{Reset} `{}`",
+            self.0, self.1
+        )
     }
 }
 
-const ARGS_ERROR: &str = "! error reading args:";
+struct ArgsError;
+
+impl Display for ArgsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{Red}! error reading {Blue}args{Red}:")
+    }
+}
 
 struct Args {
     command: Command,
