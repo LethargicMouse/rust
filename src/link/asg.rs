@@ -1,5 +1,10 @@
 use std::collections::HashMap;
 
+pub struct Block<'a> {
+    pub stmts: Vec<Expr<'a>>,
+    pub ret: Box<Expr<'a>>,
+}
+
 pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
 }
@@ -17,12 +22,19 @@ pub struct If<'a> {
 }
 
 pub enum Expr<'a> {
+    Block(Block<'a>),
     Deref(Box<Expr<'a>>),
     Call(Call<'a>),
     Binary(Binary<'a>),
     Literal(Literal<'a>),
     Var(&'a str),
     If(If<'a>),
+}
+
+impl<'a> From<Block<'a>> for Expr<'a> {
+    fn from(v: Block<'a>) -> Self {
+        Self::Block(v)
+    }
 }
 
 impl<'a> From<If<'a>> for Expr<'a> {
@@ -59,6 +71,7 @@ pub enum BinOp {
     Add,
     Multiply,
     Equal,
+    Less,
 }
 
 pub struct Call<'a> {

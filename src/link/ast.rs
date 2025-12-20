@@ -13,8 +13,7 @@ pub enum Item<'a> {
 pub struct Fun<'a> {
     pub name: &'a str,
     pub params: Vec<&'a str>,
-    pub stmts: Vec<Expr<'a>>,
-    pub ret: Expr<'a>,
+    pub body: Block<'a>,
 }
 
 pub enum Literal<'a> {
@@ -24,18 +23,56 @@ pub enum Literal<'a> {
 }
 
 pub struct If<'a> {
-    pub condition: Box<Expr<'a>>,
-    pub then_expr: Box<Expr<'a>>,
-    pub else_expr: Box<Expr<'a>>,
+    pub condition: Expr<'a>,
+    pub then_expr: Expr<'a>,
+    pub else_expr: Expr<'a>,
+}
+
+pub struct Block<'a> {
+    pub stmts: Vec<Expr<'a>>,
+    pub ret: Expr<'a>,
 }
 
 pub enum Expr<'a> {
     Call(Call<'a>),
-    Binary(Binary<'a>),
+    Binary(Box<Binary<'a>>),
     Literal(Literal<'a>),
-    If(If<'a>),
+    If(Box<If<'a>>),
     Var(NameLoc<'a>),
-    Get(Get<'a>),
+    Get(Box<Get<'a>>),
+    Block(Box<Block<'a>>),
+}
+
+impl<'a> From<If<'a>> for Expr<'a> {
+    fn from(value: If<'a>) -> Self {
+        Expr::If(Box::new(value))
+    }
+}
+
+impl<'a> From<Block<'a>> for Expr<'a> {
+    fn from(value: Block<'a>) -> Self {
+        Expr::Block(Box::new(value))
+    }
+}
+
+impl Expr<'_> {
+    pub fn needs_semicolon(&self) -> bool {
+        match self {
+            Expr::Call(_) => true,
+            Expr::Binary(_) => true,
+            Expr::Literal(_) => true,
+            Expr::If(if_expr) => {
+                if matches!(if_expr.else_expr, Expr::Literal(Literal::Unit)) {
+                    if_expr.then_expr.needs_semicolon()
+                } else {
+                    if_expr.else_expr.needs_semicolon()
+                }
+            }
+            Expr::Var(_) => true,
+            Expr::Get(_) => true,
+            Expr::Block(_) => false,
+        }
+    }
 }
 
 impl<'a> From<NameLoc<'a>> for Expr<'a> {
@@ -46,7 +83,7 @@ impl<'a> From<NameLoc<'a>> for Expr<'a> {
 
 impl<'a> From<Get<'a>> for Expr<'a> {
     fn from(v: Get<'a>) -> Self {
-        Self::Get(v)
+        Self::Get(Box::new(v))
     }
 }
 
@@ -58,7 +95,7 @@ impl<'a> From<Literal<'a>> for Expr<'a> {
 
 impl<'a> From<Binary<'a>> for Expr<'a> {
     fn from(v: Binary<'a>) -> Self {
-        Self::Binary(v)
+        Self::Binary(Box::new(v))
     }
 }
 
@@ -68,14 +105,15 @@ pub struct Call<'a> {
 }
 
 pub struct Binary<'a> {
-    pub left: Box<Expr<'a>>,
+    pub left: Expr<'a>,
     pub op: BinOp,
-    pub right: Box<Expr<'a>>,
+    pub right: Expr<'a>,
 }
 
 pub enum BinOp {
     Plus,
     Equal,
+    Less,
 }
 
 pub enum Postfix<'a> {
@@ -83,8 +121,8 @@ pub enum Postfix<'a> {
 }
 
 pub struct Get<'a> {
-    pub from: Box<Expr<'a>>,
-    pub index: Box<Expr<'a>>,
+    pub from: Expr<'a>,
+    pub index: Expr<'a>,
 }
 
 pub struct NameLoc<'a> {

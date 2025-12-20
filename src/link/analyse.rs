@@ -6,7 +6,7 @@ use crate::{
         Asg, Context,
         analyse::error::NotDeclared,
         asg,
-        ast::{Ast, BinOp, Binary, Call, Expr, Fun, Get, If, Literal, NameLoc},
+        ast::{Ast, BinOp, Binary, Block, Call, Expr, Fun, Get, If, Literal, NameLoc},
     },
 };
 
@@ -59,25 +59,32 @@ impl<'a, 'b> AnalyseFun<'a, 'b> {
             self.context.insert(param, ());
         }
         let params = fun.params;
-        let stmts = fun.stmts.into_iter().map(|e| self.expr(e)).collect();
-        let ret = self.expr(fun.ret);
+        let stmts = fun.body.stmts.into_iter().map(|e| self.expr(e)).collect();
+        let ret = self.expr(fun.body.ret);
         asg::Fun { params, stmts, ret }
     }
 
     fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {
         match expr {
             Expr::Call(call) => self.call(call).into(),
-            Expr::Binary(binary) => self.binary(binary).into(),
+            Expr::Binary(binary) => self.binary(*binary).into(),
             Expr::Literal(literal) => self.literal(literal).into(),
             Expr::Var(name) => self.var(name),
-            Expr::If(if_expr) => self.if_expr(if_expr).into(),
-            Expr::Get(get) => self.get(get),
+            Expr::If(if_expr) => self.if_expr(*if_expr).into(),
+            Expr::Get(get) => self.get(*get),
+            Expr::Block(block) => self.block(*block).into(),
         }
     }
 
+    fn block(&self, block: Block<'a>) -> asg::Block<'a> {
+        let stmts = block.stmts.into_iter().map(|e| self.expr(e)).collect();
+        let ret = Box::new(self.expr(block.ret));
+        asg::Block { stmts, ret }
+    }
+
     fn get(&self, get: Get<'a>) -> asg::Expr<'a> {
-        let from = self.expr(*get.from);
-        let index = self.expr(*get.index);
+        let from = self.expr(get.from);
+        let index = self.expr(get.index);
         asg::Expr::Deref(Box::new(
             asg::Binary {
                 left: Box::new(from),
@@ -96,9 +103,9 @@ impl<'a, 'b> AnalyseFun<'a, 'b> {
     }
 
     fn if_expr(&self, if_expr: If<'a>) -> asg::If<'a> {
-        let condition = Box::new(self.expr(*if_expr.condition));
-        let then_expr = Box::new(self.expr(*if_expr.then_expr));
-        let else_expr = Box::new(self.expr(*if_expr.else_expr));
+        let condition = Box::new(self.expr(if_expr.condition));
+        let then_expr = Box::new(self.expr(if_expr.then_expr));
+        let else_expr = Box::new(self.expr(if_expr.else_expr));
         asg::If {
             condition,
             then_expr,
@@ -125,8 +132,8 @@ impl<'a, 'b> AnalyseFun<'a, 'b> {
     }
 
     fn binary(&self, binary: Binary<'a>) -> asg::Binary<'a> {
-        let left = Box::new(self.expr(*binary.left));
-        let right = Box::new(self.expr(*binary.right));
+        let left = Box::new(self.expr(binary.left));
+        let right = Box::new(self.expr(binary.right));
         let op = self.bin_op(binary.op);
         asg::Binary { left, op, right }
     }
@@ -135,6 +142,7 @@ impl<'a, 'b> AnalyseFun<'a, 'b> {
         match bin_op {
             BinOp::Plus => asg::BinOp::Add,
             BinOp::Equal => asg::BinOp::Equal,
+            BinOp::Less => asg::BinOp::Less,
         }
     }
 

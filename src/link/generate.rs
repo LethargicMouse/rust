@@ -75,6 +75,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Var(name) => self.var(name),
             Expr::If(if_expr) => self.if_expr(if_expr),
             Expr::Deref(expr) => self.deref(expr),
+            Expr::Block(block) => self.block(block),
         }
     }
 
@@ -137,6 +138,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             BinOp::Add => ir::BinOp::Add,
             BinOp::Multiply => ir::BinOp::Multiply,
             BinOp::Equal => ir::BinOp::Equal,
+            BinOp::Less => ir::BinOp::Less,
         }
     }
 
@@ -164,5 +166,12 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn new_const(&mut self, s: &str) -> u16 {
         self.sup.consts.push(s.into());
         self.sup.consts.len() as u16
+    }
+
+    fn block(&mut self, block: &Block) -> u32 {
+        for stmt in &block.stmts {
+            self.expr(stmt);
+        }
+        self.expr(&block.ret)
     }
 }

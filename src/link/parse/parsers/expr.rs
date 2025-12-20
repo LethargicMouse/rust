@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{BinOp, Binary, Call, Expr, Get, If, Literal, NameLoc, Postfix},
+    ast::{BinOp, Binary, Block, Call, Expr, Get, If, Literal, NameLoc, Postfix},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -8,7 +8,7 @@ impl<'a> Parse<'a> {
     fn expr_2(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
             |p| Ok(p.literal_()?.into()),
-            |p| Ok(Expr::If(p.if_expr_()?)),
+            |p| Ok(p.if_expr_()?.into()),
             |p| Ok(Expr::Call(p.call_()?)),
             |p| Ok(Expr::Var(p.var()?)),
         ])
@@ -25,13 +25,7 @@ impl<'a> Parse<'a> {
         let mut res = self.expr_2()?;
         while let Some(postfix) = self.maybe(Self::postfix) {
             match postfix {
-                Postfix::Get(index) => {
-                    res = Get {
-                        from: Box::new(res),
-                        index: Box::new(index),
-                    }
-                    .into()
-                }
+                Postfix::Get(index) => res = Get { from: res, index }.into(),
             }
         }
         Ok(res)
@@ -48,16 +42,20 @@ impl<'a> Parse<'a> {
 
     fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
         self.expect_(If)?;
-        let condition = Box::new(self.expr()?);
-        self.expect(Do)?;
-        let then_expr = Box::new(self.expr()?);
-        let else_expr = Box::new(
-            self.maybe(|p| {
+        let condition = self.expr()?;
+        let then_expr = self.either(&[
+            |p| {
+                p.expect(Do)?;
+                p.expr()
+            },
+            |p| Ok(p.block()?.into()),
+        ])?;
+        let else_expr = self
+            .maybe(|p| {
                 p.expect(Else)?;
                 p.expr()
             })
-            .unwrap_or(Literal::Unit.into()),
-        );
+            .unwrap_or(Literal::Unit.into());
         Ok(If {
             condition,
             then_expr,
@@ -65,13 +63,25 @@ impl<'a> Parse<'a> {
         })
     }
 
+    pub fn block(&mut self) -> Result<Block<'a>, Fail> {
+        self.block_().or_else(|_| self.fail(CurL.show()))
+    }
+
+    fn block_(&mut self) -> Result<Block<'a>, Fail> {
+        self.expect_(CurL)?;
+        let stmts = self.many(Self::stmt);
+        let ret = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
+        self.expect_(CurR)?;
+        Ok(Block { stmts, ret })
+    }
+
     pub fn expr(&mut self) -> Result<Expr<'a>, Fail> {
         let mut expr = self.expr_1()?;
         while let Some((op, right)) = self.maybe(|p| p.bin_postfix_()) {
             expr = Binary {
-                left: Box::new(expr),
+                left: expr,
                 op,
-                right: Box::new(right),
+                right,
             }
             .into()
         }
@@ -86,14 +96,9 @@ impl<'a> Parse<'a> {
 
     fn bin_op_(&mut self) -> Result<BinOp, Fail> {
         self.either(&[
-            |p| {
-                p.expect_(Plus)?;
-                Ok(BinOp::Plus)
-            },
-            |p| {
-                p.expect_(Equal)?;
-                Ok(BinOp::Equal)
-            },
+            |p| p.expect_(Plus).map(|_| BinOp::Plus),
+            |p| p.expect_(Equal).map(|_| BinOp::Equal),
+            |p| p.expect_(Less).map(|_| BinOp::Less),
         ])
     }
 
@@ -103,5 +108,13 @@ impl<'a> Parse<'a> {
         let args = self.sep(Self::expr);
         self.expect(ParR)?;
         Ok(Call { fun, args })
+    }
+
+    pub fn stmt(&mut self) -> Result<Expr<'a>, Fail> {
+        let expr = self.expr()?;
+        if expr.needs_semicolon() {
+            self.expect(Semicolon)?;
+        }
+        Ok(expr)
     }
 }

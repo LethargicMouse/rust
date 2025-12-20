@@ -108,6 +108,7 @@ pub enum BinOp {
     Add,
     Multiply,
     Equal,
+    Less,
 }
 
 impl Display for BinOp {
@@ -116,6 +117,7 @@ impl Display for BinOp {
             BinOp::Add => write!(f, "add"),
             BinOp::Multiply => write!(f, "mul"),
             BinOp::Equal => write!(f, "ceql"),
+            BinOp::Less => write!(f, "csltl"),
         }
     }
 }

@@ -4,7 +4,7 @@ mod literal;
 use crate::{
     Location,
     link::{
-        ast::{self, Ast, Item, Literal},
+        ast::{self, Ast, Item},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse},
     },
@@ -47,20 +47,8 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         let params = self.sep(Self::name);
         self.expect(ParR)?;
-        self.expect(CurL)?;
-        let stmts = self.many(|p| {
-            let expr = p.expr()?;
-            p.expect(Semicolon)?;
-            Ok(expr)
-        });
-        let ret = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
-        self.expect(CurR)?;
-        Ok(ast::Fun {
-            params,
-            stmts,
-            ret,
-            name,
-        })
+        let body = self.block()?;
+        Ok(ast::Fun { params, body, name })
     }
 
     pub fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {

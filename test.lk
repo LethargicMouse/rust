@@ -1,10 +1,15 @@
 extern strcmp;
 extern system;
 extern puts;
+extern exit;
 
 fn main(argc, argv) {
+    if argc < 2 {
+        puts(r"! error reading args: expected command");
+        exit(1);
+      }
     if strcmp(argv[1], r"clean") == 0
-      do clean();
+      do clean()
     else puts(r"! error reading args: unexpected command");
   }
 
