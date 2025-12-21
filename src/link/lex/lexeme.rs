@@ -22,6 +22,7 @@ pub enum Lexeme<'a> {
     Extern,
     Else,
     Less,
+    Dot,
     Unknown,
 }
 
@@ -49,6 +50,7 @@ impl Lexeme<'_> {
             Extern => "`extern`",
             Else => "`else`",
             Less => "`<`",
+            Dot => "`.`",
         }
     }
 }

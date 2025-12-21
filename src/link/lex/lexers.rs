@@ -97,4 +97,5 @@ pub const LIST: LexList = &[
     (b"extern", Extern),
     (b"else", Else),
     (b"<", Less),
+    (b".", Dot),
 ];

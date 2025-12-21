@@ -8,13 +8,66 @@ fn main(argc, argv) {
       do die(r"! error reading args: expected command");
     if strcmp(argv[1], r"clean") == 0
       do clean()
+    else if strcmp(argv[1], r"run") == 0 {
+        if argc < 3
+          do die(r"! error reading args: expected path")
+        else run(argv[2])
+      }
     else puts(r"! error reading args: unexpected command");
+  }
+
+fn die(e) {
+    puts(e);
+    exit(1)
   }
 
 fn clean()
   do system(r"rm out.qbe out.s out")
 
-fn die(e) {
-    puts(e);
-    exit(1)
+fn run(path) {
+    clean();
+    build(path);
+    system(r"./out")
+  }
+
+fn build(path) {
+    compile(path).dump();
+    postcompile();
+  }
+
+fn compile(path) {
+    path
+      .read()
+      .lex()
+      .parse()
+      .analyse()
+      .generate()
+  }
+
+fn read(path) {
+    
+  }
+
+fn lex(code) {
+    
+  }
+
+fn parse(tokens) {
+
+  }
+
+fn analyse(ast) {
+
+  }
+
+fn generate(asg) {
+    
+  }
+
+fn dump(ir) {
+    let out = fopen(r"out.qbe", r"r");
+  }
+
+fn postcompile() {
+    system(r"qbe -o out.s out.qbe && cc -o out out.s");
   }

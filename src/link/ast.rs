@@ -118,6 +118,7 @@ pub enum BinOp {
 
 pub enum Postfix<'a> {
     Get(Expr<'a>),
+    Call(Call<'a>),
 }
 
 pub struct Get<'a> {
