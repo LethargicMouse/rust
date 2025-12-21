@@ -35,14 +35,13 @@ fn build(path) {
     postcompile();
   }
 
-fn compile(path) {
-    path
-      .read()
-      .lex()
-      .parse()
-      .analyse()
-      .generate()
-  }
+fn compile(path) 
+  do path
+    .read()
+    .lex()
+    .parse()
+    .analyse()
+    .generate()
 
 fn read(path) {
     
@@ -65,9 +64,10 @@ fn generate(asg) {
   }
 
 fn dump(ir) {
-    let out = fopen(r"out.qbe", r"r");
+    let out = fopen(r"out.qbe", r"w");
+    putstr(out, "test drive");
+    fclose(out);
   }
 
-fn postcompile() {
-    system(r"qbe -o out.s out.qbe && cc -o out out.s");
-  }
+fn postcompile() 
+  do system(r"qbe -o out.s out.qbe && cc -o out out.s")

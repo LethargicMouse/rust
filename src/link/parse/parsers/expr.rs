@@ -79,7 +79,9 @@ impl<'a> Parse<'a> {
     }
 
     fn block(&mut self) -> Result<Block<'a>, Fail> {
-        self.block_().or_else(|_| self.fail(CurL.show()))
+        self.maybe(Self::block_)
+            .ok_or(Fail)
+            .or_else(|_| self.fail(CurL.show()))
     }
 
     fn block_(&mut self) -> Result<Block<'a>, Fail> {
@@ -118,7 +120,9 @@ impl<'a> Parse<'a> {
     }
 
     fn call(&mut self) -> Result<Call<'a>, Fail> {
-        self.call_().or_else(|_| self.fail("name"))
+        self.maybe(Self::call_)
+            .ok_or(Fail)
+            .or_else(|_| self.fail("name"))
     }
 
     fn call_(&mut self) -> Result<Call<'a>, Fail> {
