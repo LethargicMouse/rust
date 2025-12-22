@@ -16,17 +16,22 @@ impl Display for NotDeclared<'_> {
         write!(
             f,
             "{}\n{Red}--! {} {Reset}`{}`{Red} is not declared{Reset}",
-            CheckError(&self.location),
-            self.kind,
-            self.name
+            self.location, self.kind, self.name
         )
     }
 }
 
-struct CheckError<'a>(&'a Location<'a>);
+pub enum CheckError<'a> {
+    ND(NotDeclared<'a>),
+}
 
 impl Display for CheckError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{Red}! error checking {}", self.0)
+        write!(f, "{Red}! error checking ")?;
+        match self {
+            CheckError::ND(not_declared) => write!(f, "{not_declared}"),
+        }
     }
 }
+
+pub struct Fail;

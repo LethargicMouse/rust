@@ -74,7 +74,17 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Deref(expr) => self.deref(expr),
             Expr::Block(block) => self.block(block),
             Expr::Let(let_expr) => self.let_expr(let_expr),
+            Expr::Field(field) => self.field(field),
         }
+    }
+
+    fn field(&mut self, field: &Field<'a>) -> Tmp {
+        let from = self.expr(&field.from);
+        let tmp = self.new_tmp();
+        let offset = self.int(field.offset as i64);
+        self.stmts
+            .push(Stmt::Bin(tmp, ir::BinOp::Add, from, offset));
+        tmp
     }
 
     fn let_expr(&mut self, let_expr: &Let<'a>) -> Tmp {

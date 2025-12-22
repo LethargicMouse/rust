@@ -21,6 +21,10 @@ impl<'a, T> Context<'a, T> {
     pub fn new_layer(&mut self) {
         self.sup.push(HashMap::new());
     }
+
+    pub fn pop_layer(&mut self) {
+        self.sup.pop();
+    }
 }
 
 impl<'a, T> Default for Context<'a, T> {

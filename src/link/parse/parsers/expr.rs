@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{BinOp, Binary, Block, Call, Expr, Get, If, Let, Literal, NameLoc, Postfix},
+    ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, NameLoc, Postfix},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -11,7 +11,7 @@ impl<'a> Parse<'a> {
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
-            |p| Ok(Expr::Var(p.var(false)?)),
+            |p| Ok(Expr::Var(p.name_loc(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
     }
@@ -24,7 +24,7 @@ impl<'a> Parse<'a> {
         Ok(Let { name, expr })
     }
 
-    fn var(&mut self, loud: bool) -> Result<NameLoc<'a>, Fail> {
+    fn name_loc(&mut self, loud: bool) -> Result<NameLoc<'a>, Fail> {
         let location = self.here();
         let name = self.name(loud)?;
         Ok(NameLoc { name, location })
@@ -39,6 +39,7 @@ impl<'a> Parse<'a> {
                     call.args.insert(0, res);
                     res = Expr::Call(call);
                 }
+                Postfix::Field(name) => res = Field { from: res, name }.into(),
             }
         }
         Ok(res)
@@ -54,8 +55,11 @@ impl<'a> Parse<'a> {
             },
             |p| {
                 p.expect_(Dot)?;
-                let call = p.call(true)?;
-                Ok(Postfix::Call(call))
+                Ok(p.name(true)?.into())
+            },
+            |p| {
+                p.expect_(Dot)?;
+                Ok(p.call(true)?.into())
             },
         ])
     }
@@ -129,7 +133,7 @@ impl<'a> Parse<'a> {
     }
 
     fn call(&mut self, loud: bool) -> Result<Call<'a>, Fail> {
-        let fun = self.var(loud)?;
+        let fun = self.name_loc(loud)?;
         self.expect_(ParL)?;
         let args = self.sep(Self::expr);
         self.expect(ParR)?;

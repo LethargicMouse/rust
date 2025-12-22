@@ -2,7 +2,12 @@ use crate::Location;
 
 pub struct Ast<'a> {
     pub funs: Vec<Fun<'a>>,
-    pub externs: Vec<&'a str>,
+    pub externs: Vec<Extern<'a>>,
+}
+
+pub struct Extern<'a> {
+    pub name: &'a str,
+    pub typ: Type<'a>,
 }
 
 pub enum Item<'a> {
@@ -11,9 +16,20 @@ pub enum Item<'a> {
 }
 
 pub struct Fun<'a> {
+    pub header: Header<'a>,
+    pub body: Expr<'a>,
+}
+
+pub struct Header<'a> {
     pub name: &'a str,
     pub params: Vec<&'a str>,
-    pub body: Expr<'a>,
+    pub typ: FunType<'a>,
+}
+
+#[derive(Clone)]
+pub struct FunType<'a> {
+    pub params: Vec<Type<'a>>,
+    pub ret_type: Type<'a>,
 }
 
 pub enum Literal<'a> {
@@ -38,7 +54,13 @@ pub struct Let<'a> {
     pub expr: Expr<'a>,
 }
 
+pub struct Field<'a> {
+    pub from: Expr<'a>,
+    pub name: &'a str,
+}
+
 pub enum Expr<'a> {
+    Field(Box<Field<'a>>),
     Let(Box<Let<'a>>),
     Call(Call<'a>),
     Binary(Box<Binary<'a>>),
@@ -47,6 +69,12 @@ pub enum Expr<'a> {
     Var(NameLoc<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Field<'a>> for Expr<'a> {
+    fn from(v: Field<'a>) -> Self {
+        Self::Field(Box::new(v))
+    }
 }
 
 impl<'a> From<Let<'a>> for Expr<'a> {
@@ -84,6 +112,7 @@ impl Expr<'_> {
             Expr::Get(_) => true,
             Expr::Block(_) => false,
             Expr::Let(_) => true,
+            Expr::Field(_) => true,
         }
     }
 }
@@ -132,6 +161,19 @@ pub enum BinOp {
 pub enum Postfix<'a> {
     Get(Expr<'a>),
     Call(Call<'a>),
+    Field(&'a str),
+}
+
+impl<'a> From<&'a str> for Postfix<'a> {
+    fn from(v: &'a str) -> Self {
+        Self::Field(v)
+    }
+}
+
+impl<'a> From<Call<'a>> for Postfix<'a> {
+    fn from(v: Call<'a>) -> Self {
+        Self::Call(v)
+    }
 }
 
 pub struct Get<'a> {
@@ -142,4 +184,27 @@ pub struct Get<'a> {
 pub struct NameLoc<'a> {
     pub name: &'a str,
     pub location: Location<'a>,
+}
+
+#[derive(Clone)]
+pub enum Type<'a> {
+    Name(&'a str),
+    Fun(Box<FunType<'a>>),
+    Unit,
+}
+
+impl<'a> From<FunType<'a>> for Type<'a> {
+    fn from(v: FunType<'a>) -> Self {
+        Self::Fun(Box::new(v))
+    }
+}
+
+impl<'a> Type<'a> {
+    pub fn name(&self) -> &'a str {
+        match self {
+            Type::Name(n) => n,
+            Type::Unit => "()",
+            Type::Fun(_) => "fn",
+        }
+    }
 }

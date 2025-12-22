@@ -25,7 +25,13 @@ pub struct Let<'a> {
     pub expr: Expr<'a>,
 }
 
+pub struct Field<'a> {
+    pub from: Expr<'a>,
+    pub offset: usize,
+}
+
 pub enum Expr<'a> {
+    Field(Box<Field<'a>>),
     Let(Box<Let<'a>>),
     Block(Box<Block<'a>>),
     Deref(Box<Expr<'a>>),
@@ -34,6 +40,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Field<'a>> for Expr<'a> {
+    fn from(v: Field<'a>) -> Self {
+        Self::Field(Box::new(v))
+    }
 }
 
 impl<'a> From<Let<'a>> for Expr<'a> {
