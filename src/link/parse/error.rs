@@ -9,11 +9,12 @@ use crate::{
 impl<'a> Parse<'a> {
     pub fn error(self) -> Error<'a> {
         let help = self.help();
+        let location = self.tokens[self.err_cursor].location;
         let mut msgs = self.msgs;
         msgs.sort();
         msgs.dedup();
         Error {
-            location: self.tokens[self.err_cursor].location,
+            location,
             help,
             msgs,
         }

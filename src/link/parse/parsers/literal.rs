@@ -19,14 +19,12 @@ impl<'a> Parse<'a> {
         Ok(Literal::Unit)
     }
 
-    pub fn name(&mut self) -> Result<&'a str, Fail> {
-        self.name_().or_else(|_| self.fail("name"))
-    }
-
-    pub fn name_(&mut self) -> Result<&'a str, Fail> {
+    pub fn name(&mut self, loud: bool) -> Result<&'a str, Fail> {
         if let Name(n) = self.next() {
             self.cursor += 1;
             Ok(n)
+        } else if loud {
+            self.fail("name")
         } else {
             Err(Fail)
         }

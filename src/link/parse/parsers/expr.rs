@@ -10,23 +10,23 @@ impl<'a> Parse<'a> {
             |p| Ok(p.literal_()?.into()),
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
-            |p| Ok(Expr::Call(p.call_()?)),
-            |p| Ok(Expr::Var(p.var_()?)),
+            |p| Ok(Expr::Call(p.call(false)?)),
+            |p| Ok(Expr::Var(p.var(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
     }
 
     fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
         self.expect_(Let)?;
-        let name = self.name_()?;
+        let name = self.name(true)?;
         self.expect(Equal)?;
         let expr = self.expr()?;
         Ok(Let { name, expr })
     }
 
-    fn var_(&mut self) -> Result<NameLoc<'a>, Fail> {
+    fn var(&mut self, loud: bool) -> Result<NameLoc<'a>, Fail> {
         let location = self.here();
-        let name = self.name_()?;
+        let name = self.name(loud)?;
         Ok(NameLoc { name, location })
     }
 
@@ -54,7 +54,7 @@ impl<'a> Parse<'a> {
             },
             |p| {
                 p.expect_(Dot)?;
-                let call = p.call()?;
+                let call = p.call(true)?;
                 Ok(Postfix::Call(call))
             },
         ])
@@ -128,14 +128,8 @@ impl<'a> Parse<'a> {
         ])
     }
 
-    fn call(&mut self) -> Result<Call<'a>, Fail> {
-        self.maybe(Self::call_)
-            .ok_or(Fail)
-            .or_else(|_| self.fail("name"))
-    }
-
-    fn call_(&mut self) -> Result<Call<'a>, Fail> {
-        let fun = self.var_()?;
+    fn call(&mut self, loud: bool) -> Result<Call<'a>, Fail> {
+        let fun = self.var(loud)?;
         self.expect_(ParL)?;
         let args = self.sep(Self::expr);
         self.expect(ParR)?;

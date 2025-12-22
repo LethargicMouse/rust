@@ -23,25 +23,32 @@ impl<'a> Lex<'a> {
     }
 
     pub fn raw_str(&mut self) -> Option<Token<'a>> {
+        self.str_with(b"r\"")
+    }
+
+    pub fn str(&mut self) -> Option<Token<'a>> {
+        self.str_with(b"\"")
+    }
+
+    fn str_with(&mut self, left: &[u8]) -> Option<Token<'a>> {
         self.skip();
-        if self.source.code[self.cursor..].starts_with(b"r\"") {
-            self.cursor += 2;
-            let start = self.cursor;
-            while self.cursor != self.source.code.len() && self.source.code[self.cursor] != b'\"' {
-                self.cursor += 1;
-            }
-            if self.cursor == self.source.code.len() {
-                self.cursor = start - 2;
-                die(Unclosed(self.location(1)))
-            }
-            let res = &self.source.code[start..self.cursor];
-            let lexeme = Lexeme::RawStr(str::from_utf8(res).unwrap());
-            self.cursor -= res.len() + 4;
-            let tok = self.token(lexeme, res.len() + 5);
-            Some(tok)
-        } else {
-            None
+        if !self.source.code[self.cursor..].starts_with(left) {
+            return None;
         }
+        self.cursor += left.len();
+        let start = self.cursor;
+        while self.cursor != self.source.code.len() && self.source.code[self.cursor] != b'\"' {
+            self.cursor += 1;
+        }
+        if self.cursor == self.source.code.len() {
+            self.cursor = start - left.len();
+            die(Unclosed(self.location(1)))
+        }
+        let res = &self.source.code[start..self.cursor];
+        let lexeme = Lexeme::RawStr(str::from_utf8(res).unwrap());
+        self.cursor -= res.len() + 2 + left.len();
+        let tok = self.token(lexeme, res.len() + 3 + left.len());
+        Some(tok)
     }
 
     pub fn name(&mut self) -> Option<Token<'a>> {

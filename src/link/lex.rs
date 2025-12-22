@@ -34,6 +34,7 @@ impl<'a> Lex<'a> {
             let tok = self
                 .list(list)
                 .or_else(|| self.raw_str())
+                .or_else(|| self.str())
                 .or_else(|| self.name())
                 .or_else(|| self.int())
                 .unwrap_or_else(|| self.unknown());
