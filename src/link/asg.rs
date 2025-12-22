@@ -20,7 +20,13 @@ pub struct If<'a> {
     pub else_expr: Box<Expr<'a>>,
 }
 
+pub struct Let<'a> {
+    pub name: &'a str,
+    pub expr: Expr<'a>,
+}
+
 pub enum Expr<'a> {
+    Let(Box<Let<'a>>),
     Block(Block<'a>),
     Deref(Box<Expr<'a>>),
     Call(Call<'a>),
@@ -28,6 +34,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(If<'a>),
+}
+
+impl<'a> From<Let<'a>> for Expr<'a> {
+    fn from(v: Let<'a>) -> Self {
+        Expr::Let(Box::new(v))
+    }
 }
 
 impl<'a> From<Block<'a>> for Expr<'a> {

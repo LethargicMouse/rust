@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{BinOp, Binary, Block, Call, Expr, Get, If, Literal, NameLoc, Postfix},
+    ast::{BinOp, Binary, Block, Call, Expr, Get, If, Let, Literal, NameLoc, Postfix},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -9,10 +9,19 @@ impl<'a> Parse<'a> {
         self.either(&[
             |p| Ok(p.literal_()?.into()),
             |p| Ok(p.if_expr_()?.into()),
+            |p| Ok(p.let_expr_()?.into()),
             |p| Ok(Expr::Call(p.call_()?)),
             |p| Ok(Expr::Var(p.var_()?)),
         ])
         .or_else(|_| self.fail("expression"))
+    }
+
+    fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
+        self.expect_(Let)?;
+        let name = self.name_()?;
+        self.expect(Equal)?;
+        let expr = self.expr()?;
+        Ok(Let { name, expr })
     }
 
     fn var_(&mut self) -> Result<NameLoc<'a>, Fail> {
@@ -23,7 +32,7 @@ impl<'a> Parse<'a> {
 
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
         let mut res = self.expr_2()?;
-        while let Some(postfix) = self.maybe(Self::postfix) {
+        while let Some(postfix) = self.maybe(Self::postfix_) {
             match postfix {
                 Postfix::Get(index) => res = Get { from: res, index }.into(),
                 Postfix::Call(mut call) => {
@@ -35,7 +44,7 @@ impl<'a> Parse<'a> {
         Ok(res)
     }
 
-    fn postfix(&mut self) -> Result<Postfix<'a>, Fail> {
+    fn postfix_(&mut self) -> Result<Postfix<'a>, Fail> {
         self.either(&[
             |p| {
                 p.expect_(BraL)?;
@@ -114,7 +123,7 @@ impl<'a> Parse<'a> {
     fn bin_op_(&mut self) -> Result<BinOp, Fail> {
         self.either(&[
             |p| p.expect_(Plus).map(|_| BinOp::Plus),
-            |p| p.expect_(Equal).map(|_| BinOp::Equal),
+            |p| p.expect_(Equal2).map(|_| BinOp::Equal),
             |p| p.expect_(Less).map(|_| BinOp::Less),
         ])
     }

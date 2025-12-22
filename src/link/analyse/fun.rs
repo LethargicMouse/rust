@@ -4,7 +4,7 @@ use crate::{
         Context,
         analyse::error::NotDeclared,
         asg,
-        ast::{BinOp, Binary, Block, Call, Expr, Fun, Get, If, Literal, NameLoc},
+        ast::{BinOp, Binary, Block, Call, Expr, Fun, Get, If, Let, Literal, NameLoc},
     },
 };
 
@@ -18,7 +18,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         Self { context }
     }
 
-    pub fn run(self, fun: Fun<'a>) -> asg::Fun<'a> {
+    pub fn run(mut self, fun: Fun<'a>) -> asg::Fun<'a> {
         for param in &fun.params {
             self.context.insert(param, ());
         }
@@ -27,7 +27,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         asg::Fun { params, body }
     }
 
-    fn expr(&self, expr: Expr<'a>) -> asg::Expr<'a> {
+    fn expr(&mut self, expr: Expr<'a>) -> asg::Expr<'a> {
         match expr {
             Expr::Call(call) => self.call(call).into(),
             Expr::Binary(binary) => self.binary(*binary).into(),
@@ -36,16 +36,24 @@ impl<'a, 'b> Analyse<'a, 'b> {
             Expr::If(if_expr) => self.if_expr(*if_expr).into(),
             Expr::Get(get) => self.get(*get),
             Expr::Block(block) => self.block(*block).into(),
+            Expr::Let(let_expr) => self.let_expr(*let_expr).into(),
         }
     }
 
-    fn block(&self, block: Block<'a>) -> asg::Block<'a> {
+    fn let_expr(&mut self, let_expr: Let<'a>) -> asg::Let<'a> {
+        let name = let_expr.name;
+        let expr = self.expr(let_expr.expr);
+        self.context.insert(name, ());
+        asg::Let { name, expr }
+    }
+
+    fn block(&mut self, block: Block<'a>) -> asg::Block<'a> {
         let stmts = block.stmts.into_iter().map(|e| self.expr(e)).collect();
         let ret = Box::new(self.expr(block.ret));
         asg::Block { stmts, ret }
     }
 
-    fn get(&self, get: Get<'a>) -> asg::Expr<'a> {
+    fn get(&mut self, get: Get<'a>) -> asg::Expr<'a> {
         let from = self.expr(get.from);
         let index = self.expr(get.index);
         asg::Expr::Deref(Box::new(
@@ -65,7 +73,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         ))
     }
 
-    fn if_expr(&self, if_expr: If<'a>) -> asg::If<'a> {
+    fn if_expr(&mut self, if_expr: If<'a>) -> asg::If<'a> {
         let condition = Box::new(self.expr(if_expr.condition));
         let then_expr = Box::new(self.expr(if_expr.then_expr));
         let else_expr = Box::new(self.expr(if_expr.else_expr));
@@ -76,7 +84,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         }
     }
 
-    fn call(&self, call: Call<'a>) -> asg::Call<'a> {
+    fn call(&mut self, call: Call<'a>) -> asg::Call<'a> {
         let args = call.args.into_iter().map(|e| self.expr(e)).collect();
         let name = call.fun.name;
         self.var(call.fun);
@@ -94,7 +102,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         asg::Expr::Var(var.name)
     }
 
-    fn binary(&self, binary: Binary<'a>) -> asg::Binary<'a> {
+    fn binary(&mut self, binary: Binary<'a>) -> asg::Binary<'a> {
         let left = Box::new(self.expr(binary.left));
         let right = Box::new(self.expr(binary.right));
         let op = self.bin_op(binary.op);

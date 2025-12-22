@@ -64,7 +64,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         }
     }
 
-    fn expr(&mut self, expr: &Expr) -> Tmp {
+    fn expr(&mut self, expr: &Expr<'a>) -> Tmp {
         match expr {
             Expr::Call(call) => self.call(call),
             Expr::Binary(binary) => self.binary(binary),
@@ -73,17 +73,24 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::If(if_expr) => self.if_expr(if_expr),
             Expr::Deref(expr) => self.deref(expr),
             Expr::Block(block) => self.block(block),
+            Expr::Let(let_expr) => self.let_expr(let_expr),
         }
     }
 
-    fn deref(&mut self, expr: &Expr) -> Tmp {
+    fn let_expr(&mut self, let_expr: &Let<'a>) -> Tmp {
+        let tmp = self.expr(&let_expr.expr);
+        self.context.insert(let_expr.name, tmp);
+        self.int(0)
+    }
+
+    fn deref(&mut self, expr: &Expr<'a>) -> Tmp {
         let expr = self.expr(expr);
         let tmp = self.new_tmp();
         self.stmts.push(Stmt::Load(tmp, expr));
         tmp
     }
 
-    fn if_expr(&mut self, if_expr: &If) -> Tmp {
+    fn if_expr(&mut self, if_expr: &If<'a>) -> Tmp {
         let condition = self.expr(&if_expr.condition);
         let then_label = self.new_label();
         let else_label = self.new_label();
@@ -108,7 +115,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         *self.context.get(name).unwrap()
     }
 
-    fn call(&mut self, call: &Call) -> Tmp {
+    fn call(&mut self, call: &Call<'a>) -> Tmp {
         let name = call.name.into();
         let args = call.args.iter().map(|e| self.expr(e)).collect();
         let tmp = self.new_tmp();
@@ -121,7 +128,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.tmp
     }
 
-    fn binary(&mut self, binary: &Binary) -> Tmp {
+    fn binary(&mut self, binary: &Binary<'a>) -> Tmp {
         let left = self.expr(&binary.left);
         let right = self.expr(&binary.right);
         let op = self.bin_op(&binary.op);
@@ -165,7 +172,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.sup.consts.len() as u16
     }
 
-    fn block(&mut self, block: &Block) -> u32 {
+    fn block(&mut self, block: &Block<'a>) -> u32 {
         for stmt in &block.stmts {
             self.expr(stmt);
         }

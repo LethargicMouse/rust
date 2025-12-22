@@ -33,7 +33,13 @@ pub struct Block<'a> {
     pub ret: Expr<'a>,
 }
 
+pub struct Let<'a> {
+    pub name: &'a str,
+    pub expr: Expr<'a>,
+}
+
 pub enum Expr<'a> {
+    Let(Box<Let<'a>>),
     Call(Call<'a>),
     Binary(Box<Binary<'a>>),
     Literal(Literal<'a>),
@@ -41,6 +47,12 @@ pub enum Expr<'a> {
     Var(NameLoc<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Let<'a>> for Expr<'a> {
+    fn from(v: Let<'a>) -> Self {
+        Self::Let(Box::new(v))
+    }
 }
 
 impl<'a> From<If<'a>> for Expr<'a> {
@@ -71,6 +83,7 @@ impl Expr<'_> {
             Expr::Var(_) => true,
             Expr::Get(_) => true,
             Expr::Block(_) => false,
+            Expr::Let(_) => true,
         }
     }
 }
