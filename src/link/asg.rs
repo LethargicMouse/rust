@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub struct Block<'a> {
     pub stmts: Vec<Expr<'a>>,
-    pub ret: Box<Expr<'a>>,
+    pub ret: Expr<'a>,
 }
 
 pub struct Asg<'a> {
@@ -15,9 +15,9 @@ pub struct Fun<'a> {
 }
 
 pub struct If<'a> {
-    pub condition: Box<Expr<'a>>,
-    pub then_expr: Box<Expr<'a>>,
-    pub else_expr: Box<Expr<'a>>,
+    pub condition: Expr<'a>,
+    pub then_expr: Expr<'a>,
+    pub else_expr: Expr<'a>,
 }
 
 pub struct Let<'a> {
@@ -27,13 +27,13 @@ pub struct Let<'a> {
 
 pub enum Expr<'a> {
     Let(Box<Let<'a>>),
-    Block(Block<'a>),
+    Block(Box<Block<'a>>),
     Deref(Box<Expr<'a>>),
     Call(Call<'a>),
-    Binary(Binary<'a>),
+    Binary(Box<Binary<'a>>),
     Literal(Literal<'a>),
     Var(&'a str),
-    If(If<'a>),
+    If(Box<If<'a>>),
 }
 
 impl<'a> From<Let<'a>> for Expr<'a> {
@@ -44,13 +44,13 @@ impl<'a> From<Let<'a>> for Expr<'a> {
 
 impl<'a> From<Block<'a>> for Expr<'a> {
     fn from(v: Block<'a>) -> Self {
-        Self::Block(v)
+        Self::Block(Box::new(v))
     }
 }
 
 impl<'a> From<If<'a>> for Expr<'a> {
     fn from(v: If<'a>) -> Self {
-        Self::If(v)
+        Self::If(Box::new(v))
     }
 }
 
@@ -62,7 +62,7 @@ impl<'a> From<Literal<'a>> for Expr<'a> {
 
 impl<'a> From<Binary<'a>> for Expr<'a> {
     fn from(v: Binary<'a>) -> Self {
-        Self::Binary(v)
+        Self::Binary(Box::new(v))
     }
 }
 
@@ -73,9 +73,9 @@ impl<'a> From<Call<'a>> for Expr<'a> {
 }
 
 pub struct Binary<'a> {
-    pub left: Box<Expr<'a>>,
-    pub right: Box<Expr<'a>>,
+    pub left: Expr<'a>,
     pub op: BinOp,
+    pub right: Expr<'a>,
 }
 
 pub enum BinOp {

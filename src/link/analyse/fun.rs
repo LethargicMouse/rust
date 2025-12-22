@@ -49,7 +49,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn block(&mut self, block: Block<'a>) -> asg::Block<'a> {
         let stmts = block.stmts.into_iter().map(|e| self.expr(e)).collect();
-        let ret = Box::new(self.expr(block.ret));
+        let ret = self.expr(block.ret);
         asg::Block { stmts, ret }
     }
 
@@ -58,25 +58,23 @@ impl<'a, 'b> Analyse<'a, 'b> {
         let index = self.expr(get.index);
         asg::Expr::Deref(Box::new(
             asg::Binary {
-                left: Box::new(from),
-                right: Box::new(
-                    asg::Binary {
-                        left: Box::new(index),
-                        right: Box::new(asg::Literal::Int(8).into()),
-                        op: asg::BinOp::Multiply,
-                    }
-                    .into(),
-                ),
+                left: from,
                 op: asg::BinOp::Add,
+                right: asg::Binary {
+                    left: index,
+                    op: asg::BinOp::Multiply,
+                    right: asg::Literal::Int(8).into(),
+                }
+                .into(),
             }
             .into(),
         ))
     }
 
     fn if_expr(&mut self, if_expr: If<'a>) -> asg::If<'a> {
-        let condition = Box::new(self.expr(if_expr.condition));
-        let then_expr = Box::new(self.expr(if_expr.then_expr));
-        let else_expr = Box::new(self.expr(if_expr.else_expr));
+        let condition = self.expr(if_expr.condition);
+        let then_expr = self.expr(if_expr.then_expr);
+        let else_expr = self.expr(if_expr.else_expr);
         asg::If {
             condition,
             then_expr,
@@ -103,8 +101,8 @@ impl<'a, 'b> Analyse<'a, 'b> {
     }
 
     fn binary(&mut self, binary: Binary<'a>) -> asg::Binary<'a> {
-        let left = Box::new(self.expr(binary.left));
-        let right = Box::new(self.expr(binary.right));
+        let left = self.expr(binary.left);
+        let right = self.expr(binary.right);
         let op = self.bin_op(binary.op);
         asg::Binary { left, op, right }
     }
