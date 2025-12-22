@@ -38,6 +38,9 @@ impl<'a> Lex<'a> {
                 .or_else(|| self.int())
                 .unwrap_or_else(|| self.unknown());
             res.push(tok);
+            if matches!(res.last().unwrap().lexeme, Unknown) {
+                break;
+            }
             self.skip();
         }
         self.cursor -= 1;

@@ -66,8 +66,12 @@ fn generate(asg) {
 
 fn dump(ir) {
     let out = fopen(r"out.qbe", r"w");
-    putstr(out, r"test drive");
+    putstr(out, "test drive");
     fclose(out);
+  }
+
+fn putstr(file, str) {
+    fwrite(str.ptr, 1, str.len, file)
   }
 
 fn postcompile() 
