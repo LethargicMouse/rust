@@ -68,4 +68,19 @@ impl<'a> Parse<'a> {
         let ret_type = self.maybe(Self::typ).unwrap_or(Type::Unit);
         Ok(FunType { params, ret_type })
     }
+
+    fn param(&mut self) -> Result<(&'a str, Type<'a>), Fail> {
+        self.either(&[
+            |p| {
+                let name = p.name(true)?;
+                p.expect(Colon)?;
+                let typ = p.typ()?;
+                Ok((name, typ))
+            },
+            |p| {
+                let name = p.name(true)?;
+                Ok((name, Type::Name(name)))
+            },
+        ])
+    }
 }

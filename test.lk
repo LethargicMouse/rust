@@ -3,8 +3,10 @@ extern system: fn(*u8);
 extern puts: fn(*u8);
 extern exit: fn(i32);
 extern fopen: fn(*u8, *u8);
+extern fwrite: fn(*u8, u64, u64, *FILE) u64;
+extern fclose: fn(*FILE);
 
-fn main(argc, argv) {
+fn main(argc, argv: **u8) {
     if argc < 2
       do die(r"! error reading args: expected command");
     if strcmp(argv[1], r"clean") == 0

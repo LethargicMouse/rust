@@ -34,9 +34,9 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         let mut params = Vec::new();
         let mut type_params = Vec::new();
-        for param in self.sep(|p| p.name(true)) {
+        for (param, typ) in self.sep(Self::param) {
             params.push(param);
-            type_params.push(Type::Name(param));
+            type_params.push(typ);
         }
         self.expect(ParR)?;
         let ret_type = Type::Unit;
