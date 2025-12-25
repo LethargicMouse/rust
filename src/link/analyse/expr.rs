@@ -191,6 +191,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
     fn ret_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
         match typ {
             Type::Fun(fun_type) => fun_type.ret_type,
+            Type::Error => Type::Error,
             _ => {
                 self.sup.errors.push(NoCall { location, typ }.into());
                 Type::Error
