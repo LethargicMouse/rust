@@ -27,6 +27,16 @@ impl<'a, T> Typed<'a, T> {
     }
 }
 
+impl<'a, T> From<Typed<'a, T>> for (T, Type<'a>) {
+    fn from(value: Typed<'a, T>) -> Self {
+        (value.sup, value.typ)
+    }
+}
+
+fn typed<'a, T>(sup: T, typ: Type<'a>) -> Typed<'a, T> {
+    Typed { sup, typ }
+}
+
 pub fn analyse(ast: Ast) -> Asg {
     Analyse::new().run(ast)
 }
@@ -70,27 +80,10 @@ impl<'a> Analyse<'a> {
     }
 
     fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
-        for extrn in ast.externs {
-            self.sup.context.insert(extrn.name, extrn.typ);
-        }
-        for fun in &ast.funs {
-            self.sup
-                .context
-                .insert(fun.header.name, fun.header.typ.clone().into());
-        }
-        let funs = ast
-            .funs
-            .into_iter()
-            .map(|fun| {
-                (
-                    fun.header.name,
-                    after_structs::Analyse::new(&mut self).fun(fun),
-                )
-            })
-            .collect();
+        let res = after_structs::Analyse::new(&mut self).run(ast);
         if !self.sup.errors.is_empty() {
             die(Error(self.sup.errors))
         }
-        Asg { funs }
+        res
     }
 }

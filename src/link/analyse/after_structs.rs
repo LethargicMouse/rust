@@ -3,12 +3,16 @@ use std::collections::HashMap;
 use crate::{
     Location,
     link::{
+        Asg,
         analyse::{
             State, Struct, Typed,
             error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared},
+            typed,
         },
         asg,
-        ast::{BinOp, Binary, Block, Call, Expr, Field, Fun, Get, If, Let, Literal, Type, Var},
+        ast::{
+            Ast, BinOp, Binary, Block, Call, Expr, Field, Fun, Get, If, Let, Literal, Type, Var,
+        },
     },
     mem::{map_box, update},
 };
@@ -24,6 +28,23 @@ impl<'a, 'b> Analyse<'a, 'b> {
             structs: &sup.structs,
             sup: &mut sup.sup,
         }
+    }
+
+    pub fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
+        for extrn in ast.externs {
+            self.sup.context.insert(extrn.name, extrn.typ);
+        }
+        for fun in &ast.funs {
+            self.sup
+                .context
+                .insert(fun.header.name, fun.header.typ.clone().into());
+        }
+        let funs = ast
+            .funs
+            .into_iter()
+            .map(|fun| (fun.header.name, self.fun(fun)))
+            .collect();
+        Asg { funs }
     }
 
     fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -44,14 +65,11 @@ impl<'a, 'b> Analyse<'a, 'b> {
     }
 
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
-        Typed {
-            sup: asg::Literal::Int(0).into(),
-            typ: Type::Error,
-        }
+        typed(asg::Literal::Int(0).into(), Type::Error)
     }
 
     fn field(&mut self, field: Field<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
-        let Typed { sup: from, typ } = self.expr(field.from);
+        let (from, typ) = self.expr(field.from).into();
         if matches!(typ, Type::Error) {
             return Err(Fail);
         }
@@ -278,7 +296,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         }
     }
 
-    pub fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
+    fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
         self.sup.context.new_layer();
         for ((param, typ), location) in fun
             .header
