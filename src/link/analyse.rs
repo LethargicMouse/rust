@@ -1,5 +1,5 @@
 mod error;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use error::Error;
 mod expr;
@@ -44,6 +44,7 @@ pub struct Struct<'a> {
 struct State<'a> {
     errors: Vec<CheckError<'a>>,
     context: Context<'a, Type<'a>>,
+    corrupt: HashSet<&'a str>,
 }
 
 impl<'a> State<'a> {
@@ -51,6 +52,7 @@ impl<'a> State<'a> {
         Self {
             context: Context::new(),
             errors: Vec::new(),
+            corrupt: HashSet::new(),
         }
     }
 }

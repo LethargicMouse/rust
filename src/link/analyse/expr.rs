@@ -48,6 +48,10 @@ impl<'a, 'b> Analyse<'a, 'b> {
         location: Location<'a>,
     ) -> Result<&'b Struct<'a>, Fail> {
         self.structs.get(name).ok_or_else(|| {
+            if self.sup.corrupt.contains(name) {
+                return Fail;
+            }
+            self.sup.corrupt.insert(name);
             self.sup.errors.push(
                 NotDeclared {
                     location,
