@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use crate::{
     Location,
     link::{
-        Context,
         analyse::{
-            Struct, Typed,
+            State, Struct, Typed,
             error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared},
         },
         asg,
@@ -15,16 +14,14 @@ use crate::{
 
 pub struct Analyse<'a, 'b> {
     structs: &'b HashMap<&'a str, Struct<'a>>,
-    errors: &'b mut Vec<CheckError<'a>>,
-    context: &'b mut Context<'a, Type<'a>>,
+    sup: &'b mut State<'a>,
 }
 
 impl<'a, 'b> Analyse<'a, 'b> {
     pub fn new(sup: &'b mut super::Analyse<'a>) -> Self {
         Self {
             structs: &sup.structs,
-            errors: &mut sup.errors,
-            context: &mut sup.context,
+            sup: &mut sup.sup,
         }
     }
 
@@ -51,7 +48,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         location: Location<'a>,
     ) -> Result<&'b Struct<'a>, Fail> {
         self.structs.get(name).ok_or_else(|| {
-            self.errors.push(
+            self.sup.errors.push(
                 NotDeclared {
                     location,
                     kind: "struct",
@@ -82,7 +79,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         })?;
         let r#struct = self.get_struct(name, from_location)?;
         let field = r#struct.fields.get(field.name).ok_or_else(|| {
-            self.errors.push(
+            self.sup.errors.push(
                 NoField {
                     location: field.name_location,
                     name: field.name,
@@ -101,14 +98,14 @@ impl<'a, 'b> Analyse<'a, 'b> {
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
-        self.errors.push(error.into());
+        self.sup.errors.push(error.into());
         Fail
     }
 
     fn let_expr(&mut self, let_expr: Let<'a>) -> Typed<'a, asg::Let<'a>> {
         let name = let_expr.name;
         let Typed { sup: expr, typ } = self.expr(let_expr.expr);
-        self.context.insert(name, typ);
+        self.sup.context.insert(name, typ);
         Typed {
             sup: asg::Let { name, expr },
             typ: Type::Unit,
@@ -152,7 +149,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
             Type::Ptr(t) => *t,
             Type::Error => Type::Error,
             _ => {
-                self.errors.push(NoIndex { location, typ }.into());
+                self.sup.errors.push(NoIndex { location, typ }.into());
                 Type::Error
             }
         }
@@ -191,20 +188,20 @@ impl<'a, 'b> Analyse<'a, 'b> {
         match typ {
             Type::Fun(fun_type) => fun_type.ret_type,
             _ => {
-                self.errors.push(NoCall { location, typ }.into());
+                self.sup.errors.push(NoCall { location, typ }.into());
                 Type::Error
             }
         }
     }
 
     fn var(&mut self, var: Var<'a>) -> Typed<'a, &'a str> {
-        match self.context.get(var.name) {
+        match self.sup.context.get(var.name) {
             Some(typ) => Typed {
                 sup: var.name,
                 typ: typ.clone(),
             },
             None => {
-                self.errors.push(
+                self.sup.errors.push(
                     NotDeclared {
                         location: var.location,
                         kind: "item",

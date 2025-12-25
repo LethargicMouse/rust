@@ -41,27 +41,40 @@ pub struct Struct<'a> {
     pub fields: HashMap<&'a str, Field<'a>>,
 }
 
-struct Analyse<'a> {
-    structs: HashMap<&'a str, Struct<'a>>,
+struct State<'a> {
     errors: Vec<CheckError<'a>>,
     context: Context<'a, Type<'a>>,
+}
+
+impl<'a> State<'a> {
+    fn new() -> Self {
+        Self {
+            context: Context::new(),
+            errors: Vec::new(),
+        }
+    }
+}
+
+struct Analyse<'a> {
+    structs: HashMap<&'a str, Struct<'a>>,
+    sup: State<'a>,
 }
 
 impl<'a> Analyse<'a> {
     fn new() -> Self {
         Self {
-            context: Context::new(),
-            errors: Vec::new(),
+            sup: State::new(),
             structs: HashMap::new(),
         }
     }
 
     fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
         for extrn in ast.externs {
-            self.context.insert(extrn.name, extrn.typ);
+            self.sup.context.insert(extrn.name, extrn.typ);
         }
         for fun in &ast.funs {
-            self.context
+            self.sup
+                .context
                 .insert(fun.header.name, fun.header.typ.clone().into());
         }
         let funs = ast
@@ -69,16 +82,16 @@ impl<'a> Analyse<'a> {
             .into_iter()
             .map(|f| (f.header.name, self.fun(f)))
             .collect();
-        if !self.errors.is_empty() {
-            die(Error(self.errors))
+        if !self.sup.errors.is_empty() {
+            die(Error(self.sup.errors))
         }
         Asg { funs }
     }
 
     pub fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
-        self.context.new_layer();
+        self.sup.context.new_layer();
         for (param, typ) in fun.header.params.iter().zip(fun.header.typ.params) {
-            self.context.insert(param, typ);
+            self.sup.context.insert(param, typ);
         }
         let params = fun.header.params;
         let body = expr::Analyse::new(self).expr(fun.body).sup;
