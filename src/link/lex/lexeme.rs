@@ -2,6 +2,7 @@ pub type LexList<'a> = &'a [(&'a [u8], Lexeme<'a>)];
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Lexeme<'a> {
+    Struct,
     Eof,
     Fun,
     Name(&'a str),
@@ -59,6 +60,7 @@ impl Lexeme<'_> {
             Equal => "`=`",
             Colon => "`:`",
             Star => "`*`",
+            Struct => "`struct`",
         }
     }
 }

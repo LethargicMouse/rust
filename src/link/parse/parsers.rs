@@ -17,10 +17,12 @@ impl<'a> Parse<'a> {
     pub fn ast(&mut self) -> Result<Ast<'a>, Fail> {
         let mut funs = Vec::new();
         let mut externs = Vec::new();
+        let mut structs = Vec::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(fun),
                 Item::Extern(extrn) => externs.push(extrn),
+                Item::Struct(r#struct) => structs.push(r#struct),
             }
         }
         self.expect(Eof)?;
@@ -69,17 +71,19 @@ impl<'a> Parse<'a> {
         Ok(FunType { params, ret_type })
     }
 
-    fn param(&mut self) -> Result<(&'a str, Type<'a>), Fail> {
+    fn param(&mut self) -> Result<(&'a str, Type<'a>, Location<'a>), Fail> {
         self.either(&[
             |p| {
                 let name = p.name(true)?;
                 p.expect(Colon)?;
+                let location = p.here();
                 let typ = p.typ()?;
-                Ok((name, typ))
+                Ok((name, typ, location))
             },
             |p| {
+                let location = p.here();
                 let name = p.name(true)?;
-                Ok((name, Type::Name(name)))
+                Ok((name, Type::Name(name), location))
             },
         ])
     }

@@ -7,5 +7,6 @@ pub mod file;
 pub mod link;
 pub mod location;
 pub use location::Location;
+pub mod mem;
 pub mod process;
 pub mod qbe;

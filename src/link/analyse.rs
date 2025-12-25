@@ -2,15 +2,14 @@ mod error;
 use std::collections::{HashMap, HashSet};
 
 use error::Error;
-mod expr;
+mod after_structs;
 
 use crate::{
     die,
     link::{
         Asg, Context,
         analyse::error::CheckError,
-        asg,
-        ast::{Ast, Fun, Type},
+        ast::{Ast, Type},
     },
 };
 
@@ -82,21 +81,16 @@ impl<'a> Analyse<'a> {
         let funs = ast
             .funs
             .into_iter()
-            .map(|f| (f.header.name, self.fun(f)))
+            .map(|fun| {
+                (
+                    fun.header.name,
+                    after_structs::Analyse::new(&mut self).fun(fun),
+                )
+            })
             .collect();
         if !self.sup.errors.is_empty() {
             die(Error(self.sup.errors))
         }
         Asg { funs }
-    }
-
-    pub fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
-        self.sup.context.new_layer();
-        for (param, typ) in fun.header.params.iter().zip(fun.header.typ.params) {
-            self.sup.context.insert(param, typ);
-        }
-        let params = fun.header.params;
-        let body = expr::Analyse::new(self).expr(fun.body).sup;
-        asg::Fun { params, body }
     }
 }

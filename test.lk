@@ -76,5 +76,9 @@ fn putstr(file, str) {
     fwrite(str.ptr, 1, str.len, file)
   }
 
+struct str {
+
+  }
+
 fn postcompile() 
   do system(r"qbe -o out.s out.qbe && cc -o out out.s")

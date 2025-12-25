@@ -8,8 +8,9 @@ use crate::{
             error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared},
         },
         asg,
-        ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, Type, Var},
+        ast::{BinOp, Binary, Block, Call, Expr, Field, Fun, Get, If, Let, Literal, Type, Var},
     },
+    mem::{map_box, update},
 };
 
 pub struct Analyse<'a, 'b> {
@@ -25,7 +26,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         }
     }
 
-    pub fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
+    fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
         match expr {
             Expr::Call(call) => self.call(call).map_into(),
             Expr::Binary(binary) => self.binary(*binary).map_into(),
@@ -42,28 +43,6 @@ impl<'a, 'b> Analyse<'a, 'b> {
         }
     }
 
-    fn get_struct(
-        &mut self,
-        name: &'a str,
-        location: Location<'a>,
-    ) -> Result<&'b Struct<'a>, Fail> {
-        self.structs.get(name).ok_or_else(|| {
-            if self.sup.corrupt.contains(name) {
-                return Fail;
-            }
-            self.sup.corrupt.insert(name);
-            self.sup.errors.push(
-                NotDeclared {
-                    location,
-                    kind: "struct",
-                    name,
-                }
-                .into(),
-            );
-            Fail
-        })
-    }
-
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
         Typed {
             sup: asg::Literal::Int(0).into(),
@@ -72,8 +51,10 @@ impl<'a, 'b> Analyse<'a, 'b> {
     }
 
     fn field(&mut self, field: Field<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
-        let from_location = field.from.location();
         let Typed { sup: from, typ } = self.expr(field.from);
+        if matches!(typ, Type::Error) {
+            return Err(Fail);
+        }
         let name = typ.name().ok_or_else(|| {
             self.fail(NoField {
                 location: field.name_location,
@@ -81,7 +62,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
                 typ: typ.clone(),
             })
         })?;
-        let r#struct = self.get_struct(name, from_location)?;
+        let r#struct = self.structs.get(name).unwrap();
         let field = r#struct.fields.get(field.name).ok_or_else(|| {
             self.sup.errors.push(
                 NoField {
@@ -260,5 +241,57 @@ impl<'a, 'b> Analyse<'a, 'b> {
                 typ: Type::Ptr(Box::new(Type::Name("u8"))),
             },
         }
+    }
+
+    fn r#struct(&mut self, name: &'a str, location: Location<'a>) -> Type<'a> {
+        if self.structs.contains_key(name) {
+            Type::Name(name)
+        } else if self.sup.corrupt.contains(name) {
+            Type::Error
+        } else {
+            self.sup.corrupt.insert(name);
+            self.sup.errors.push(
+                NotDeclared {
+                    location,
+                    kind: "struct",
+                    name,
+                }
+                .into(),
+            );
+            Type::Error
+        }
+    }
+
+    fn typ(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
+        match typ {
+            Type::Ptr(t) => Type::Ptr(map_box(t, |t| self.typ(t, location))),
+            Type::Name(name) => self.r#struct(name, location),
+            Type::Fun(mut fun_type) => {
+                for typ in &mut fun_type.params {
+                    update(typ, |t| self.typ(t, location))
+                }
+                fun_type.ret_type = self.typ(fun_type.ret_type, location);
+                Type::Fun(fun_type)
+            }
+            Type::Unit => todo!(),
+            Type::Error => todo!(),
+        }
+    }
+
+    pub fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
+        self.sup.context.new_layer();
+        for ((param, typ), location) in fun
+            .header
+            .params
+            .iter()
+            .zip(fun.header.typ.params)
+            .zip(fun.header.type_params_locations)
+        {
+            let typ = self.typ(typ, location);
+            self.sup.context.insert(param, typ);
+        }
+        let params = fun.header.params;
+        let body = self.expr(fun.body).sup;
+        asg::Fun { params, body }
     }
 }

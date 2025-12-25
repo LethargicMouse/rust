@@ -12,9 +12,32 @@ pub struct Extern<'a> {
     pub typ: Type<'a>,
 }
 
+pub struct Struct<'a> {
+    pub name: &'a str,
+}
+
 pub enum Item<'a> {
     Fun(Fun<'a>),
     Extern(Extern<'a>),
+    Struct(Struct<'a>),
+}
+
+impl<'a> From<Struct<'a>> for Item<'a> {
+    fn from(v: Struct<'a>) -> Self {
+        Self::Struct(v)
+    }
+}
+
+impl<'a> From<Extern<'a>> for Item<'a> {
+    fn from(v: Extern<'a>) -> Self {
+        Self::Extern(v)
+    }
+}
+
+impl<'a> From<Fun<'a>> for Item<'a> {
+    fn from(v: Fun<'a>) -> Self {
+        Self::Fun(v)
+    }
 }
 
 pub struct Fun<'a> {
@@ -25,6 +48,7 @@ pub struct Fun<'a> {
 pub struct Header<'a> {
     pub name: &'a str,
     pub params: Vec<&'a str>,
+    pub type_params_locations: Vec<Location<'a>>,
     pub typ: FunType<'a>,
 }
 
@@ -208,6 +232,12 @@ pub enum Type<'a> {
     Fun(Box<FunType<'a>>),
     Unit,
     Error,
+}
+
+impl Default for Type<'_> {
+    fn default() -> Self {
+        Self::Error
+    }
 }
 
 impl<'a> From<&'a str> for Type<'a> {
