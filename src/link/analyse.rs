@@ -81,7 +81,7 @@ impl<'a> Analyse<'a> {
             self.context.insert(param, typ);
         }
         let params = fun.header.params;
-        let body = self.expr(fun.body).sup;
+        let body = expr::Analyse::new(self).expr(fun.body).sup;
         asg::Fun { params, body }
     }
 }

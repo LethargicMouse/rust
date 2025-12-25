@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use crate::{
     Location,
     link::{
+        Context,
         analyse::{
-            Analyse, Typed,
+            Struct, Typed,
             error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared},
         },
         asg,
@@ -10,7 +13,21 @@ use crate::{
     },
 };
 
-impl<'a> Analyse<'a> {
+pub struct Analyse<'a, 'b> {
+    structs: &'b HashMap<&'a str, Struct<'a>>,
+    errors: &'b mut Vec<CheckError<'a>>,
+    context: &'b mut Context<'a, Type<'a>>,
+}
+
+impl<'a, 'b> Analyse<'a, 'b> {
+    pub fn new(sup: &'b mut super::Analyse<'a>) -> Self {
+        Self {
+            structs: &sup.structs,
+            errors: &mut sup.errors,
+            context: &mut sup.context,
+        }
+    }
+
     pub fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
         match expr {
             Expr::Call(call) => self.call(call).map_into(),
@@ -26,6 +43,24 @@ impl<'a> Analyse<'a> {
                 Err(_) => self.fake_expr(),
             },
         }
+    }
+
+    fn get_struct(
+        &mut self,
+        name: &'a str,
+        location: Location<'a>,
+    ) -> Result<&'b Struct<'a>, Fail> {
+        self.structs.get(name).ok_or_else(|| {
+            self.errors.push(
+                NotDeclared {
+                    location,
+                    kind: "struct",
+                    name,
+                }
+                .into(),
+            );
+            Fail
+        })
     }
 
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
@@ -45,17 +80,7 @@ impl<'a> Analyse<'a> {
                 typ: typ.clone(),
             })
         })?;
-        let r#struct = self.structs.get(name).ok_or_else(|| {
-            self.errors.push(
-                NotDeclared {
-                    location: from_location,
-                    kind: "struct",
-                    name,
-                }
-                .into(),
-            );
-            Fail
-        })?;
+        let r#struct = self.get_struct(name, from_location)?;
         let field = r#struct.fields.get(field.name).ok_or_else(|| {
             self.errors.push(
                 NoField {
