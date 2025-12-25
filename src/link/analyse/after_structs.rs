@@ -94,10 +94,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         })?;
         let offset = field.offset;
         let typ = field.typ.clone();
-        Ok(Typed {
-            sup: asg::Field { from, offset },
-            typ,
-        })
+        Ok(typed(asg::Field { from, offset }, typ))
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
@@ -107,21 +104,15 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn let_expr(&mut self, let_expr: Let<'a>) -> Typed<'a, asg::Let<'a>> {
         let name = let_expr.name;
-        let Typed { sup: expr, typ } = self.expr(let_expr.expr);
+        let (expr, typ) = self.expr(let_expr.expr).into();
         self.sup.context.insert(name, typ);
-        Typed {
-            sup: asg::Let { name, expr },
-            typ: Type::Unit,
-        }
+        typed(asg::Let { name, expr }, Type::Unit)
     }
 
     fn block(&mut self, block: Block<'a>) -> Typed<'a, asg::Block<'a>> {
         let stmts: Vec<_> = block.stmts.into_iter().map(|e| self.expr(e).sup).collect();
-        let Typed { sup: ret, typ } = self.expr(block.ret);
-        Typed {
-            sup: asg::Block { stmts, ret },
-            typ,
-        }
+        let (ret, typ) = self.expr(block.ret).into();
+        typed(asg::Block { stmts, ret }, typ)
     }
 
     fn get(&mut self, get: Get<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -129,22 +120,20 @@ impl<'a, 'b> Analyse<'a, 'b> {
         let from = self.expr(get.from);
         let typ = self.index_type(from.typ, location);
         let index = self.expr(get.index);
-        Typed {
-            sup: asg::Expr::Deref(Box::new(
-                asg::Binary {
-                    left: from.sup,
-                    op: asg::BinOp::Add,
-                    right: asg::Binary {
-                        left: index.sup,
-                        op: asg::BinOp::Multiply,
-                        right: asg::Literal::Int(8).into(),
-                    }
-                    .into(),
+        let res = asg::Expr::Deref(Box::new(
+            asg::Binary {
+                left: from.sup,
+                op: asg::BinOp::Add,
+                right: asg::Binary {
+                    left: index.sup,
+                    op: asg::BinOp::Multiply,
+                    right: asg::Literal::Int(8).into(),
                 }
                 .into(),
-            )),
-            typ,
-        }
+            }
+            .into(),
+        ));
+        typed(res, typ)
     }
 
     fn index_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
@@ -160,19 +149,14 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn if_expr(&mut self, if_expr: If<'a>) -> Typed<'a, asg::If<'a>> {
         let condition = self.expr(if_expr.condition).sup;
-        let Typed {
-            sup: then_expr,
-            typ,
-        } = self.expr(if_expr.then_expr);
+        let (then_expr, typ) = self.expr(if_expr.then_expr).into();
         let else_expr = self.expr(if_expr.else_expr).sup;
-        Typed {
-            sup: asg::If {
-                condition,
-                then_expr,
-                else_expr,
-            },
-            typ,
-        }
+        let res = asg::If {
+            condition,
+            then_expr,
+            else_expr,
+        };
+        typed(res, typ)
     }
 
     fn call(&mut self, call: Call<'a>) -> Typed<'a, asg::Call<'a>> {
@@ -181,10 +165,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         let fun_typ = self.var(call.var).typ;
         let typ = self.ret_type(fun_typ, location);
         let args = call.args.into_iter().map(|e| self.expr(e).sup).collect();
-        Typed {
-            sup: asg::Call { name, args },
-            typ,
-        }
+        typed(asg::Call { name, args }, typ)
     }
 
     fn ret_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
@@ -200,10 +181,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn var(&mut self, var: Var<'a>) -> Typed<'a, &'a str> {
         match self.sup.context.get(var.name) {
-            Some(typ) => Typed {
-                sup: var.name,
-                typ: typ.clone(),
-            },
+            Some(typ) => typed(var.name, typ.clone()),
             None => {
                 self.sup.errors.push(
                     NotDeclared {
@@ -213,16 +191,13 @@ impl<'a, 'b> Analyse<'a, 'b> {
                     }
                     .into(),
                 );
-                Typed {
-                    sup: var.name,
-                    typ: Type::Error,
-                }
+                typed(var.name, Type::Error)
             }
         }
     }
 
     fn binary(&mut self, binary: Binary<'a>) -> Typed<'a, asg::Binary<'a>> {
-        let Typed { sup: left, typ } = self.expr(binary.left);
+        let (left, typ) = self.expr(binary.left).into();
         let right = self.expr(binary.right).sup;
         let typ = match binary.op {
             BinOp::Plus => typ,
@@ -230,10 +205,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
             BinOp::Less => Type::Name("bool"),
         };
         let op = self.bin_op(binary.op);
-        Typed {
-            sup: asg::Binary { left, op, right },
-            typ,
-        }
+        typed(asg::Binary { left, op, right }, typ)
     }
 
     fn bin_op(&self, bin_op: BinOp) -> asg::BinOp {
@@ -246,18 +218,11 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn literal(&self, literal: Literal<'a>) -> Typed<'a, asg::Literal<'a>> {
         match literal {
-            Literal::Unit => Typed {
-                sup: asg::Literal::Int(0),
-                typ: Type::Unit,
-            },
-            Literal::Int(i) => Typed {
-                sup: asg::Literal::Int(i),
-                typ: Type::Name("i32"),
-            },
-            Literal::RawStr(s) => Typed {
-                sup: asg::Literal::Str(s),
-                typ: Type::Ptr(Box::new(Type::Name("u8"))),
-            },
+            Literal::Unit => typed(asg::Literal::Int(0), Type::Unit),
+            Literal::Int(i) => typed(asg::Literal::Int(i), Type::Name("i32")),
+            Literal::RawStr(s) => {
+                typed(asg::Literal::Str(s), Type::Ptr(Box::new(Type::Name("u8"))))
+            }
         }
     }
 
