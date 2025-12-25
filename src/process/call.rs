@@ -1,6 +1,6 @@
 use std::{fmt::Display, process::Command};
 
-use crate::{die::Mortal, display::block::Block, process::Error};
+use crate::{die::Mortal, display::Block, process::Error};
 
 pub fn call<'a>(path: &'a str, args: &'a [&'a str]) -> Result<(), Fail<'a>> {
     let output = Command::new(path)

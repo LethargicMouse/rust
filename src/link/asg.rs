@@ -42,6 +42,12 @@ pub enum Expr<'a> {
     If(Box<If<'a>>),
 }
 
+impl<'a> From<&'a str> for Expr<'a> {
+    fn from(v: &'a str) -> Self {
+        Self::Var(v)
+    }
+}
+
 impl<'a> From<Field<'a>> for Expr<'a> {
     fn from(v: Field<'a>) -> Self {
         Self::Field(Box::new(v))

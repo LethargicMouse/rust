@@ -15,6 +15,16 @@ pub struct Location<'a> {
     pub end: Pos,
 }
 
+impl<'a> Location<'a> {
+    pub fn combine(self, other: Self) -> Self {
+        Self {
+            source: self.source,
+            start: self.start,
+            end: other.end,
+        }
+    }
+}
+
 impl Display for Location<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

@@ -1,5 +1,5 @@
 use crate::link::{
-    lex::Lexeme,
+    lex::Lexeme::Comma,
     parse::{Parse, error::Fail, parsers::Parser},
 };
 
@@ -26,17 +26,31 @@ impl<'a> Parse<'a> {
         res
     }
 
-    pub fn sep<T>(&mut self, f: Parser<'a, T>) -> Vec<T> {
-        let mut res = Vec::new();
-        if let Some(t) = self.maybe(f) {
-            res.push(t);
+    pub fn sep<T>(&mut self, parser: Parser<'a, T>) -> ParseSep<'a, '_, T> {
+        ParseSep {
+            parse: self,
+            parser,
+            first: true,
         }
-        while let Some(t) = self.maybe(|p| {
-            p.expect(Lexeme::Comma)?;
-            f(p)
-        }) {
-            res.push(t);
+    }
+}
+
+pub struct ParseSep<'a, 'b, T> {
+    parse: &'b mut Parse<'a>,
+    parser: Parser<'a, T>,
+    first: bool,
+}
+
+impl<T> Iterator for ParseSep<'_, '_, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.first {
+            self.first = false;
+            self.parse.maybe(self.parser)
+        } else {
+            self.parse.expect(Comma).ok()?;
+            self.parse.maybe(self.parser)
         }
-        res
     }
 }

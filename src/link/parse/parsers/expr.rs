@@ -1,45 +1,70 @@
-use crate::link::{
-    ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, NameLoc, Postfix},
-    lex::Lexeme::*,
-    parse::{Parse, error::Fail},
+use crate::{
+    Location,
+    link::{
+        ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, Postfix, Var},
+        lex::Lexeme::*,
+        parse::{Parse, error::Fail},
+    },
 };
 
 impl<'a> Parse<'a> {
     fn expr_2(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
-            |p| Ok(p.literal_()?.into()),
+            |p| {
+                let location = p.here();
+                Ok(Expr::Literal(p.literal_()?, location))
+            },
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
-            |p| Ok(Expr::Var(p.name_loc(false)?)),
+            |p| Ok(Expr::Var(p.var(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
     }
 
     fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
+        let location = self.here();
         self.expect_(Let)?;
         let name = self.name(true)?;
         self.expect(Equal)?;
         let expr = self.expr()?;
-        Ok(Let { name, expr })
+        Ok(Let {
+            name,
+            expr,
+            location,
+        })
     }
 
-    fn name_loc(&mut self, loud: bool) -> Result<NameLoc<'a>, Fail> {
+    fn var(&mut self, loud: bool) -> Result<Var<'a>, Fail> {
         let location = self.here();
         let name = self.name(loud)?;
-        Ok(NameLoc { name, location })
+        Ok(Var { name, location })
     }
 
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
         let mut res = self.expr_2()?;
         while let Some(postfix) = self.maybe(Self::postfix_) {
             match postfix {
-                Postfix::Get(index) => res = Get { from: res, index }.into(),
+                Postfix::Get(index) => {
+                    res = Get {
+                        location: res.location().combine(index.location()),
+                        from: res,
+                        index,
+                    }
+                    .into()
+                }
                 Postfix::Call(mut call) => {
                     call.args.insert(0, res);
                     res = Expr::Call(call);
                 }
-                Postfix::Field(name) => res = Field { from: res, name }.into(),
+                Postfix::Field(name, name_location) => {
+                    res = Field {
+                        from: res,
+                        name,
+                        name_location,
+                    }
+                    .into()
+                }
             }
         }
         Ok(res)
@@ -55,16 +80,19 @@ impl<'a> Parse<'a> {
             },
             |p| {
                 p.expect_(Dot)?;
-                Ok(p.name(true)?.into())
+                Ok(p.call(true)?.into())
             },
             |p| {
                 p.expect_(Dot)?;
-                Ok(p.call(true)?.into())
+                let location = p.here();
+                let name = p.name(true)?;
+                Ok(Postfix::Field(name, location))
             },
         ])
     }
 
     fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
+        let location = self.here();
         self.expect_(If)?;
         let condition = self.expr()?;
         let then_expr = self.block_or_do()?;
@@ -73,12 +101,17 @@ impl<'a> Parse<'a> {
                 p.expect(Else)?;
                 p.expr()
             })
-            .unwrap_or(Literal::Unit.into());
+            .unwrap_or_else(|| self.implicit_unit());
         Ok(If {
+            location,
             condition,
             then_expr,
             else_expr,
         })
+    }
+
+    fn implicit_unit(&self) -> Expr<'a> {
+        Expr::Literal(Literal::Unit, self.here())
     }
 
     pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
@@ -100,17 +133,20 @@ impl<'a> Parse<'a> {
     fn block_(&mut self) -> Result<Block<'a>, Fail> {
         self.expect_(CurL)?;
         let stmts = self.many(Self::stmt);
-        let ret = self.maybe(Self::expr).unwrap_or(Literal::Unit.into());
+        let ret = self
+            .maybe(Self::expr)
+            .unwrap_or_else(|| self.implicit_unit());
         self.expect_(CurR)?;
         Ok(Block { stmts, ret })
     }
 
     pub fn expr(&mut self) -> Result<Expr<'a>, Fail> {
         let mut expr = self.expr_1()?;
-        while let Some((op, right)) = self.maybe(|p| p.bin_postfix_()) {
+        while let Some((op, op_location, right)) = self.maybe(|p| p.bin_postfix_()) {
             expr = Binary {
                 left: expr,
                 op,
+                op_location,
                 right,
             }
             .into()
@@ -118,10 +154,11 @@ impl<'a> Parse<'a> {
         Ok(expr)
     }
 
-    fn bin_postfix_(&mut self) -> Result<(BinOp, Expr<'a>), Fail> {
+    fn bin_postfix_(&mut self) -> Result<(BinOp, Location<'a>, Expr<'a>), Fail> {
         let op = self.bin_op_()?;
+        let location = self.here();
         let expr = self.expr_1()?;
-        Ok((op, expr))
+        Ok((op, location, expr))
     }
 
     fn bin_op_(&mut self) -> Result<BinOp, Fail> {
@@ -133,11 +170,11 @@ impl<'a> Parse<'a> {
     }
 
     fn call(&mut self, loud: bool) -> Result<Call<'a>, Fail> {
-        let fun = self.name_loc(loud)?;
+        let var = self.var(loud)?;
         self.expect_(ParL)?;
-        let args = self.sep(Self::expr);
+        let args = self.sep(Self::expr).collect();
         self.expect(ParR)?;
-        Ok(Call { fun, args })
+        Ok(Call { var, args })
     }
 
     pub fn stmt(&mut self) -> Result<Expr<'a>, Fail> {

@@ -1,4 +1,6 @@
-use crate::Location;
+use std::fmt::Display;
+
+use crate::{Location, display::Sep};
 
 pub struct Ast<'a> {
     pub funs: Vec<Fun<'a>>,
@@ -12,7 +14,7 @@ pub struct Extern<'a> {
 
 pub enum Item<'a> {
     Fun(Fun<'a>),
-    Extern(&'a str),
+    Extern(Extern<'a>),
 }
 
 pub struct Fun<'a> {
@@ -32,6 +34,12 @@ pub struct FunType<'a> {
     pub ret_type: Type<'a>,
 }
 
+impl Display for FunType<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "fn({}) {}", Sep(", ", &self.params), self.ret_type)
+    }
+}
+
 pub enum Literal<'a> {
     Unit,
     Int(i64),
@@ -39,6 +47,7 @@ pub enum Literal<'a> {
 }
 
 pub struct If<'a> {
+    pub location: Location<'a>,
     pub condition: Expr<'a>,
     pub then_expr: Expr<'a>,
     pub else_expr: Expr<'a>,
@@ -50,6 +59,7 @@ pub struct Block<'a> {
 }
 
 pub struct Let<'a> {
+    pub location: Location<'a>,
     pub name: &'a str,
     pub expr: Expr<'a>,
 }
@@ -57,6 +67,12 @@ pub struct Let<'a> {
 pub struct Field<'a> {
     pub from: Expr<'a>,
     pub name: &'a str,
+    pub name_location: Location<'a>,
+}
+
+pub struct Var<'a> {
+    pub name: &'a str,
+    pub location: Location<'a>,
 }
 
 pub enum Expr<'a> {
@@ -64,9 +80,9 @@ pub enum Expr<'a> {
     Let(Box<Let<'a>>),
     Call(Call<'a>),
     Binary(Box<Binary<'a>>),
-    Literal(Literal<'a>),
+    Literal(Literal<'a>, Location<'a>),
     If(Box<If<'a>>),
-    Var(NameLoc<'a>),
+    Var(Var<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
 }
@@ -95,14 +111,28 @@ impl<'a> From<Block<'a>> for Expr<'a> {
     }
 }
 
-impl Expr<'_> {
+impl<'a> Expr<'a> {
+    pub fn location(&self) -> Location<'a> {
+        match self {
+            Expr::Field(field) => field.name_location,
+            Expr::Let(let_expr) => let_expr.location,
+            Expr::Call(call) => call.var.location,
+            Expr::Binary(binary) => binary.op_location,
+            Expr::Literal(_, location) => *location,
+            Expr::If(if_expr) => if_expr.location,
+            Expr::Var(var) => var.location,
+            Expr::Get(get) => get.location,
+            Expr::Block(block) => block.ret.location(),
+        }
+    }
+
     pub fn needs_semicolon(&self) -> bool {
         match self {
             Expr::Call(_) => true,
             Expr::Binary(_) => true,
-            Expr::Literal(_) => true,
+            Expr::Literal(_, _) => true,
             Expr::If(if_expr) => {
-                if matches!(if_expr.else_expr, Expr::Literal(Literal::Unit)) {
+                if matches!(if_expr.else_expr, Expr::Literal(Literal::Unit, _)) {
                     if_expr.then_expr.needs_semicolon()
                 } else {
                     if_expr.else_expr.needs_semicolon()
@@ -117,8 +147,8 @@ impl Expr<'_> {
     }
 }
 
-impl<'a> From<NameLoc<'a>> for Expr<'a> {
-    fn from(v: NameLoc<'a>) -> Self {
+impl<'a> From<Var<'a>> for Expr<'a> {
+    fn from(v: Var<'a>) -> Self {
         Self::Var(v)
     }
 }
@@ -129,12 +159,6 @@ impl<'a> From<Get<'a>> for Expr<'a> {
     }
 }
 
-impl<'a> From<Literal<'a>> for Expr<'a> {
-    fn from(v: Literal<'a>) -> Self {
-        Self::Literal(v)
-    }
-}
-
 impl<'a> From<Binary<'a>> for Expr<'a> {
     fn from(v: Binary<'a>) -> Self {
         Self::Binary(Box::new(v))
@@ -142,13 +166,14 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
 }
 
 pub struct Call<'a> {
-    pub fun: NameLoc<'a>,
+    pub var: Var<'a>,
     pub args: Vec<Expr<'a>>,
 }
 
 pub struct Binary<'a> {
     pub left: Expr<'a>,
     pub op: BinOp,
+    pub op_location: Location<'a>,
     pub right: Expr<'a>,
 }
 
@@ -161,13 +186,7 @@ pub enum BinOp {
 pub enum Postfix<'a> {
     Get(Expr<'a>),
     Call(Call<'a>),
-    Field(&'a str),
-}
-
-impl<'a> From<&'a str> for Postfix<'a> {
-    fn from(v: &'a str) -> Self {
-        Self::Field(v)
-    }
+    Field(&'a str, Location<'a>),
 }
 
 impl<'a> From<Call<'a>> for Postfix<'a> {
@@ -179,18 +198,34 @@ impl<'a> From<Call<'a>> for Postfix<'a> {
 pub struct Get<'a> {
     pub from: Expr<'a>,
     pub index: Expr<'a>,
-}
-
-pub struct NameLoc<'a> {
-    pub name: &'a str,
     pub location: Location<'a>,
 }
 
 #[derive(Clone)]
 pub enum Type<'a> {
+    Ptr(Box<Type<'a>>),
     Name(&'a str),
     Fun(Box<FunType<'a>>),
     Unit,
+    Error,
+}
+
+impl<'a> From<&'a str> for Type<'a> {
+    fn from(v: &'a str) -> Self {
+        Self::Name(v)
+    }
+}
+
+impl Display for Type<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Name(n) => write!(f, "{n}"),
+            Type::Fun(fun_type) => write!(f, "{fun_type}"),
+            Type::Unit => write!(f, "()"),
+            Type::Error => write!(f, "<error>"),
+            Type::Ptr(t) => write!(f, "*{t}"),
+        }
+    }
 }
 
 impl<'a> From<FunType<'a>> for Type<'a> {
@@ -200,11 +235,10 @@ impl<'a> From<FunType<'a>> for Type<'a> {
 }
 
 impl<'a> Type<'a> {
-    pub fn name(&self) -> &'a str {
+    pub fn name(&self) -> Option<&'a str> {
         match self {
-            Type::Name(n) => n,
-            Type::Unit => "()",
-            Type::Fun(_) => "fn",
+            Type::Name(n) => Some(n),
+            _ => None,
         }
     }
 }

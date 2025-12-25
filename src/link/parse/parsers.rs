@@ -5,7 +5,7 @@ mod literal;
 use crate::{
     Location,
     link::{
-        ast::{Ast, Item},
+        ast::{Ast, FunType, Item, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse},
     },
@@ -20,7 +20,7 @@ impl<'a> Parse<'a> {
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(fun),
-                Item::Extern(name) => externs.push(name),
+                Item::Extern(extrn) => externs.push(extrn),
             }
         }
         self.expect(Eof)?;
@@ -46,5 +46,26 @@ impl<'a> Parse<'a> {
 
     fn here(&self) -> Location<'a> {
         self.tokens[self.cursor].location
+    }
+
+    fn typ(&mut self) -> Result<Type<'a>, Fail> {
+        self.either(&[
+            |p| Ok(p.name(false)?.into()),
+            |p| Ok(p.fun_type_()?.into()),
+            |p| {
+                p.expect_(Star)?;
+                Ok(Type::Ptr(Box::new(p.typ()?)))
+            },
+        ])
+        .or_else(|_| self.fail("type"))
+    }
+
+    fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {
+        self.expect_(Fun)?;
+        self.expect(ParL)?;
+        let params = self.sep(Self::typ).collect();
+        self.expect(ParR)?;
+        let ret_type = self.maybe(Self::typ).unwrap_or(Type::Unit);
+        Ok(FunType { params, ret_type })
     }
 }

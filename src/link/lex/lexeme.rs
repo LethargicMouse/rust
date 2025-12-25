@@ -13,6 +13,8 @@ pub enum Lexeme<'a> {
     Plus,
     RawStr(&'a str),
     Semicolon,
+    Colon,
+    Star,
     Comma,
     BraL,
     BraR,
@@ -55,6 +57,8 @@ impl Lexeme<'_> {
             Dot => "`.`",
             Let => "`let`",
             Equal => "`=`",
+            Colon => "`:`",
+            Star => "`*`",
         }
     }
 }

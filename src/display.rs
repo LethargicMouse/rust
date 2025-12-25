@@ -1,3 +1,7 @@
-pub mod block;
+mod block;
+pub use block::Block;
 pub mod colors;
-pub mod repeat;
+mod repeat;
+pub use repeat::Repeat;
+mod sep;
+pub use sep::Sep;
