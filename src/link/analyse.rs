@@ -106,6 +106,7 @@ struct Field<'a> {
 
 struct Struct<'a> {
     fields: HashMap<&'a str, Field<'a>>,
+    size: usize,
 }
 
 struct State<'a> {
@@ -125,6 +126,7 @@ impl<'a> State<'a> {
 }
 
 struct Analyse<'a> {
+    ast_structs: HashMap<&'a str, ast::Struct<'a>>,
     structs: HashMap<&'a str, Struct<'a>>,
     sup: State<'a>,
 }
@@ -134,10 +136,12 @@ impl<'a> Analyse<'a> {
         Self {
             sup: State::new(),
             structs: HashMap::new(),
+            ast_structs: HashMap::new(),
         }
     }
 
     pub fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
+        self.ast_structs = ast.structs;
         for extrn in ast.externs {
             let typ = self.typ(extrn.typ);
             self.sup.context.insert(extrn.name, typ);
@@ -178,7 +182,7 @@ impl<'a> Analyse<'a> {
         typed(asg::Literal::Int(0).into(), Type::Error)
     }
 
-    fn field(&mut self, field: ast::Field<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
+    fn field(&mut self, field: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
         let (from, typ) = self.expr(field.from).into();
         if matches!(typ, Type::Error) {
             return Err(Fail);
@@ -190,18 +194,14 @@ impl<'a> Analyse<'a> {
                 typ: typ.clone(),
             })
         })?;
-        let r#struct = self.structs.get(name).unwrap();
-        let field = r#struct.fields.get(field.name).ok_or_else(|| {
-            self.sup.errors.push(
-                NoField {
-                    location: field.name_location,
-                    name: field.name,
-                    typ,
-                }
-                .into(),
-            );
-            Fail
-        })?;
+        let field = match self.structs[name].fields.get(field.name) {
+            Some(field) => Ok(field),
+            None => Err(self.fail(NoField {
+                location: field.name_location,
+                name: field.name,
+                typ,
+            })),
+        }?;
         let offset = field.offset;
         let typ = field.typ.clone();
         Ok(typed(asg::Field { from, offset }, typ))
@@ -335,29 +335,61 @@ impl<'a> Analyse<'a> {
         }
     }
 
-    fn r#struct(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
+    fn struct_type(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
         if self.structs.contains_key(name) {
             Type::Name(name)
         } else if self.sup.corrupt.contains(name) {
             Type::Error
         } else {
-            self.sup.corrupt.insert(name);
-            self.sup.errors.push(
-                NotDeclared {
-                    location,
-                    kind: "struct",
-                    name,
+            match self.ast_structs.remove(name) {
+                Some(r#struct) => {
+                    self.r#struct(name, r#struct);
+                    Type::Name(name)
                 }
-                .into(),
-            );
-            Type::Error
+                None => {
+                    self.sup.corrupt.insert(name);
+                    self.sup.errors.push(
+                        NotDeclared {
+                            location,
+                            kind: "struct",
+                            name,
+                        }
+                        .into(),
+                    );
+                    Type::Error
+                }
+            }
+        }
+    }
+
+    fn r#struct(&mut self, name: &'a str, r#struct: ast::Struct<'a>) {
+        let mut fields = HashMap::new();
+        let mut offset = 0;
+        for field in r#struct.fields {
+            let typ = self.typ(field.typ);
+            let size = self.size(&typ);
+            fields.insert(field.name, Field { offset, typ });
+            offset += size;
+        }
+        let size = offset;
+        let r#struct = Struct { fields, size };
+        self.structs.insert(name, r#struct);
+    }
+
+    fn size(&self, typ: &Type<'a>) -> usize {
+        match typ {
+            Type::Ptr(_) => 8,
+            Type::Name(name) => self.structs[name].size,
+            Type::Fun(_) => 8,
+            Type::Prime(prime) => prime.size(),
+            Type::Error => 0,
         }
     }
 
     fn typ(&mut self, typ: ast::Type<'a>) -> Type<'a> {
         match typ {
             ast::Type::Ptr(t) => Type::Ptr(Box::new(self.typ(*t))),
-            ast::Type::Name(var) => self.r#struct(var),
+            ast::Type::Name(var) => self.struct_type(var),
             ast::Type::Fun(fun_type) => self.fun_type(*fun_type).into(),
             ast::Type::Prime(prime) => Type::Prime(prime),
         }

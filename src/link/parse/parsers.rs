@@ -2,10 +2,12 @@ mod expr;
 mod item;
 mod literal;
 
+use std::collections::HashMap;
+
 use crate::{
     Location,
     link::{
-        ast::{Ast, FunType, Item, Prime, Type},
+        ast::{Ast, Field, FunType, Item, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse},
     },
@@ -17,16 +19,22 @@ impl<'a> Parse<'a> {
     pub fn ast(&mut self) -> Result<Ast<'a>, Fail> {
         let mut funs = Vec::new();
         let mut externs = Vec::new();
-        let mut structs = Vec::new();
+        let mut structs = HashMap::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(fun),
                 Item::Extern(extrn) => externs.push(extrn),
-                Item::Struct(r#struct) => structs.push(r#struct),
+                Item::Struct(name, r#struct) => {
+                    structs.insert(name, r#struct);
+                }
             }
         }
         self.expect(Eof)?;
-        Ok(Ast { funs, externs })
+        Ok(Ast {
+            funs,
+            externs,
+            structs,
+        })
     }
 
     pub fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
@@ -71,17 +79,20 @@ impl<'a> Parse<'a> {
         Ok(FunType { params, ret_type })
     }
 
-    fn param(&mut self) -> Result<(&'a str, Type<'a>), Fail> {
+    fn field(&mut self) -> Result<Field<'a>, Fail> {
         self.either(&[
             |p| {
                 let name = p.name(true)?;
                 p.expect(Colon)?;
                 let typ = p.typ()?;
-                Ok((name, typ))
+                Ok(Field { name, typ })
             },
             |p| {
                 let lame = p.lame(true)?;
-                Ok((lame.name, Type::Name(lame)))
+                Ok(Field {
+                    name: lame.name,
+                    typ: Type::Name(lame),
+                })
             },
         ])
     }

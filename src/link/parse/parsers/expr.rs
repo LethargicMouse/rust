@@ -1,7 +1,7 @@
 use crate::{
     Location,
     link::{
-        ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, Postfix},
+        ast::{BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Postfix},
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
     },
@@ -52,7 +52,7 @@ impl<'a> Parse<'a> {
                     res = Expr::Call(call);
                 }
                 Postfix::Field(name, name_location) => {
-                    res = Field {
+                    res = FieldExpr {
                         from: res,
                         name,
                         name_location,

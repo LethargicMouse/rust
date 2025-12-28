@@ -14,12 +14,13 @@ impl<'a> Parse<'a> {
         .or_else(|_| self.fail("item"))
     }
 
-    fn struct_(&mut self) -> Result<Struct<'a>, Fail> {
+    fn struct_(&mut self) -> Result<(&'a str, Struct<'a>), Fail> {
         self.expect_(Struct)?;
         let name = self.name(true)?;
         self.expect(CurL)?;
+        let fields = self.sep(Self::field).collect();
         self.expect(CurR)?;
-        Ok(Struct { name })
+        Ok((name, Struct { fields }))
     }
 
     fn extrn_(&mut self) -> Result<Extern<'a>, Fail> {
@@ -43,9 +44,9 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         let mut params = Vec::new();
         let mut type_params = Vec::new();
-        for (param, typ) in self.sep(Self::param) {
-            params.push(param);
-            type_params.push(typ);
+        for param in self.sep(Self::field) {
+            params.push(param.name);
+            type_params.push(param.typ);
         }
         self.expect(ParR)?;
         let ret_type = Prime::Unit.into();
