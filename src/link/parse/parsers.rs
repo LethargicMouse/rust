@@ -60,14 +60,25 @@ impl<'a> Parse<'a> {
 
     fn typ(&mut self) -> Result<Type<'a>, Fail> {
         self.either(&[
-            |p| Ok(p.lame(false)?.into()),
+            |p| Ok(p.prime_()?.into()),
             |p| Ok(p.fun_type_()?.into()),
             |p| {
                 p.expect_(Star)?;
                 Ok(Type::Ptr(Box::new(p.typ()?)))
             },
+            |p| Ok(p.lame(false)?.into()),
         ])
         .or_else(|_| self.fail("type"))
+    }
+
+    fn prime_(&mut self) -> Result<Prime, Fail> {
+        self.either(&[
+            |p| p.expect_(Name("i32")).map(|_| Prime::I32),
+            |p| p.expect_(Name("u8")).map(|_| Prime::U8),
+            |p| p.expect_(Name("u64")).map(|_| Prime::U64),
+            |p| p.expect_(Name("bool")).map(|_| Prime::Bool),
+            |p| p.unit_().map(|_| Prime::Unit),
+        ])
     }
 
     fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {

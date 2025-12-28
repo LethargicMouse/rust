@@ -245,6 +245,7 @@ pub enum Prime {
     Bool,
     I32,
     U8,
+    U64,
 }
 
 impl Prime {
@@ -254,6 +255,7 @@ impl Prime {
             Prime::Bool => 1,
             Prime::I32 => 4,
             Prime::U8 => 1,
+            Prime::U64 => 8,
         }
     }
 }
@@ -265,6 +267,7 @@ impl Display for Prime {
             Prime::Bool => write!(f, "bool"),
             Prime::I32 => write!(f, "i32"),
             Prime::U8 => write!(f, "u8"),
+            Prime::U64 => write!(f, "u64"),
         }
     }
 }

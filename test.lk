@@ -2,11 +2,11 @@ extern strcmp: fn(*u8, *u8) bool;
 extern system: fn(*u8);
 extern puts: fn(*u8);
 extern exit: fn(i32);
-extern fopen: fn(*u8, *u8);
-extern fwrite: fn(*u8, u64, u64, *FILE) u64;
-extern fclose: fn(*FILE);
+extern open: fn(*u8, *u8) i32;
+extern write: fn(i32, *u8, u64) u64;
+extern close: fn(i32);
 
-fn main(argc, argv: **u8) {
+fn main(argc: i32, argv: **u8) {
     if argc < 2
       do die(r"! error reading args: expected command");
     if strcmp(argv[1], r"clean") == 0
@@ -19,7 +19,7 @@ fn main(argc, argv: **u8) {
     else puts(r"! error reading args: unexpected command");
   }
 
-fn die(e) {
+fn die(e: *u8) {
     puts(e);
     exit(1)
   }
@@ -27,18 +27,18 @@ fn die(e) {
 fn clean()
   do system(r"rm out.qbe out.s out")
 
-fn run(path) {
+fn run(path: *u8) {
     clean();
     build(path);
     system(r"./out")
   }
 
-fn build(path) {
+fn build(path: *u8) {
     compile(path).dump();
     postcompile();
   }
 
-fn compile(path) 
+fn compile(path: *u8) 
   do path
     .read()
     .lex()
@@ -46,38 +46,49 @@ fn compile(path)
     .analyse()
     .generate()
 
-fn read(path) {
+fn read(path: *u8) {
     
   }
 
-fn lex(code) {
+fn lex(source) {
     
   }
 
-fn parse(tokens) {
+struct source {}
+
+fn parse(tokens: vec_token) {
 
   }
+
+struct vec_token {}
 
 fn analyse(ast) {
 
   }
 
+struct ast {}
+
 fn generate(asg) {
     
   }
 
+struct asg {}
+
 fn dump(ir) {
-    let out = fopen(r"out.qbe", r"w");
+    let out = open(r"out.qbe", r"w");
     putstr(out, "test drive");
-    fclose(out);
+    close(out);
   }
 
-fn putstr(file, str) {
-    fwrite(str.ptr, 1, str.len, file)
+struct ir {}
+
+fn putstr(file: i32, str) {
+    write(file, str.ptr, str.len)
   }
 
 struct str {
-
+    len: u64,
+    ptr: *u8
   }
 
 fn postcompile() 

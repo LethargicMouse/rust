@@ -13,8 +13,8 @@ use crate::{
     source::Source,
 };
 
-pub fn lex(code: &'_ Source) -> Vec<Token<'_>> {
-    Lex::new(code).run(LIST)
+pub fn lex(source: &'_ Source) -> Vec<Token<'_>> {
+    Lex::new(source).run(LIST)
 }
 
 struct Lex<'a> {

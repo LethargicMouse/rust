@@ -36,7 +36,7 @@ impl Lexeme<'_> {
         match self {
             Eof => "<eof>",
             Fun => "`fn`",
-            Name(_) => "<name>",
+            Name(_) => "<your mom>",
             ParL => "`(`",
             ParR => "`)`",
             CurL => "`{`",
