@@ -5,7 +5,7 @@ mod literal;
 use crate::{
     Location,
     link::{
-        ast::{Ast, FunType, Item, Type},
+        ast::{Ast, FunType, Item, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse},
     },
@@ -52,7 +52,7 @@ impl<'a> Parse<'a> {
 
     fn typ(&mut self) -> Result<Type<'a>, Fail> {
         self.either(&[
-            |p| Ok(p.name(false)?.into()),
+            |p| Ok(p.lame(false)?.into()),
             |p| Ok(p.fun_type_()?.into()),
             |p| {
                 p.expect_(Star)?;
@@ -67,23 +67,21 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         let params = self.sep(Self::typ).collect();
         self.expect(ParR)?;
-        let ret_type = self.maybe(Self::typ).unwrap_or(Type::Unit);
+        let ret_type = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
         Ok(FunType { params, ret_type })
     }
 
-    fn param(&mut self) -> Result<(&'a str, Type<'a>, Location<'a>), Fail> {
+    fn param(&mut self) -> Result<(&'a str, Type<'a>), Fail> {
         self.either(&[
             |p| {
                 let name = p.name(true)?;
                 p.expect(Colon)?;
-                let location = p.here();
                 let typ = p.typ()?;
-                Ok((name, typ, location))
+                Ok((name, typ))
             },
             |p| {
-                let location = p.here();
-                let name = p.name(true)?;
-                Ok((name, Type::Name(name), location))
+                let lame = p.lame(true)?;
+                Ok((lame.name, Type::Name(lame)))
             },
         ])
     }

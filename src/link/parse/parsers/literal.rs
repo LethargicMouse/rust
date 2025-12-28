@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::Literal,
+    ast::{Lame, Literal},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -46,5 +46,11 @@ impl<'a> Parse<'a> {
         } else {
             Err(Fail)
         }
+    }
+
+    pub fn lame(&mut self, loud: bool) -> Result<Lame<'a>, Fail> {
+        let location = self.here();
+        let name = self.name(loud)?;
+        Ok(Lame { name, location })
     }
 }

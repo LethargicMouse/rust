@@ -1,17 +1,75 @@
 mod error;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use error::Error;
 mod after_structs;
 
 use crate::{
     die,
+    display::Sep,
     link::{
         Asg, Context,
         analyse::error::CheckError,
-        ast::{Ast, Type},
+        ast::{Ast, Prime},
     },
 };
+
+#[derive(Clone)]
+struct FunType<'a> {
+    params: Vec<Type<'a>>,
+    ret_type: Type<'a>,
+}
+
+impl Display for FunType<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "fn({}) {}", Sep(", ", &self.params), self.ret_type)
+    }
+}
+
+#[derive(Clone)]
+enum Type<'a> {
+    Ptr(Box<Type<'a>>),
+    Name(&'a str),
+    Fun(Box<FunType<'a>>),
+    Prime(Prime),
+    Error,
+}
+
+impl<'a> From<Prime> for Type<'a> {
+    fn from(v: Prime) -> Self {
+        Self::Prime(v)
+    }
+}
+
+impl Display for Type<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Ptr(typ) => write!(f, "*{typ}"),
+            Type::Name(n) => write!(f, "{n}"),
+            Type::Error => write!(f, "<error>"),
+            Type::Fun(fun_type) => write!(f, "{fun_type}"),
+            Type::Prime(prime) => write!(f, "{prime}"),
+        }
+    }
+}
+
+impl<'a> From<FunType<'a>> for Type<'a> {
+    fn from(v: FunType<'a>) -> Self {
+        Self::Fun(Box::new(v))
+    }
+}
+
+impl<'a> Type<'a> {
+    fn name(&self) -> Option<&'a str> {
+        match self {
+            Type::Name(n) => Some(n),
+            _ => None,
+        }
+    }
+}
 
 struct Typed<'a, T> {
     sup: T,
@@ -41,13 +99,13 @@ pub fn analyse(ast: Ast) -> Asg {
     Analyse::new().run(ast)
 }
 
-pub struct Field<'a> {
+struct Field<'a> {
     pub offset: usize,
     pub typ: Type<'a>,
 }
 
-pub struct Struct<'a> {
-    pub fields: HashMap<&'a str, Field<'a>>,
+struct Struct<'a> {
+    fields: HashMap<&'a str, Field<'a>>,
 }
 
 struct State<'a> {

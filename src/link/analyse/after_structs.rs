@@ -5,16 +5,16 @@ use crate::{
     link::{
         Asg,
         analyse::{
-            State, Struct, Typed,
+            FunType, State, Struct, Type, Typed,
             error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared},
             typed,
         },
         asg,
         ast::{
-            Ast, BinOp, Binary, Block, Call, Expr, Field, Fun, Get, If, Let, Literal, Type, Var,
+            self, Ast, BinOp, Binary, Block, Call, Expr, Field, Fun, Get, If, Lame, Let, Literal,
+            Prime,
         },
     },
-    mem::{map_box, update},
 };
 
 pub struct Analyse<'a, 'b> {
@@ -32,12 +32,12 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     pub fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
         for extrn in ast.externs {
-            self.sup.context.insert(extrn.name, extrn.typ);
+            let typ = self.typ(extrn.typ);
+            self.sup.context.insert(extrn.name, typ);
         }
         for fun in &ast.funs {
-            self.sup
-                .context
-                .insert(fun.header.name, fun.header.typ.clone().into());
+            let typ = self.typ(fun.header.typ.clone().into());
+            self.sup.context.insert(fun.header.name, typ);
         }
         let funs = ast
             .funs
@@ -106,7 +106,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         let name = let_expr.name;
         let (expr, typ) = self.expr(let_expr.expr).into();
         self.sup.context.insert(name, typ);
-        typed(asg::Let { name, expr }, Type::Unit)
+        typed(asg::Let { name, expr }, Prime::Unit.into())
     }
 
     fn block(&mut self, block: Block<'a>) -> Typed<'a, asg::Block<'a>> {
@@ -138,8 +138,8 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn index_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
         match typ {
-            Type::Ptr(t) => *t,
             Type::Error => Type::Error,
+            Type::Ptr(typ) => *typ,
             _ => {
                 self.sup.errors.push(NoIndex { location, typ }.into());
                 Type::Error
@@ -170,8 +170,8 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn ret_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
         match typ {
-            Type::Fun(fun_type) => fun_type.ret_type,
             Type::Error => Type::Error,
+            Type::Fun(typ) => typ.ret_type,
             _ => {
                 self.sup.errors.push(NoCall { location, typ }.into());
                 Type::Error
@@ -179,7 +179,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         }
     }
 
-    fn var(&mut self, var: Var<'a>) -> Typed<'a, &'a str> {
+    fn var(&mut self, var: Lame<'a>) -> Typed<'a, &'a str> {
         match self.sup.context.get(var.name) {
             Some(typ) => typed(var.name, typ.clone()),
             None => {
@@ -201,8 +201,7 @@ impl<'a, 'b> Analyse<'a, 'b> {
         let right = self.expr(binary.right).sup;
         let typ = match binary.op {
             BinOp::Plus => typ,
-            BinOp::Equal => Type::Name("bool"),
-            BinOp::Less => Type::Name("bool"),
+            BinOp::Equal | BinOp::Less => Prime::Bool.into(),
         };
         let op = self.bin_op(binary.op);
         typed(asg::Binary { left, op, right }, typ)
@@ -218,15 +217,15 @@ impl<'a, 'b> Analyse<'a, 'b> {
 
     fn literal(&self, literal: Literal<'a>) -> Typed<'a, asg::Literal<'a>> {
         match literal {
-            Literal::Unit => typed(asg::Literal::Int(0), Type::Unit),
-            Literal::Int(i) => typed(asg::Literal::Int(i), Type::Name("i32")),
+            Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
+            Literal::Int(i) => typed(asg::Literal::Int(i), Prime::I32.into()),
             Literal::RawStr(s) => {
-                typed(asg::Literal::Str(s), Type::Ptr(Box::new(Type::Name("u8"))))
+                typed(asg::Literal::Str(s), Type::Ptr(Box::new(Prime::U8.into())))
             }
         }
     }
 
-    fn r#struct(&mut self, name: &'a str, location: Location<'a>) -> Type<'a> {
+    fn r#struct(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
         if self.structs.contains_key(name) {
             Type::Name(name)
         } else if self.sup.corrupt.contains(name) {
@@ -245,32 +244,25 @@ impl<'a, 'b> Analyse<'a, 'b> {
         }
     }
 
-    fn typ(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
+    fn typ(&mut self, typ: ast::Type<'a>) -> Type<'a> {
         match typ {
-            Type::Ptr(t) => Type::Ptr(map_box(t, |t| self.typ(t, location))),
-            Type::Name(name) => self.r#struct(name, location),
-            Type::Fun(mut fun_type) => {
-                for typ in &mut fun_type.params {
-                    update(typ, |t| self.typ(t, location))
-                }
-                fun_type.ret_type = self.typ(fun_type.ret_type, location);
-                Type::Fun(fun_type)
-            }
-            Type::Unit => todo!(),
-            Type::Error => todo!(),
+            ast::Type::Ptr(t) => Type::Ptr(Box::new(self.typ(*t))),
+            ast::Type::Name(var) => self.r#struct(var),
+            ast::Type::Fun(fun_type) => self.fun_type(*fun_type).into(),
+            ast::Type::Prime(prime) => Type::Prime(prime),
         }
+    }
+
+    fn fun_type(&mut self, fun_type: ast::FunType<'a>) -> FunType<'a> {
+        let params = fun_type.params.into_iter().map(|t| self.typ(t)).collect();
+        let ret_type = self.typ(fun_type.ret_type);
+        FunType { params, ret_type }
     }
 
     fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
         self.sup.context.new_layer();
-        for ((param, typ), location) in fun
-            .header
-            .params
-            .iter()
-            .zip(fun.header.typ.params)
-            .zip(fun.header.type_params_locations)
-        {
-            let typ = self.typ(typ, location);
+        for (param, typ) in fun.header.params.iter().zip(fun.header.typ.params) {
+            let typ = self.typ(typ);
             self.sup.context.insert(param, typ);
         }
         let params = fun.header.params;

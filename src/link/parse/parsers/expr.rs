@@ -1,7 +1,7 @@
 use crate::{
     Location,
     link::{
-        ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, Postfix, Var},
+        ast::{BinOp, Binary, Block, Call, Expr, Field, Get, If, Let, Literal, Postfix},
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
     },
@@ -17,7 +17,7 @@ impl<'a> Parse<'a> {
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
-            |p| Ok(Expr::Var(p.var(false)?)),
+            |p| Ok(Expr::Var(p.lame(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
     }
@@ -33,12 +33,6 @@ impl<'a> Parse<'a> {
             expr,
             location,
         })
-    }
-
-    fn var(&mut self, loud: bool) -> Result<Var<'a>, Fail> {
-        let location = self.here();
-        let name = self.name(loud)?;
-        Ok(Var { name, location })
     }
 
     fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
@@ -170,7 +164,7 @@ impl<'a> Parse<'a> {
     }
 
     fn call(&mut self, loud: bool) -> Result<Call<'a>, Fail> {
-        let var = self.var(loud)?;
+        let var = self.lame(loud)?;
         self.expect_(ParL)?;
         let args = self.sep(Self::expr).collect();
         self.expect(ParR)?;

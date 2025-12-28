@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Location, display::Sep};
+use crate::Location;
 
 pub struct Ast<'a> {
     pub funs: Vec<Fun<'a>>,
@@ -48,7 +48,6 @@ pub struct Fun<'a> {
 pub struct Header<'a> {
     pub name: &'a str,
     pub params: Vec<&'a str>,
-    pub type_params_locations: Vec<Location<'a>>,
     pub typ: FunType<'a>,
 }
 
@@ -56,12 +55,6 @@ pub struct Header<'a> {
 pub struct FunType<'a> {
     pub params: Vec<Type<'a>>,
     pub ret_type: Type<'a>,
-}
-
-impl Display for FunType<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fn({}) {}", Sep(", ", &self.params), self.ret_type)
-    }
 }
 
 pub enum Literal<'a> {
@@ -94,7 +87,8 @@ pub struct Field<'a> {
     pub name_location: Location<'a>,
 }
 
-pub struct Var<'a> {
+#[derive(Clone)]
+pub struct Lame<'a> {
     pub name: &'a str,
     pub location: Location<'a>,
 }
@@ -106,7 +100,7 @@ pub enum Expr<'a> {
     Binary(Box<Binary<'a>>),
     Literal(Literal<'a>, Location<'a>),
     If(Box<If<'a>>),
-    Var(Var<'a>),
+    Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
 }
@@ -171,8 +165,8 @@ impl<'a> Expr<'a> {
     }
 }
 
-impl<'a> From<Var<'a>> for Expr<'a> {
-    fn from(v: Var<'a>) -> Self {
+impl<'a> From<Lame<'a>> for Expr<'a> {
+    fn from(v: Lame<'a>) -> Self {
         Self::Var(v)
     }
 }
@@ -190,7 +184,7 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
 }
 
 pub struct Call<'a> {
-    pub var: Var<'a>,
+    pub var: Lame<'a>,
     pub args: Vec<Expr<'a>>,
 }
 
@@ -228,33 +222,39 @@ pub struct Get<'a> {
 #[derive(Clone)]
 pub enum Type<'a> {
     Ptr(Box<Type<'a>>),
-    Name(&'a str),
+    Name(Lame<'a>),
     Fun(Box<FunType<'a>>),
+    Prime(Prime),
+}
+
+impl<'a> From<Prime> for Type<'a> {
+    fn from(v: Prime) -> Self {
+        Self::Prime(v)
+    }
+}
+
+#[derive(Clone)]
+pub enum Prime {
     Unit,
-    Error,
+    Bool,
+    I32,
+    U8,
 }
 
-impl Default for Type<'_> {
-    fn default() -> Self {
-        Self::Error
-    }
-}
-
-impl<'a> From<&'a str> for Type<'a> {
-    fn from(v: &'a str) -> Self {
-        Self::Name(v)
-    }
-}
-
-impl Display for Type<'_> {
+impl Display for Prime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Name(n) => write!(f, "{n}"),
-            Type::Fun(fun_type) => write!(f, "{fun_type}"),
-            Type::Unit => write!(f, "()"),
-            Type::Error => write!(f, "<error>"),
-            Type::Ptr(t) => write!(f, "*{t}"),
+            Prime::Unit => write!(f, "()"),
+            Prime::Bool => write!(f, "bool"),
+            Prime::I32 => write!(f, "i32"),
+            Prime::U8 => write!(f, "u8"),
         }
+    }
+}
+
+impl<'a> From<Lame<'a>> for Type<'a> {
+    fn from(v: Lame<'a>) -> Self {
+        Self::Name(v)
     }
 }
 
@@ -267,7 +267,7 @@ impl<'a> From<FunType<'a>> for Type<'a> {
 impl<'a> Type<'a> {
     pub fn name(&self) -> Option<&'a str> {
         match self {
-            Type::Name(n) => Some(n),
+            Type::Name(n) => Some(n.name),
             _ => None,
         }
     }
