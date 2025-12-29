@@ -2,9 +2,9 @@ extern strcmp: fn(*u8, *u8) bool;
 extern system: fn(*u8);
 extern puts: fn(*u8);
 extern exit: fn(i32);
-extern open: fn(*u8, *u8) i32;
-extern write: fn(i32, *u8, u64) u64;
-extern close: fn(i32);
+extern fopen: fn(*u8, *u8) *();
+extern fwrite: fn(*u8, u64, u64, *()) u64;
+extern fclose: fn(*());
 
 fn main(argc: i32, argv: **u8) {
     if argc < 2
@@ -75,15 +75,15 @@ fn generate(asg) {
 struct asg {}
 
 fn dump(ir) {
-    let out = open(r"out.qbe", r"w");
+    let out = fopen(r"out.qbe", r"w");
     putstr(out, "test drive");
-    close(out);
+    fclose(out);
   }
 
 struct ir {}
 
-fn putstr(file: i32, str) {
-    write(file, str.ptr, str.len)
+fn putstr(file: *(), str) {
+    fwrite(str.ptr, 1, str.len, file)
   }
 
 struct str {

@@ -80,10 +80,12 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn field(&mut self, field: &Field<'a>) -> Tmp {
         let from = self.expr(&field.from);
-        let tmp = self.new_tmp();
+        let off = self.new_tmp();
         let offset = self.int(field.offset as i64);
         self.stmts
-            .push(Stmt::Bin(tmp, ir::BinOp::Add, from, offset));
+            .push(Stmt::Bin(off, ir::BinOp::Add, from, offset));
+        let tmp = self.new_tmp();
+        self.stmts.push(Stmt::Load(tmp, off));
         tmp
     }
 
