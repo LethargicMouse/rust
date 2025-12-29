@@ -62,8 +62,8 @@ fn parse(tokens: vec_token) {
 
 struct vec_token {}
 
-fn analyse(ast) {
-
+fn analyse(ast) asg {
+    
   }
 
 struct ast {}

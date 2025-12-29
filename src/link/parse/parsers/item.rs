@@ -49,7 +49,7 @@ impl<'a> Parse<'a> {
             type_params.push(param.typ);
         }
         self.expect(ParR)?;
-        let ret_type = Prime::Unit.into();
+        let ret_type = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
         let typ = FunType {
             params: type_params,
             ret_type,
