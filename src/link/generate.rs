@@ -1,6 +1,6 @@
 use crate::{
     link::{Context, asg::*},
-    qbe::ir::{self, IR, Stmt, Tmp, Type, Value},
+    qbe::ir::{self, Const, IR, Stmt, Tmp, Type, Value},
 };
 
 pub fn generate(asg: &Asg) -> IR {
@@ -8,7 +8,7 @@ pub fn generate(asg: &Asg) -> IR {
 }
 
 struct Generate<'a> {
-    consts: Vec<String>,
+    consts: Vec<Const>,
     asg: &'a Asg<'a>,
 }
 
@@ -161,6 +161,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn literal(&mut self, literal: &Literal) -> Tmp {
         match literal {
             Literal::Int(n) => self.int(*n),
+            Literal::RawStr(s) => self.raw_str(s),
             Literal::Str(s) => self.str(s),
         }
     }
@@ -171,16 +172,28 @@ impl<'a, 'b> GenFun<'a, 'b> {
         tmp
     }
 
-    fn str(&mut self, s: &str) -> Tmp {
-        let c = self.new_const(s);
+    fn raw_str(&mut self, s: &str) -> Tmp {
+        let c = self.new_const(Const::String(s.into()));
         let tmp = self.new_tmp();
         self.stmts
             .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
         tmp
     }
 
-    fn new_const(&mut self, s: &str) -> u16 {
-        self.sup.consts.push(s.into());
+    fn str(&mut self, s: &str) -> Tmp {
+        let cs = self.new_const(Const::String(s.into()));
+        let c = self.new_const(Const::Struct(vec![
+            Value::Const(cs),
+            Value::Int(s.len() as i64),
+        ]));
+        let tmp = self.new_tmp();
+        self.stmts
+            .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
+        tmp
+    }
+
+    fn new_const(&mut self, s: Const) -> u16 {
+        self.sup.consts.push(s);
         self.sup.consts.len() as u16
     }
 

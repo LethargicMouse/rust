@@ -10,6 +10,7 @@ impl<'a> Parse<'a> {
             Self::unit_,
             |p| Ok(Literal::Int(p.int_()?)),
             |p| Ok(Literal::RawStr(p.raw_str_()?)),
+            |p| Ok(Literal::Str(p.str_()?)),
         ])
     }
 
@@ -41,6 +42,15 @@ impl<'a> Parse<'a> {
 
     pub fn raw_str_(&mut self) -> Result<&'a str, Fail> {
         if let RawStr(s) = self.next() {
+            self.cursor += 1;
+            Ok(s)
+        } else {
+            Err(Fail)
+        }
+    }
+
+    fn str_(&mut self) -> Result<&'a str, Fail> {
+        if let Str(s) = self.next() {
             self.cursor += 1;
             Ok(s)
         } else {

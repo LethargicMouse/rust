@@ -1,14 +1,14 @@
 use std::fmt::Display;
 
 pub struct IR {
-    pub consts: Vec<String>,
+    pub consts: Vec<Const>,
     pub funs: Vec<Fun>,
 }
 
 impl Display for IR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, c) in self.consts.iter().enumerate() {
-            write!(f, "\ndata $s{} = {{ b \"{c}\" 0 }}", i + 1)?;
+            write!(f, "\ndata $s{} = {{ {c} }}", i + 1)?;
         }
         for fun in &self.funs {
             if fun.name == "main" {
@@ -17,6 +17,25 @@ impl Display for IR {
             write!(f, "{fun}")?;
         }
         Ok(())
+    }
+}
+
+pub enum Const {
+    String(String),
+    Struct(Vec<Value>),
+}
+
+impl Display for Const {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Const::String(s) => write!(f, "b \"{s}\" 0"),
+            Const::Struct(values) => {
+                for value in values {
+                    write!(f, "l {value}, ")?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 

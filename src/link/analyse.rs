@@ -329,9 +329,11 @@ impl<'a> Analyse<'a> {
         match literal {
             Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
             Literal::Int(i) => typed(asg::Literal::Int(i), Prime::I32.into()),
-            Literal::RawStr(s) => {
-                typed(asg::Literal::Str(s), Type::Ptr(Box::new(Prime::U8.into())))
-            }
+            Literal::RawStr(s) => typed(
+                asg::Literal::RawStr(s),
+                Type::Ptr(Box::new(Prime::U8.into())),
+            ),
+            Literal::Str(s) => typed(asg::Literal::Str(s), Type::Name("str")),
         }
     }
 

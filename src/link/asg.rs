@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct Block<'a> {
     pub stmts: Vec<Expr<'a>>,
     pub ret: Expr<'a>,
@@ -14,22 +15,26 @@ pub struct Fun<'a> {
     pub body: Expr<'a>,
 }
 
+#[derive(Debug)]
 pub struct If<'a> {
     pub condition: Expr<'a>,
     pub then_expr: Expr<'a>,
     pub else_expr: Expr<'a>,
 }
 
+#[derive(Debug)]
 pub struct Let<'a> {
     pub name: &'a str,
     pub expr: Expr<'a>,
 }
 
+#[derive(Debug)]
 pub struct Field<'a> {
     pub from: Expr<'a>,
     pub offset: usize,
 }
 
+#[derive(Debug)]
 pub enum Expr<'a> {
     Field(Box<Field<'a>>),
     Let(Box<Let<'a>>),
@@ -90,12 +95,14 @@ impl<'a> From<Call<'a>> for Expr<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct Binary<'a> {
     pub left: Expr<'a>,
     pub op: BinOp,
     pub right: Expr<'a>,
 }
 
+#[derive(Debug)]
 pub enum BinOp {
     Add,
     Multiply,
@@ -103,12 +110,15 @@ pub enum BinOp {
     Less,
 }
 
+#[derive(Debug)]
 pub struct Call<'a> {
     pub name: &'a str,
     pub args: Vec<Expr<'a>>,
 }
 
+#[derive(Debug)]
 pub enum Literal<'a> {
     Int(i64),
+    RawStr(&'a str),
     Str(&'a str),
 }

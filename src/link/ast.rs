@@ -67,6 +67,7 @@ pub enum Literal<'a> {
     Unit,
     Int(i64),
     RawStr(&'a str),
+    Str(&'a str),
 }
 
 pub struct If<'a> {

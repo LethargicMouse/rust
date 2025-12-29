@@ -87,8 +87,8 @@ fn putstr(file: *(), str) {
   }
 
 struct str {
+    ptr: *u8,
     len: u64,
-    ptr: *u8
   }
 
 fn postcompile() 
