@@ -282,8 +282,10 @@ impl<'a> Analyse<'a> {
         let location = if_expr.condition.location();
         let (condition, typ) = self.expr(if_expr.condition).into();
         self.unify(location, Prime::Bool.into(), typ);
-        let (then_expr, typ) = self.expr(if_expr.then_expr).into();
-        let else_expr = self.expr(if_expr.else_expr).sup;
+        let (then_expr, then_typ) = self.expr(if_expr.then_expr).into();
+        let location = if_expr.else_expr.location();
+        let (else_expr, else_typ) = self.expr(if_expr.else_expr).into();
+        let typ = self.unify(location, then_typ, else_typ);
         let res = asg::If {
             condition,
             then_expr,
