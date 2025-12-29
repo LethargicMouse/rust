@@ -30,7 +30,7 @@ fn clean()
 fn run(path: *u8) {
     clean();
     build(path);
-    system(r"./out")
+    system(r"./out || echo fail")
   }
 
 fn build(path: *u8) {

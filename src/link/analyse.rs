@@ -109,34 +109,22 @@ struct Struct<'a> {
     size: usize,
 }
 
-struct State<'a> {
+struct Analyse<'a> {
+    ast_structs: HashMap<&'a str, ast::Struct<'a>>,
+    structs: HashMap<&'a str, Struct<'a>>,
     errors: Vec<CheckError<'a>>,
     context: Context<'a, Type<'a>>,
     corrupt: HashSet<&'a str>,
 }
 
-impl<'a> State<'a> {
-    fn new() -> Self {
-        Self {
-            context: Context::new(),
-            errors: Vec::new(),
-            corrupt: HashSet::new(),
-        }
-    }
-}
-
-struct Analyse<'a> {
-    ast_structs: HashMap<&'a str, ast::Struct<'a>>,
-    structs: HashMap<&'a str, Struct<'a>>,
-    sup: State<'a>,
-}
-
 impl<'a> Analyse<'a> {
     fn new() -> Self {
         Self {
-            sup: State::new(),
             structs: HashMap::new(),
             ast_structs: HashMap::new(),
+            context: Context::new(),
+            errors: Vec::new(),
+            corrupt: HashSet::new(),
         }
     }
 
@@ -144,19 +132,19 @@ impl<'a> Analyse<'a> {
         self.ast_structs = ast.structs;
         for extrn in ast.externs {
             let typ = self.typ(extrn.typ);
-            self.sup.context.insert(extrn.name, typ);
+            self.context.insert(extrn.name, typ);
         }
         for fun in &ast.funs {
             let typ = self.typ(fun.header.typ.clone().into());
-            self.sup.context.insert(fun.header.name, typ);
+            self.context.insert(fun.header.name, typ);
         }
         let funs = ast
             .funs
             .into_iter()
             .map(|fun| (fun.header.name, self.fun(fun)))
             .collect();
-        if !self.sup.errors.is_empty() {
-            die(Error(self.sup.errors))
+        if !self.errors.is_empty() {
+            die(Error(self.errors))
         }
         Asg { funs }
     }
@@ -208,14 +196,14 @@ impl<'a> Analyse<'a> {
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
-        self.sup.errors.push(error.into());
+        self.errors.push(error.into());
         Fail
     }
 
     fn let_expr(&mut self, let_expr: Let<'a>) -> Typed<'a, asg::Let<'a>> {
         let name = let_expr.name;
         let (expr, typ) = self.expr(let_expr.expr).into();
-        self.sup.context.insert(name, typ);
+        self.context.insert(name, typ);
         typed(asg::Let { name, expr }, Prime::Unit.into())
     }
 
@@ -251,7 +239,7 @@ impl<'a> Analyse<'a> {
             Type::Error => Type::Error,
             Type::Ptr(typ) => *typ,
             _ => {
-                self.sup.errors.push(NoIndex { location, typ }.into());
+                self.errors.push(NoIndex { location, typ }.into());
                 Type::Error
             }
         }
@@ -283,17 +271,17 @@ impl<'a> Analyse<'a> {
             Type::Error => Type::Error,
             Type::Fun(typ) => typ.ret_type,
             _ => {
-                self.sup.errors.push(NoCall { location, typ }.into());
+                self.errors.push(NoCall { location, typ }.into());
                 Type::Error
             }
         }
     }
 
     fn var(&mut self, var: Lame<'a>) -> Typed<'a, &'a str> {
-        match self.sup.context.get(var.name) {
+        match self.context.get(var.name) {
             Some(typ) => typed(var.name, typ.clone()),
             None => {
-                self.sup.errors.push(
+                self.errors.push(
                     NotDeclared {
                         location: var.location,
                         kind: "item",
@@ -340,7 +328,7 @@ impl<'a> Analyse<'a> {
     fn struct_type(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
         if self.structs.contains_key(name) {
             Type::Name(name)
-        } else if self.sup.corrupt.contains(name) {
+        } else if self.corrupt.contains(name) {
             Type::Error
         } else {
             match self.ast_structs.remove(name) {
@@ -349,8 +337,8 @@ impl<'a> Analyse<'a> {
                     Type::Name(name)
                 }
                 None => {
-                    self.sup.corrupt.insert(name);
-                    self.sup.errors.push(
+                    self.corrupt.insert(name);
+                    self.errors.push(
                         NotDeclared {
                             location,
                             kind: "struct",
@@ -404,10 +392,10 @@ impl<'a> Analyse<'a> {
     }
 
     fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
-        self.sup.context.new_layer();
+        self.context.new_layer();
         for (param, typ) in fun.header.params.iter().zip(fun.header.typ.params) {
             let typ = self.typ(typ);
-            self.sup.context.insert(param, typ);
+            self.context.insert(param, typ);
         }
         let params = fun.header.params;
         let body = self.expr(fun.body).sup;
