@@ -43,6 +43,13 @@ pub enum CheckError<'a> {
     NF(NoField<'a>),
     MDer(NoIndex<'a>),
     NC(NoCall<'a>),
+    WT(WrongType<'a>),
+}
+
+impl<'a> From<WrongType<'a>> for CheckError<'a> {
+    fn from(v: WrongType<'a>) -> Self {
+        Self::WT(v)
+    }
 }
 
 impl<'a> From<NoCall<'a>> for CheckError<'a> {
@@ -77,6 +84,7 @@ impl Display for CheckError<'_> {
             CheckError::NF(no_field) => write!(f, "{no_field}"),
             CheckError::MDer(no_deref) => write!(f, "{no_deref}"),
             CheckError::NC(no_call) => write!(f, "{no_call}"),
+            CheckError::WT(wrong_type) => write!(f, "{wrong_type}"),
         }
     }
 }
@@ -125,6 +133,22 @@ impl Display for NoCall<'_> {
             f,
             "{}\n{Red}--! cannot call a value of type {Reset}{}",
             self.location, self.typ
+        )
+    }
+}
+
+pub struct WrongType<'a> {
+    pub location: Location<'a>,
+    pub expected: Type<'a>,
+    pub found: Type<'a>,
+}
+
+impl Display for WrongType<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! mismatched types:\n----! expected {Reset}{}{Red}\n----!    found {Reset}{}",
+            self.location, self.expected, self.found
         )
     }
 }

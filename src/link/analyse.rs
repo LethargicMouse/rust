@@ -11,13 +11,13 @@ use crate::{
     display::Sep,
     link::{
         Asg, Context,
-        analyse::error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared},
+        analyse::error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared, WrongType},
         asg,
         ast::{self, *},
     },
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct FunType<'a> {
     params: Vec<Type<'a>>,
     ret_type: Type<'a>,
@@ -29,7 +29,7 @@ impl Display for FunType<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum Type<'a> {
     Ptr(Box<Type<'a>>),
     Name(&'a str),
@@ -217,7 +217,9 @@ impl<'a> Analyse<'a> {
         let location = get.from.location();
         let from = self.expr(get.from);
         let typ = self.index_type(from.typ, location);
+        let location = get.index.location();
         let index = self.expr(get.index);
+        self.unify(location, Prime::U64.into(), index.typ);
         let res = asg::Expr::Deref(Box::new(
             asg::Binary {
                 left: from.sup,
@@ -232,6 +234,23 @@ impl<'a> Analyse<'a> {
             .into(),
         ));
         typed(res, typ)
+    }
+
+    fn unify(&mut self, location: Location<'a>, expected: Type<'a>, found: Type<'a>) -> Type<'a> {
+        match (expected, found) {
+            (a, b) if a == b => a,
+            (expected, found) => {
+                self.errors.push(
+                    WrongType {
+                        location,
+                        expected,
+                        found,
+                    }
+                    .into(),
+                );
+                Type::Error
+            }
+        }
     }
 
     fn index_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {

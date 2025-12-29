@@ -240,7 +240,7 @@ impl<'a> From<Prime> for Type<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Prime {
     Unit,
     Bool,
