@@ -23,14 +23,14 @@ impl<'a> Lex<'a> {
     }
 
     pub fn raw_str(&mut self) -> Option<Token<'a>> {
-        self.str_with(b"r\"")
+        self.str_with(Lexeme::RawStr, b"r\"")
     }
 
     pub fn str(&mut self) -> Option<Token<'a>> {
-        self.str_with(b"\"")
+        self.str_with(Lexeme::Str, b"\"")
     }
 
-    fn str_with(&mut self, left: &[u8]) -> Option<Token<'a>> {
+    fn str_with(&mut self, lexeme: fn(&'a str) -> Lexeme<'a>, left: &[u8]) -> Option<Token<'a>> {
         self.skip();
         if !self.source.code[self.cursor..].starts_with(left) {
             return None;
@@ -45,7 +45,7 @@ impl<'a> Lex<'a> {
             die(Unclosed(self.location(1)))
         }
         let res = &self.source.code[start..self.cursor];
-        let lexeme = Lexeme::RawStr(str::from_utf8(res).unwrap());
+        let lexeme = lexeme(str::from_utf8(res).unwrap());
         self.cursor -= res.len() + 2 + left.len();
         let tok = self.token(lexeme, res.len() + 3 + left.len());
         Some(tok)

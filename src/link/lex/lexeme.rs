@@ -13,6 +13,7 @@ pub enum Lexeme<'a> {
     Int(i64),
     Plus,
     RawStr(&'a str),
+    Str(&'a str),
     Semicolon,
     Colon,
     Star,
@@ -61,6 +62,7 @@ impl Lexeme<'_> {
             Colon => "`:`",
             Star => "`*`",
             Struct => "`struct`",
+            Str(_) => "<str>",
         }
     }
 }

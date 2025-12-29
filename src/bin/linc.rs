@@ -100,7 +100,7 @@ enum Command {
 
 fn postcompile() {
     call("qbe", &["-o", OUT_ASM, OUT_IR]).or_die();
-    call("cc", &["-o", OUT, OUT_ASM]).or_die();
+    call("cc", &["-g", "-o", OUT, OUT_ASM]).or_die();
 }
 
 fn run_out(args: env::Args) {
