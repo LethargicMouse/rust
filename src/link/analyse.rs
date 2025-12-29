@@ -71,6 +71,17 @@ impl<'a> Type<'a> {
             _ => None,
         }
     }
+
+    fn is_number(&self) -> bool {
+        match self {
+            Type::Ptr(_) => false,
+            Type::Name(_) => false,
+            Type::Fun(_) => false,
+            Type::Prime(prime) => prime.is_number(),
+            Type::Error => true,
+            Type::Number => true,
+        }
+    }
 }
 
 struct Typed<'a, T> {
@@ -241,6 +252,7 @@ impl<'a> Analyse<'a> {
     fn unify(&mut self, location: Location<'a>, expected: Type<'a>, found: Type<'a>) -> Type<'a> {
         match (expected, found) {
             (a, b) if a == b => a,
+            (a, Type::Number) if a.is_number() => a,
             (expected, found) => {
                 self.errors.push(
                     WrongType {

@@ -259,6 +259,16 @@ impl Prime {
             Prime::U64 => 8,
         }
     }
+
+    pub fn is_number(&self) -> bool {
+        match self {
+            Prime::Unit => false,
+            Prime::Bool => false,
+            Prime::I32 => true,
+            Prime::U8 => true,
+            Prime::U64 => true,
+        }
+    }
 }
 
 impl Display for Prime {
