@@ -279,7 +279,9 @@ impl<'a> Analyse<'a> {
     }
 
     fn if_expr(&mut self, if_expr: If<'a>) -> Typed<'a, asg::If<'a>> {
-        let condition = self.expr(if_expr.condition).sup;
+        let location = if_expr.condition.location();
+        let (condition, typ) = self.expr(if_expr.condition).into();
+        self.unify(location, Prime::Bool.into(), typ);
         let (then_expr, typ) = self.expr(if_expr.then_expr).into();
         let else_expr = self.expr(if_expr.else_expr).sup;
         let res = asg::If {
