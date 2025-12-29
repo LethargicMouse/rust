@@ -36,6 +36,7 @@ enum Type<'a> {
     Fun(Box<FunType<'a>>),
     Prime(Prime),
     Error,
+    Number,
 }
 
 impl<'a> From<Prime> for Type<'a> {
@@ -52,6 +53,7 @@ impl Display for Type<'_> {
             Type::Error => write!(f, "<error>"),
             Type::Fun(fun_type) => write!(f, "{fun_type}"),
             Type::Prime(prime) => write!(f, "{prime}"),
+            Type::Number => write!(f, "<number>"),
         }
     }
 }
@@ -335,7 +337,7 @@ impl<'a> Analyse<'a> {
     fn literal(&self, literal: Literal<'a>) -> Typed<'a, asg::Literal<'a>> {
         match literal {
             Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
-            Literal::Int(i) => typed(asg::Literal::Int(i), Prime::I32.into()),
+            Literal::Int(i) => typed(asg::Literal::Int(i), Type::Number),
             Literal::RawStr(s) => typed(
                 asg::Literal::RawStr(s),
                 Type::Ptr(Box::new(Prime::U8.into())),
@@ -392,6 +394,7 @@ impl<'a> Analyse<'a> {
             Type::Fun(_) => 8,
             Type::Prime(prime) => prime.size(),
             Type::Error => 0,
+            Type::Number => unreachable!(),
         }
     }
 
