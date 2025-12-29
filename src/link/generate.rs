@@ -182,10 +182,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn str(&mut self, s: &str) -> Tmp {
         let cs = self.new_const(Const::String(s.into()));
-        let c = self.new_const(Const::Struct(vec![
-            Value::Const(cs),
-            Value::Int(s.len() as i64),
-        ]));
+        let c = self.new_const(Const::Struct(vec![Value::Const(cs), Value::Int(strlen(s))]));
         let tmp = self.new_tmp();
         self.stmts
             .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
@@ -203,4 +200,16 @@ impl<'a, 'b> GenFun<'a, 'b> {
         }
         self.expr(&block.ret)
     }
+}
+
+fn strlen(mut s: &str) -> i64 {
+    let mut res = 0;
+    while !s.is_empty() {
+        if s.starts_with("\\") {
+            s = &s[1..];
+        }
+        s = &s[1..];
+        res += 1;
+    }
+    res
 }

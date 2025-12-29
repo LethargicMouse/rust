@@ -76,7 +76,7 @@ struct asg {}
 
 fn dump(ir) {
     let out = fopen(r"out.qbe", r"w");
-    putstr(out, "test drive");
+    putstr(out, "export function w $main() {\n@start\nret 123\n}");
     fclose(out);
   }
 
