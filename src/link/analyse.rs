@@ -164,7 +164,10 @@ impl<'a> Analyse<'a> {
 
     fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
         match expr {
-            Expr::Call(call) => self.call(call).map_into(),
+            Expr::Call(call) => match self.call(call) {
+                Ok(call) => call.map_into(),
+                Err(_) => self.fake_expr(),
+            },
             Expr::Binary(binary) => self.binary(*binary).map_into(),
             Expr::Literal(literal, _) => self.literal(literal).map_into(),
             Expr::Var(name) => self.var(name).map_into(),
@@ -294,23 +297,27 @@ impl<'a> Analyse<'a> {
         typed(res, typ)
     }
 
-    fn call(&mut self, call: Call<'a>) -> Typed<'a, asg::Call<'a>> {
+    fn call(&mut self, call: Call<'a>) -> Result<Typed<'a, asg::Call<'a>>, Fail> {
         let name = call.var.name;
         let location = call.var.location;
-        let fun_typ = self.var(call.var).typ;
-        let typ = self.ret_type(fun_typ, location);
-        let args = call.args.into_iter().map(|e| self.expr(e).sup).collect();
-        typed(asg::Call { name, args }, typ)
+        let typ = self.var(call.var).typ;
+        let args_locations: Vec<_> = call.args.iter().map(|a| a.location()).collect();
+        let (args, args_types): (_, Vec<_>) =
+            call.args.into_iter().map(|e| self.expr(e).into()).unzip();
+        let typ = self.get_fun_type(typ, location)?;
+        for ((found, expected), location) in
+            args_types.into_iter().zip(typ.params).zip(args_locations)
+        {
+            self.unify(location, expected, found);
+        }
+        Ok(typed(asg::Call { name, args }, typ.ret_type))
     }
 
-    fn ret_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
+    fn get_fun_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Result<FunType<'a>, Fail> {
         match typ {
-            Type::Error => Type::Error,
-            Type::Fun(typ) => typ.ret_type,
-            _ => {
-                self.errors.push(NoCall { location, typ }.into());
-                Type::Error
-            }
+            Type::Error => Err(Fail),
+            Type::Fun(typ) => Ok(*typ),
+            _ => Err(self.fail(NoCall { location, typ })),
         }
     }
 
