@@ -60,7 +60,7 @@ pub struct Header<'a> {
 #[derive(Clone)]
 pub struct FunType<'a> {
     pub params: Vec<Type<'a>>,
-    pub ret_type: Type<'a>,
+    pub ret: Type<'a>,
 }
 
 pub enum Literal<'a> {

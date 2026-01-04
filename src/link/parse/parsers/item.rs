@@ -52,7 +52,7 @@ impl<'a> Parse<'a> {
         let ret_type = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
         let typ = FunType {
             params: type_params,
-            ret_type,
+            ret: ret_type,
         };
         Ok(Header { name, params, typ })
     }

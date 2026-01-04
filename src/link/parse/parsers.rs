@@ -86,8 +86,8 @@ impl<'a> Parse<'a> {
         self.expect(ParL)?;
         let params = self.sep(Self::typ).collect();
         self.expect(ParR)?;
-        let ret_type = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
-        Ok(FunType { params, ret_type })
+        let ret = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
+        Ok(FunType { params, ret })
     }
 
     fn field(&mut self) -> Result<Field<'a>, Fail> {

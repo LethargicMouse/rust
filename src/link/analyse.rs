@@ -255,6 +255,7 @@ impl<'a> Analyse<'a> {
     fn unify(&mut self, location: Location<'a>, expected: Type<'a>, found: Type<'a>) -> Type<'a> {
         match (expected, found) {
             (a, b) if a == b => a,
+            (a, Type::Error) => a,
             (a, Type::Number) if a.is_number() => a,
             (expected, found) => {
                 self.errors.push(
@@ -432,7 +433,7 @@ impl<'a> Analyse<'a> {
 
     fn fun_type(&mut self, fun_type: ast::FunType<'a>) -> FunType<'a> {
         let params = fun_type.params.into_iter().map(|t| self.typ(t)).collect();
-        let ret_type = self.typ(fun_type.ret_type);
+        let ret_type = self.typ(fun_type.ret);
         FunType { params, ret_type }
     }
 
@@ -442,8 +443,11 @@ impl<'a> Analyse<'a> {
             let typ = self.typ(typ);
             self.context.insert(param, typ);
         }
+        let ret_typ = self.typ(fun.header.typ.ret);
         let params = fun.header.params;
-        let body = self.expr(fun.body).sup;
+        let location = fun.body.location();
+        let (body, typ) = self.expr(fun.body).into();
+        self.unify(location, ret_typ, typ);
         asg::Fun { params, body }
     }
 }

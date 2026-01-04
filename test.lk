@@ -38,7 +38,7 @@ fn build(path: *u8) {
     postcompile();
   }
 
-fn compile(path: *u8) 
+fn compile(path: *u8) ir 
   do path
     .read()
     .lex()
@@ -46,24 +46,32 @@ fn compile(path: *u8)
     .analyse()
     .generate()
 
-fn read(path: *u8) {
+fn read(path: *u8) source {
     
   }
 
-fn lex(source) {
+fn lex(source) vec_token {
     
   }
 
 struct source {}
 
-fn parse(tokens: vec_token) {
+fn parse(tokens: vec_token) ast {
 
   }
 
 struct vec_token {}
 
 fn analyse(ast) asg {
-    
+    init_analyse().run_analyse(ast)
+  }
+
+fn init_analyse() {
+
+  }
+
+fn run_analyse(self: analyse, ast) asg {
+    self.ast_structs = ast.structs;
   }
 
 struct ast {}
@@ -83,7 +91,7 @@ fn dump(ir) {
 struct ir {}
 
 fn putstr(file: *(), str) {
-    fwrite(str.ptr, 1, str.len, file)
+    fwrite(str.ptr, 1, str.len, file);
   }
 
 struct str {
