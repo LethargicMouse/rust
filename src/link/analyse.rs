@@ -288,6 +288,7 @@ impl<'a> Analyse<'a> {
         match (expected, found) {
             (a, b) if a == b => a,
             (a, Type::Error) => a,
+            (Type::Error, b) => b,
             (a, Type::Number) if a.is_number() => a,
             (expected, found) => {
                 self.errors.push(

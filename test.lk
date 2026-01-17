@@ -47,17 +47,17 @@ fn compile(path: *u8) ir
     .generate()
 
 fn read(path: *u8) source {
-    
+    new source {}
   }
 
 fn lex(source) vec_token {
-    
+    new vec_token {}
   }
 
 struct source {}
 
 fn parse(tokens: vec_token) ast {
-
+    new ast {}
   }
 
 struct vec_token {}
@@ -66,8 +66,8 @@ fn analyse(ast) asg {
     init_analyse().run_analyse(ast)
   }
 
-fn init_analyse() {
-
+fn init_analyse() analyse {
+    new analyse {}
   }
 
 fn run_analyse(self: analyse, ast) asg {
@@ -79,8 +79,12 @@ struct ast {
     structs: hash_map
   }
 
-fn generate(asg) {
-    
+fn generate(asg) ir {
+    new ir {}
+  }
+
+struct analyse {
+    ast_structs: hash_map
   }
 
 struct asg {}
@@ -104,3 +108,5 @@ struct str {
 
 fn postcompile() 
   do system(r"qbe -o out.s out.qbe && cc -o out out.s")
+
+struct hash_map {}

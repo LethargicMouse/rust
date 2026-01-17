@@ -113,21 +113,27 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.stmts.push(stmt);
     }
 
-    fn expr_ref(&self, expr: &Expr<'a>) -> Tmp {
+    fn expr_ref(&mut self, expr: &Expr<'a>) -> Tmp {
         match expr {
             Expr::Var(s) => self.var(s),
+            Expr::Field(field) => self.field_ref(field),
             e => unreachable!("{e:?}"),
         }
     }
 
-    fn field(&mut self, field: &Field<'a>) -> Tmp {
-        let from = self.expr(&field.from);
+    fn field_ref(&mut self, field: &Field<'a>) -> Tmp {
+        let from = self.expr_ref(&field.from);
         let off = self.new_tmp();
         let offset = self.int(field.offset as i64);
         self.stmts
             .push(Stmt::Bin(off, ir::BinOp::Add, from, offset));
+        off
+    }
+
+    fn field(&mut self, field: &Field<'a>) -> Tmp {
+        let field = self.field_ref(field);
         let tmp = self.new_tmp();
-        self.stmts.push(Stmt::Load(tmp, off));
+        self.stmts.push(Stmt::Load(tmp, field));
         tmp
     }
 
