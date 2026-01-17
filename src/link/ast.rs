@@ -101,6 +101,7 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    New(New<'a>),
     Assign(Box<Assign<'a>>),
     Field(Box<FieldExpr<'a>>),
     Let(Box<Let<'a>>),
@@ -111,6 +112,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<New<'a>> for Expr<'a> {
+    fn from(v: New<'a>) -> Self {
+        Self::New(v)
+    }
 }
 
 impl<'a> From<Assign<'a>> for Expr<'a> {
@@ -156,6 +163,7 @@ impl<'a> Expr<'a> {
             Expr::Get(get) => get.location,
             Expr::Block(block) => block.ret.location(),
             Expr::Assign(assign) => assign.location,
+            Expr::New(new) => new.location,
         }
     }
 
@@ -177,6 +185,7 @@ impl<'a> Expr<'a> {
             Expr::Let(_) => true,
             Expr::Field(_) => true,
             Expr::Assign(_) => true,
+            Expr::New(_) => true,
         }
     }
 }
@@ -317,5 +326,10 @@ impl<'a> Type<'a> {
 pub struct Assign<'a> {
     pub expr: Expr<'a>,
     pub to: Expr<'a>,
+    pub location: Location<'a>,
+}
+
+pub struct New<'a> {
+    pub lame: Lame<'a>,
     pub location: Location<'a>,
 }

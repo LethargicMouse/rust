@@ -72,9 +72,12 @@ fn init_analyse() {
 
 fn run_analyse(self: analyse, ast) asg {
     self.ast_structs = ast.structs;
+    new asg {}
   }
 
-struct ast {}
+struct ast {
+    structs: hash_map
+  }
 
 fn generate(asg) {
     

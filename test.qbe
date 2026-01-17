@@ -1,0 +1,6 @@
+export function w $main() {
+    @start
+    %b =w 123
+    %a =w add %b, 321
+    ret %a
+  }

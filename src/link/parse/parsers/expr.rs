@@ -2,7 +2,8 @@ use crate::{
     Location,
     link::{
         ast::{
-            Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Postfix,
+            Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, New,
+            Postfix,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -18,10 +19,20 @@ impl<'a> Parse<'a> {
             },
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
+            |p| Ok(p.new_expr_()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
             |p| Ok(Expr::Var(p.lame(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
+    }
+
+    fn new_expr_(&mut self) -> Result<New<'a>, Fail> {
+        let location = self.here();
+        self.expect_(Name("new"))?;
+        let lame = self.lame(true)?;
+        self.expect(CurL)?;
+        self.expect(CurR)?;
+        Ok(New { lame, location })
     }
 
     fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {

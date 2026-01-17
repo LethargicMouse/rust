@@ -24,9 +24,9 @@ impl<'a> Parse<'a> {
         if let Name(n) = self.next() {
             if Self::RESERVED.contains(&n) {
                 if loud {
-                    Err(Fail)
-                } else {
                     self.fail("name that is not reserved")
+                } else {
+                    Err(Fail)
                 }
             } else {
                 self.cursor += 1;

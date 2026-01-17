@@ -12,7 +12,7 @@ use crate::{
     link::{
         Asg, Context,
         analyse::error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared, WrongType},
-        asg,
+        asg::{self, Tuple},
         ast::{self, *},
     },
 };
@@ -181,7 +181,15 @@ impl<'a> Analyse<'a> {
                 Err(_) => self.fake_expr(),
             },
             Expr::Assign(assign) => self.assign(*assign).map_into(),
+            Expr::New(new) => self.new_expr(new),
         }
+    }
+
+    fn new_expr(&mut self, new: New<'a>) -> Typed<'a, asg::Expr<'a>> {
+        let typ = self.typ(ast::Type::Name(new.lame));
+        let exprs = Vec::new();
+        let align = 1;
+        typed(asg::Expr::Tuple(Tuple { exprs, align }), typ)
     }
 
     fn assign(&mut self, assign: Assign<'a>) -> Typed<'a, asg::Assign<'a>> {

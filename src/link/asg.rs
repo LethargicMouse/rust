@@ -38,6 +38,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Tuple(Tuple<'a>),
     Assign(Box<Assign<'a>>),
     Field(Box<Field<'a>>),
     Let(Box<Let<'a>>),
@@ -48,6 +49,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Tuple<'a>> for Expr<'a> {
+    fn from(v: Tuple<'a>) -> Self {
+        Self::Tuple(v)
+    }
 }
 
 impl<'a> From<Assign<'a>> for Expr<'a> {
@@ -137,4 +144,17 @@ pub struct Assign<'a> {
     pub expr: Expr<'a>,
     pub expr_size: u32,
     pub to: Expr<'a>,
+}
+
+#[derive(Debug)]
+pub struct SizedExpr<'a> {
+    pub expr: Expr<'a>,
+    pub align: u32,
+    pub size: u32,
+}
+
+#[derive(Debug)]
+pub struct Tuple<'a> {
+    pub exprs: Vec<SizedExpr<'a>>,
+    pub align: u32,
 }

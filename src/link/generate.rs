@@ -76,7 +76,26 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Let(let_expr) => self.let_expr(let_expr),
             Expr::Field(field) => self.field(field),
             Expr::Assign(assign) => self.assign(assign),
+            Expr::Tuple(exprs) => self.tuple(exprs),
         }
+    }
+
+    fn tuple(&mut self, tuple: &Tuple<'a>) -> Tmp {
+        let tmp = self.new_tmp();
+        let size = tuple.exprs.iter().map(|e| e.size).sum();
+        self.stmts.push(Stmt::Alloc(tmp, tuple.align, size));
+        let offset = 0;
+        for sized in &tuple.exprs {
+            let expr = self.expr(&sized.expr);
+            let offset_tmp = self.new_tmp();
+            self.stmts
+                .push(Stmt::Copy(offset_tmp, Type::Long, (offset as i64).into()));
+            let with_offset = self.new_tmp();
+            self.stmts
+                .push(Stmt::Bin(with_offset, ir::BinOp::Add, tmp, offset));
+            self.copy(with_offset, expr, sized.size);
+        }
+        tmp
     }
 
     fn assign(&mut self, assign: &Assign<'a>) -> Tmp {
