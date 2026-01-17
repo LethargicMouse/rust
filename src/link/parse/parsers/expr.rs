@@ -109,7 +109,7 @@ impl<'a> Parse<'a> {
                 p.expect(Name("else"))?;
                 p.expr()
             })
-            .unwrap_or_else(|| self.implicit_unit());
+            .unwrap_or_else(|| self.implicit_unit(location));
         Ok(If {
             location,
             condition,
@@ -118,8 +118,8 @@ impl<'a> Parse<'a> {
         })
     }
 
-    fn implicit_unit(&self) -> Expr<'a> {
-        Expr::Literal(Literal::Unit, self.here())
+    fn implicit_unit(&self, location: Location<'a>) -> Expr<'a> {
+        Expr::Literal(Literal::Unit, location)
     }
 
     pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
@@ -139,11 +139,12 @@ impl<'a> Parse<'a> {
     }
 
     fn block_(&mut self) -> Result<Block<'a>, Fail> {
+        let location = self.here();
         self.expect_(CurL)?;
         let stmts = self.many(Self::stmt);
         let ret = self
             .maybe(Self::expr)
-            .unwrap_or_else(|| self.implicit_unit());
+            .unwrap_or_else(|| self.implicit_unit(location));
         self.expect_(CurR)?;
         Ok(Block { stmts, ret })
     }
