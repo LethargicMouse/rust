@@ -75,6 +75,29 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Block(block) => self.block(block),
             Expr::Let(let_expr) => self.let_expr(let_expr),
             Expr::Field(field) => self.field(field),
+            Expr::Assign(assign) => self.assign(assign),
+        }
+    }
+
+    fn assign(&mut self, assign: &Assign<'a>) -> Tmp {
+        let to = self.expr_ref(&assign.to);
+        let expr = self.expr(&assign.expr);
+        self.copy(to, expr, assign.expr_size);
+        self.int(0)
+    }
+
+    fn copy(&mut self, to: Tmp, from: Tmp, size: u32) {
+        let stmt = match size {
+            0..=8 => Stmt::Load(to, from),
+            _ => Stmt::Blit(to, from, size),
+        };
+        self.stmts.push(stmt);
+    }
+
+    fn expr_ref(&self, expr: &Expr<'a>) -> Tmp {
+        match expr {
+            Expr::Var(s) => self.var(s),
+            e => unreachable!("{e:?}"),
         }
     }
 
@@ -91,8 +114,16 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn let_expr(&mut self, let_expr: &Let<'a>) -> Tmp {
         let tmp = self.expr(&let_expr.expr);
+        let tmp = self.store(tmp, let_expr.expr_align, let_expr.expr_size);
         self.context.insert(let_expr.name, tmp);
         self.int(0)
+    }
+
+    fn store(&mut self, tmp: Tmp, align: u32, size: u32) -> Tmp {
+        let res = self.new_tmp();
+        self.stmts.push(Stmt::Alloc(res, align, size));
+        self.copy(res, tmp, size);
+        res
     }
 
     fn deref(&mut self, expr: &Expr<'a>) -> Tmp {

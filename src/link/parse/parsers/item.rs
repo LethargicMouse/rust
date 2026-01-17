@@ -15,7 +15,7 @@ impl<'a> Parse<'a> {
     }
 
     fn struct_(&mut self) -> Result<(&'a str, Struct<'a>), Fail> {
-        self.expect_(Struct)?;
+        self.expect_(Name("struct"))?;
         let name = self.name(true)?;
         self.expect(CurL)?;
         let fields = self.sep(Self::field).collect();
@@ -24,7 +24,7 @@ impl<'a> Parse<'a> {
     }
 
     fn extrn_(&mut self) -> Result<Extern<'a>, Fail> {
-        self.expect_(Extern)?;
+        self.expect_(Name("extern"))?;
         let name = self.name(true)?;
         self.expect(Colon)?;
         let typ = self.typ()?;
@@ -39,7 +39,7 @@ impl<'a> Parse<'a> {
     }
 
     fn header_(&mut self) -> Result<Header<'a>, Fail> {
-        self.expect_(Fun)?;
+        self.expect_(Name("fn"))?;
         let name = self.name(true)?;
         self.expect(ParL)?;
         let mut params = Vec::new();

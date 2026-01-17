@@ -26,16 +26,19 @@ pub struct If<'a> {
 pub struct Let<'a> {
     pub name: &'a str,
     pub expr: Expr<'a>,
+    pub expr_align: u32,
+    pub expr_size: u32,
 }
 
 #[derive(Debug)]
 pub struct Field<'a> {
     pub from: Expr<'a>,
-    pub offset: usize,
+    pub offset: u32,
 }
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Assign(Box<Assign<'a>>),
     Field(Box<Field<'a>>),
     Let(Box<Let<'a>>),
     Block(Box<Block<'a>>),
@@ -45,6 +48,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Assign<'a>> for Expr<'a> {
+    fn from(v: Assign<'a>) -> Self {
+        Self::Assign(Box::new(v))
+    }
 }
 
 impl<'a> From<&'a str> for Expr<'a> {
@@ -121,4 +130,11 @@ pub enum Literal<'a> {
     Int(i64),
     RawStr(&'a str),
     Str(&'a str),
+}
+
+#[derive(Debug)]
+pub struct Assign<'a> {
+    pub expr: Expr<'a>,
+    pub expr_size: u32,
+    pub to: Expr<'a>,
 }

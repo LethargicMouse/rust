@@ -76,6 +76,8 @@ impl Display for Type {
 }
 
 pub enum Stmt {
+    Alloc(Tmp, u32, u32),
+    Blit(Tmp, Tmp, u32),
     Load(Tmp, Tmp),
     Ret(Tmp),
     Copy(Tmp, Type, Value),
@@ -103,6 +105,8 @@ impl Display for Stmt {
             Stmt::Label(l) => write!(f, "@l{l}"),
             Stmt::Load(t, l) => write!(f, "%t{t} =l loadl %t{l}"),
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
+            Stmt::Blit(a, b, c) => write!(f, "blit %t{a}, %t{b}, {c}"),
+            Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),
         }
     }
 }

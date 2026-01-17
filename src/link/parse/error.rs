@@ -21,7 +21,7 @@ impl<'a> Parse<'a> {
     }
 
     fn help(&self) -> Option<Help<'a>> {
-        if self.tokens[self.err_cursor].lexeme == Lexeme::Else
+        if self.tokens[self.err_cursor].lexeme == Lexeme::Name("else")
             && self.err_cursor != 0
             && self.tokens[self.err_cursor - 1].lexeme == Lexeme::Semicolon
         {
@@ -32,7 +32,7 @@ impl<'a> Parse<'a> {
         None
     }
 
-    pub fn fail<T>(&mut self, s: &'static str) -> Result<T, Fail> {
+    pub fn fail<T>(&mut self, s: &'a str) -> Result<T, Fail> {
         match self.cursor.cmp(&self.err_cursor) {
             Ordering::Less => {}
             Ordering::Equal => self.msgs.push(s),
@@ -50,7 +50,7 @@ pub struct Fail;
 
 pub struct Error<'a> {
     location: Location<'a>,
-    msgs: Vec<&'static str>,
+    msgs: Vec<&'a str>,
     help: Option<Help<'a>>,
 }
 

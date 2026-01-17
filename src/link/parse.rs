@@ -19,10 +19,12 @@ struct Parse<'a> {
     tokens: Vec<Token<'a>>,
     cursor: usize,
     err_cursor: usize,
-    msgs: Vec<&'static str>,
+    msgs: Vec<&'a str>,
 }
 
 impl<'a> Parse<'a> {
+    const RESERVED: &'static [&'static str] = &["do"];
+
     fn new(tokens: Vec<Token<'a>>) -> Self {
         Self {
             tokens,

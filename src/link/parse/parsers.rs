@@ -37,7 +37,7 @@ impl<'a> Parse<'a> {
         })
     }
 
-    pub fn expect(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
+    pub fn expect(&mut self, lexeme: Lexeme<'a>) -> Result<(), Fail> {
         self.expect_(lexeme).or_else(|_| self.fail(lexeme.show()))
     }
 
@@ -82,7 +82,7 @@ impl<'a> Parse<'a> {
     }
 
     fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {
-        self.expect_(Fun)?;
+        self.expect_(Name("fn"))?;
         self.expect(ParL)?;
         let params = self.sep(Self::typ).collect();
         self.expect(ParR)?;

@@ -22,8 +22,16 @@ impl<'a> Parse<'a> {
 
     pub fn name(&mut self, loud: bool) -> Result<&'a str, Fail> {
         if let Name(n) = self.next() {
-            self.cursor += 1;
-            Ok(n)
+            if Self::RESERVED.contains(&n) {
+                if loud {
+                    Err(Fail)
+                } else {
+                    self.fail("name that is not reserved")
+                }
+            } else {
+                self.cursor += 1;
+                Ok(n)
+            }
         } else if loud {
             self.fail("name")
         } else {

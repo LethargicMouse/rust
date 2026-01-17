@@ -113,13 +113,14 @@ pub fn analyse(ast: Ast) -> Asg {
 }
 
 struct Field<'a> {
-    pub offset: usize,
+    pub offset: u32,
     pub typ: Type<'a>,
 }
 
 struct Struct<'a> {
     fields: HashMap<&'a str, Field<'a>>,
-    size: usize,
+    size: u32,
+    align: u32,
 }
 
 struct Analyse<'a> {
@@ -179,7 +180,20 @@ impl<'a> Analyse<'a> {
                 Ok(f) => f.map_into(),
                 Err(_) => self.fake_expr(),
             },
+            Expr::Assign(assign) => self.assign(*assign).map_into(),
         }
+    }
+
+    fn assign(&mut self, assign: Assign<'a>) -> Typed<'a, asg::Assign<'a>> {
+        let (expr, typ) = self.expr(assign.expr).into();
+        typed(
+            asg::Assign {
+                expr,
+                to: self.expr(assign.to).sup,
+                expr_size: self.size(&typ),
+            },
+            Prime::Unit.into(),
+        )
     }
 
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
@@ -219,8 +233,18 @@ impl<'a> Analyse<'a> {
     fn let_expr(&mut self, let_expr: Let<'a>) -> Typed<'a, asg::Let<'a>> {
         let name = let_expr.name;
         let (expr, typ) = self.expr(let_expr.expr).into();
+        let expr_align = self.align(&typ);
+        let expr_size = self.size(&typ);
         self.context.insert(name, typ);
-        typed(asg::Let { name, expr }, Prime::Unit.into())
+        typed(
+            asg::Let {
+                name: let_expr.name,
+                expr,
+                expr_align,
+                expr_size,
+            },
+            Prime::Unit.into(),
+        )
     }
 
     fn block(&mut self, block: Block<'a>) -> Typed<'a, asg::Block<'a>> {
@@ -400,18 +424,23 @@ impl<'a> Analyse<'a> {
     fn r#struct(&mut self, name: &'a str, r#struct: ast::Struct<'a>) {
         let mut fields = HashMap::new();
         let mut offset = 0;
+        let mut align = 1;
         for field in r#struct.fields {
             let typ = self.typ(field.typ);
             let size = self.size(&typ);
+            align = align.max(self.align(&typ));
             fields.insert(field.name, Field { offset, typ });
             offset += size;
         }
-        let size = offset;
-        let r#struct = Struct { fields, size };
+        let r#struct = Struct {
+            fields,
+            size: offset,
+            align,
+        };
         self.structs.insert(name, r#struct);
     }
 
-    fn size(&self, typ: &Type<'a>) -> usize {
+    fn size(&self, typ: &Type<'a>) -> u32 {
         match typ {
             Type::Ptr(_) => 8,
             Type::Name(name) => self.structs[name].size,
@@ -419,6 +448,13 @@ impl<'a> Analyse<'a> {
             Type::Prime(prime) => prime.size(),
             Type::Error => 0,
             Type::Number => unreachable!(),
+        }
+    }
+
+    fn align(&self, typ: &Type<'a>) -> u32 {
+        match typ {
+            Type::Name(name) => self.structs[name].align,
+            _ => self.size(typ),
         }
     }
 

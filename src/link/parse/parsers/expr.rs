@@ -1,7 +1,9 @@
 use crate::{
     Location,
     link::{
-        ast::{BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Postfix},
+        ast::{
+            Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Postfix,
+        },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
     },
@@ -24,7 +26,7 @@ impl<'a> Parse<'a> {
 
     fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
         let location = self.here();
-        self.expect_(Let)?;
+        self.expect_(Name("let"))?;
         let name = self.name(true)?;
         self.expect(Equal)?;
         let expr = self.expr()?;
@@ -59,6 +61,14 @@ impl<'a> Parse<'a> {
                     }
                     .into()
                 }
+                Postfix::Assign(expr) => {
+                    res = Assign {
+                        location: res.location().combine(expr.location()),
+                        expr,
+                        to: res,
+                    }
+                    .into()
+                }
             }
         }
         Ok(res)
@@ -71,6 +81,10 @@ impl<'a> Parse<'a> {
                 let expr = p.expr()?;
                 p.expect(BraR)?;
                 Ok(Postfix::Get(expr))
+            },
+            |p| {
+                p.expect_(Equal)?;
+                Ok(Postfix::Assign(p.expr()?))
             },
             |p| {
                 p.expect_(Dot)?;
@@ -87,12 +101,12 @@ impl<'a> Parse<'a> {
 
     fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
         let location = self.here();
-        self.expect_(If)?;
+        self.expect_(Name("if"))?;
         let condition = self.expr()?;
         let then_expr = self.block_or_do()?;
         let else_expr = self
             .maybe(|p| {
-                p.expect(Else)?;
+                p.expect(Name("else"))?;
                 p.expr()
             })
             .unwrap_or_else(|| self.implicit_unit());
@@ -111,7 +125,7 @@ impl<'a> Parse<'a> {
     pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
         self.either(&[
             |p| {
-                p.expect(Do)?;
+                p.expect(Name("do"))?;
                 p.expr()
             },
             |p| Ok(p.block()?.into()),

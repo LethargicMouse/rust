@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = "0.4.43"
 csv = "1.4.0"
 macroquad = "0.4.14"
 num-traits = "0.2.19"

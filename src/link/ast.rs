@@ -101,6 +101,7 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    Assign(Box<Assign<'a>>),
     Field(Box<FieldExpr<'a>>),
     Let(Box<Let<'a>>),
     Call(Call<'a>),
@@ -110,6 +111,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Assign<'a>> for Expr<'a> {
+    fn from(v: Assign<'a>) -> Self {
+        Self::Assign(Box::new(v))
+    }
 }
 
 impl<'a> From<FieldExpr<'a>> for Expr<'a> {
@@ -148,6 +155,7 @@ impl<'a> Expr<'a> {
             Expr::Var(var) => var.location,
             Expr::Get(get) => get.location,
             Expr::Block(block) => block.ret.location(),
+            Expr::Assign(assign) => assign.location,
         }
     }
 
@@ -168,6 +176,7 @@ impl<'a> Expr<'a> {
             Expr::Block(_) => false,
             Expr::Let(_) => true,
             Expr::Field(_) => true,
+            Expr::Assign(_) => true,
         }
     }
 }
@@ -209,6 +218,7 @@ pub enum BinOp {
 }
 
 pub enum Postfix<'a> {
+    Assign(Expr<'a>),
     Get(Expr<'a>),
     Call(Call<'a>),
     Field(&'a str, Location<'a>),
@@ -250,7 +260,7 @@ pub enum Prime {
 }
 
 impl Prime {
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> u32 {
         match self {
             Prime::Unit => 0,
             Prime::Bool => 1,
@@ -302,4 +312,10 @@ impl<'a> Type<'a> {
             _ => None,
         }
     }
+}
+
+pub struct Assign<'a> {
+    pub expr: Expr<'a>,
+    pub to: Expr<'a>,
+    pub location: Location<'a>,
 }

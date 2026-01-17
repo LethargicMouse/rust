@@ -88,7 +88,6 @@ fn is_name_char(c: u8) -> bool {
 }
 
 pub const LIST: LexList = &[
-    (b"fn", Fun),
     (b"(", ParL),
     (b")", ParR),
     (b"{", CurL),
@@ -98,16 +97,10 @@ pub const LIST: LexList = &[
     (b",", Comma),
     (b"[", BraL),
     (b"]", BraR),
-    (b"if", If),
-    (b"do", Do),
     (b"==", Equal2),
     (b"=", Equal),
-    (b"extern", Extern),
-    (b"else", Else),
     (b"<", Less),
     (b".", Dot),
-    (b"let", Let),
     (b":", Colon),
     (b"*", Star),
-    (b"struct", Struct),
 ];
