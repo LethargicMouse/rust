@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::link::analyse::{Info, Size};
+
 #[derive(Debug)]
 pub struct Block<'a> {
     pub stmts: Vec<Expr<'a>>,
@@ -8,6 +10,7 @@ pub struct Block<'a> {
 
 pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
+    pub info: Info,
 }
 
 pub struct Fun<'a> {
@@ -26,8 +29,8 @@ pub struct If<'a> {
 pub struct Let<'a> {
     pub name: &'a str,
     pub expr: Expr<'a>,
-    pub expr_align: u32,
-    pub expr_size: u32,
+    pub expr_align: Size,
+    pub expr_size: Size,
 }
 
 #[derive(Debug)]
@@ -38,6 +41,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Loop(Box<Loop<'a>>),
     Tuple(Tuple<'a>),
     Assign(Box<Assign<'a>>),
     Field(Box<Field<'a>>),
@@ -49,6 +53,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Loop<'a>> for Expr<'a> {
+    fn from(v: Loop<'a>) -> Self {
+        Self::Loop(Box::new(v))
+    }
 }
 
 impl<'a> From<Tuple<'a>> for Expr<'a> {
@@ -142,7 +152,7 @@ pub enum Literal<'a> {
 #[derive(Debug)]
 pub struct Assign<'a> {
     pub expr: Expr<'a>,
-    pub expr_size: u32,
+    pub expr_size: Size,
     pub to: Expr<'a>,
 }
 
@@ -157,4 +167,9 @@ pub struct SizedExpr<'a> {
 pub struct Tuple<'a> {
     pub exprs: Vec<SizedExpr<'a>>,
     pub align: u32,
+}
+
+#[derive(Debug)]
+pub struct Loop<'a> {
+    pub body: Block<'a>,
 }

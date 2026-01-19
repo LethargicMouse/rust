@@ -39,11 +39,18 @@ impl Display for NoField<'_> {
 }
 
 pub enum CheckError<'a> {
+    Snt(ShouldKnowType<'a>),
     NDec(NotDeclared<'a>),
     NF(NoField<'a>),
     MDer(NoIndex<'a>),
     NC(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<ShouldKnowType<'a>> for CheckError<'a> {
+    fn from(v: ShouldKnowType<'a>) -> Self {
+        Self::Snt(v)
+    }
 }
 
 impl<'a> From<WrongType<'a>> for CheckError<'a> {
@@ -85,6 +92,7 @@ impl Display for CheckError<'_> {
             CheckError::MDer(no_deref) => write!(f, "{no_deref}"),
             CheckError::NC(no_call) => write!(f, "{no_call}"),
             CheckError::WT(wrong_type) => write!(f, "{wrong_type}"),
+            CheckError::Snt(should_know_type) => write!(f, "{should_know_type}"),
         }
     }
 }
@@ -149,6 +157,20 @@ impl Display for WrongType<'_> {
             f,
             "{}\n{Red}--! mismatched types:\n----! expected {Reset}{}{Red}\n----!    found {Reset}{}",
             self.location, self.expected, self.found
+        )
+    }
+}
+
+pub struct ShouldKnowType<'a> {
+    pub location: Location<'a>,
+}
+
+impl Display for ShouldKnowType<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! type should be known here{Reset}",
+            self.location
         )
     }
 }

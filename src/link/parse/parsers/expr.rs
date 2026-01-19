@@ -2,7 +2,7 @@ use crate::{
     Location,
     link::{
         ast::{
-            Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, New,
+            Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Loop, New,
             Postfix,
         },
         lex::Lexeme::*,
@@ -20,10 +20,20 @@ impl<'a> Parse<'a> {
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(p.new_expr_()?.into()),
+            |p| Ok(p.loop_expr_()?.into()),
+            |p| Ok(p.ref_expr()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
             |p| Ok(Expr::Var(p.lame(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
+    }
+
+    fn dd
+
+    fn loop_expr_(&mut self) -> Result<Loop<'a>, Fail> {
+        self.expect_(Name("loop"))?;
+        let body = self.block()?;
+        Ok(Loop { body })
     }
 
     fn new_expr_(&mut self) -> Result<New<'a>, Fail> {

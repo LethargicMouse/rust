@@ -1,5 +1,5 @@
 use crate::{
-    link::{Context, asg::*},
+    link::{Context, analyse::Size, asg::*},
     qbe::ir::{self, Const, IR, Stmt, Tmp, Type, Value},
 };
 
@@ -77,7 +77,17 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Field(field) => self.field(field),
             Expr::Assign(assign) => self.assign(assign),
             Expr::Tuple(exprs) => self.tuple(exprs),
+            Expr::Loop(loop_expr) => self.loop_expr(loop_expr),
         }
+    }
+
+    fn loop_expr(&mut self, loop_expr: &Loop<'a>) -> Tmp {
+        let start = self.new_label();
+        self.stmts.push(Stmt::Label(start));
+        let body = self.block(&loop_expr.body);
+        let end = self.new_label();
+        self.stmts.push(Stmt::Label(end));
+        body
     }
 
     fn tuple(&mut self, tuple: &Tuple<'a>) -> Tmp {
@@ -101,8 +111,15 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn assign(&mut self, assign: &Assign<'a>) -> Tmp {
         let to = self.expr_ref(&assign.to);
         let expr = self.expr(&assign.expr);
-        self.copy(to, expr, assign.expr_size);
+        self.copy(to, expr, self.size(assign.expr_size));
         self.int(0)
+    }
+
+    fn size(&self, size: Size) -> u32 {
+        match size {
+            Size::Hot(size) => size,
+            Size::Cold(id) => self.sup.asg.info.sizes[id],
+        }
     }
 
     fn copy(&mut self, to: Tmp, from: Tmp, size: u32) {
@@ -139,7 +156,11 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn let_expr(&mut self, let_expr: &Let<'a>) -> Tmp {
         let tmp = self.expr(&let_expr.expr);
-        let tmp = self.store(tmp, let_expr.expr_align, let_expr.expr_size);
+        let tmp = self.store(
+            tmp,
+            self.size(let_expr.expr_align),
+            self.size(let_expr.expr_size),
+        );
         self.context.insert(let_expr.name, tmp);
         self.int(0)
     }

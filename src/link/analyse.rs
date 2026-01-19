@@ -11,11 +11,19 @@ use crate::{
     display::Sep,
     link::{
         Asg, Context,
-        analyse::error::{CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared, WrongType},
+        analyse::error::{
+            CheckError, Fail, NoCall, NoField, NoIndex, NotDeclared, ShouldKnowType, WrongType,
+        },
         asg::{self, Tuple},
         ast::{self, *},
     },
 };
+
+#[derive(Debug, Clone, Copy)]
+pub enum Size {
+    Hot(u32),
+    Cold(usize),
+}
 
 #[derive(Clone, PartialEq)]
 struct FunType<'a> {
@@ -123,12 +131,18 @@ struct Struct<'a> {
     align: u32,
 }
 
+pub struct Info {
+    pub sizes: Vec<u32>,
+}
+
 struct Analyse<'a> {
     ast_structs: HashMap<&'a str, ast::Struct<'a>>,
     structs: HashMap<&'a str, Struct<'a>>,
     errors: Vec<CheckError<'a>>,
     context: Context<'a, Type<'a>>,
     corrupt: HashSet<&'a str>,
+    sizes: Vec<(Type<'a>, Location<'a>)>,
+    aligns: Vec<Type<'a>>,
 }
 
 impl<'a> Analyse<'a> {
@@ -139,6 +153,8 @@ impl<'a> Analyse<'a> {
             context: Context::new(),
             errors: Vec::new(),
             corrupt: HashSet::new(),
+            sizes: Vec::new(),
+            aligns: Vec::new(),
         }
     }
 
@@ -157,10 +173,26 @@ impl<'a> Analyse<'a> {
             .into_iter()
             .map(|fun| (fun.header.name, self.fun(fun)))
             .collect();
+        let info = self.info();
         if !self.errors.is_empty() {
             die(Error(self.errors))
         }
-        Asg { funs }
+        Asg { funs, info }
+    }
+
+    fn info(&mut self) -> Info {
+        let sizes = std::mem::take(&mut self.sizes);
+        let aligns = std::mem::take(&mut self.aligns);
+        let mut sizes: Vec<_> = sizes
+            .into_iter()
+            .map(|(typ, location)| self.hot_size(&typ, location))
+            .collect();
+        sizes.extend(
+            aligns
+                .into_iter()
+                .map(|typ| self.try_hot_align(&typ).unwrap_or(0)),
+        );
+        Info { sizes }
     }
 
     fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -182,7 +214,13 @@ impl<'a> Analyse<'a> {
             },
             Expr::Assign(assign) => self.assign(*assign).map_into(),
             Expr::New(new) => self.new_expr(new),
+            Expr::Loop(loop_expr) => self.loop_expr(*loop_expr).map_into(),
         }
+    }
+
+    fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
+        let (body, typ) = self.block(loop_expr.body).into();
+        typed(asg::Loop { body }, typ)
     }
 
     fn new_expr(&mut self, new: New<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -198,10 +236,29 @@ impl<'a> Analyse<'a> {
             asg::Assign {
                 expr,
                 to: self.expr(assign.to).sup,
-                expr_size: self.size(&typ),
+                expr_size: self.size(&typ, assign.location),
             },
             Prime::Unit.into(),
         )
+    }
+
+    fn size(&mut self, typ: &Type<'a>, location: Location<'a>) -> Size {
+        match self.try_hot_size(typ) {
+            Some(size) => Size::Hot(size),
+            None => self.new_cold_size(typ.clone(), location),
+        }
+    }
+
+    fn new_cold_size(&mut self, typ: Type<'a>, location: Location<'a>) -> Size {
+        let id = self.sizes.len();
+        self.sizes.push((typ, location));
+        Size::Cold(id)
+    }
+
+    fn new_cold_align(&mut self, typ: Type<'a>) -> Size {
+        let id = self.aligns.len();
+        self.aligns.push(typ);
+        Size::Cold(id)
     }
 
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
@@ -242,7 +299,7 @@ impl<'a> Analyse<'a> {
         let name = let_expr.name;
         let (expr, typ) = self.expr(let_expr.expr).into();
         let expr_align = self.align(&typ);
-        let expr_size = self.size(&typ);
+        let expr_size = self.size(&typ, let_expr.location);
         self.context.insert(name, typ);
         typed(
             asg::Let {
@@ -436,8 +493,8 @@ impl<'a> Analyse<'a> {
         let mut align = 1;
         for field in r#struct.fields {
             let typ = self.typ(field.typ);
-            let size = self.size(&typ);
-            align = align.max(self.align(&typ));
+            let size = self.try_hot_size(&typ).unwrap();
+            align = align.max(self.try_hot_align(&typ).unwrap());
             fields.insert(field.name, Field { offset, typ });
             offset += size;
         }
@@ -449,21 +506,35 @@ impl<'a> Analyse<'a> {
         self.structs.insert(name, r#struct);
     }
 
-    fn size(&self, typ: &Type<'a>) -> u32 {
+    fn try_hot_size(&self, typ: &Type<'a>) -> Option<u32> {
         match typ {
-            Type::Ptr(_) => 8,
-            Type::Name(name) => self.structs[name].size,
-            Type::Fun(_) => 8,
-            Type::Prime(prime) => prime.size(),
-            Type::Error => 0,
-            Type::Number => unreachable!(),
+            Type::Ptr(_) => Some(8),
+            Type::Name(name) => Some(self.structs[name].size),
+            Type::Fun(_) => Some(8),
+            Type::Prime(prime) => Some(prime.size()),
+            Type::Error => Some(0),
+            Type::Number => None,
         }
     }
 
-    fn align(&self, typ: &Type<'a>) -> u32 {
+    fn hot_size(&mut self, typ: &Type<'a>, location: Location<'a>) -> u32 {
+        self.try_hot_size(typ).unwrap_or_else(|| {
+            self.fail(ShouldKnowType { location });
+            0
+        })
+    }
+
+    fn try_hot_align(&mut self, typ: &Type<'a>) -> Option<u32> {
         match typ {
-            Type::Name(name) => self.structs[name].align,
-            _ => self.size(typ),
+            Type::Name(name) => Some(self.structs[name].align),
+            _ => self.try_hot_size(typ),
+        }
+    }
+
+    fn align(&mut self, typ: &Type<'a>) -> Size {
+        match self.try_hot_align(typ) {
+            Some(align) => Size::Hot(align),
+            None => self.new_cold_align(typ.clone()),
         }
     }
 
