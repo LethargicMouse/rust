@@ -266,6 +266,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             BinOp::Multiply => ir::BinOp::Multiply,
             BinOp::Equal => ir::BinOp::Equal,
             BinOp::Less => ir::BinOp::Less,
+            BinOp::NotEqual => ir::BinOp::Inequal,
         }
     }
 

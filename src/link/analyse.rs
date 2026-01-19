@@ -475,7 +475,7 @@ impl<'a> Analyse<'a> {
         let right = self.expr(binary.right).sup;
         let typ = match binary.op {
             BinOp::Plus => typ,
-            BinOp::Equal | BinOp::Less => Prime::Bool.into(),
+            BinOp::Equal | BinOp::NotEqual | BinOp::Less => Prime::Bool.into(),
         };
         let op = self.bin_op(binary.op);
         typed(asg::Binary { left, op, right }, typ)
@@ -486,6 +486,7 @@ impl<'a> Analyse<'a> {
             BinOp::Plus => asg::BinOp::Add,
             BinOp::Equal => asg::BinOp::Equal,
             BinOp::Less => asg::BinOp::Less,
+            BinOp::NotEqual => asg::BinOp::NotEqual,
         }
     }
 

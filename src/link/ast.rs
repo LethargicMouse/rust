@@ -251,6 +251,7 @@ pub enum BinOp {
     Plus,
     Equal,
     Less,
+    NotEqual,
 }
 
 pub enum Postfix<'a> {

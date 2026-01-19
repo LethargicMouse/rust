@@ -210,6 +210,7 @@ impl<'a> Parse<'a> {
             |p| p.expect_(Plus).map(|_| BinOp::Plus),
             |p| p.expect_(Equal2).map(|_| BinOp::Equal),
             |p| p.expect_(Less).map(|_| BinOp::Less),
+            |p| p.expect_(BangEqual).map(|_| BinOp::NotEqual),
         ])
     }
 

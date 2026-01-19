@@ -156,6 +156,7 @@ pub enum BinOp {
     Multiply,
     Equal,
     Less,
+    Inequal,
 }
 
 impl Display for BinOp {
@@ -165,6 +166,7 @@ impl Display for BinOp {
             BinOp::Multiply => write!(f, "mul"),
             BinOp::Equal => write!(f, "ceql"),
             BinOp::Less => write!(f, "csltl"),
+            BinOp::Inequal => write!(f, "cnel"),
         }
     }
 }
