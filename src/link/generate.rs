@@ -78,7 +78,12 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Assign(assign) => self.assign(assign),
             Expr::Tuple(exprs) => self.tuple(exprs),
             Expr::Loop(loop_expr) => self.loop_expr(loop_expr),
+            Expr::Ref(ref_expr) => self.ref_expr(ref_expr),
         }
+    }
+
+    fn ref_expr(&mut self, ref_expr: &Ref<'a>) -> Tmp {
+        self.expr_ref(&ref_expr.expr)
     }
 
     fn loop_expr(&mut self, loop_expr: &Loop<'a>) -> Tmp {

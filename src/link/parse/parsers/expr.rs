@@ -3,7 +3,7 @@ use crate::{
     link::{
         ast::{
             Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Loop, New,
-            Postfix,
+            Postfix, Ref,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -21,14 +21,19 @@ impl<'a> Parse<'a> {
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(p.new_expr_()?.into()),
             |p| Ok(p.loop_expr_()?.into()),
-            |p| Ok(p.ref_expr()?.into()),
+            |p| Ok(p.ref_expr_()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
             |p| Ok(Expr::Var(p.lame(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
     }
 
-    fn dd
+    fn ref_expr_(&mut self) -> Result<Ref<'a>, Fail> {
+        let location = self.here();
+        self.expect_(Ampersand)?;
+        let expr = self.expr_1()?;
+        Ok(Ref { expr, location })
+    }
 
     fn loop_expr_(&mut self) -> Result<Loop<'a>, Fail> {
         self.expect_(Name("loop"))?;

@@ -41,6 +41,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Ref(Box<Ref<'a>>),
     Loop(Box<Loop<'a>>),
     Tuple(Tuple<'a>),
     Assign(Box<Assign<'a>>),
@@ -53,6 +54,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Ref<'a>> for Expr<'a> {
+    fn from(v: Ref<'a>) -> Self {
+        Self::Ref(Box::new(v))
+    }
 }
 
 impl<'a> From<Loop<'a>> for Expr<'a> {
@@ -172,4 +179,9 @@ pub struct Tuple<'a> {
 #[derive(Debug)]
 pub struct Loop<'a> {
     pub body: Block<'a>,
+}
+
+#[derive(Debug)]
+pub struct Ref<'a> {
+    pub expr: Expr<'a>,
 }

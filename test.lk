@@ -4,3 +4,5 @@ fn main() {
         read(0, &c, 1)
       }
   }
+
+extern read: fn(i32, *u8, u64) u64;

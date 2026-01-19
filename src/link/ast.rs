@@ -101,6 +101,7 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    Ref(Box<Ref<'a>>),
     Loop(Box<Loop<'a>>),
     New(New<'a>),
     Assign(Box<Assign<'a>>),
@@ -113,6 +114,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Ref<'a>> for Expr<'a> {
+    fn from(v: Ref<'a>) -> Self {
+        Self::Ref(Box::new(v))
+    }
 }
 
 impl<'a> From<Loop<'a>> for Expr<'a> {
@@ -172,6 +179,7 @@ impl<'a> Expr<'a> {
             Expr::Assign(assign) => assign.location,
             Expr::New(new) => new.location,
             Expr::Loop(loop_expr) => loop_expr.body.ret.location(),
+            Expr::Ref(ref_expr) => ref_expr.location,
         }
     }
 
@@ -195,6 +203,7 @@ impl<'a> Expr<'a> {
             Expr::Assign(_) => true,
             Expr::New(_) => true,
             Expr::Loop(_) => false,
+            Expr::Ref(_) => true,
         }
     }
 }
@@ -345,4 +354,9 @@ pub struct New<'a> {
 
 pub struct Loop<'a> {
     pub body: Block<'a>,
+}
+
+pub struct Ref<'a> {
+    pub expr: Expr<'a>,
+    pub location: Location<'a>,
 }

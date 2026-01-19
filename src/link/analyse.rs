@@ -215,7 +215,13 @@ impl<'a> Analyse<'a> {
             Expr::Assign(assign) => self.assign(*assign).map_into(),
             Expr::New(new) => self.new_expr(new),
             Expr::Loop(loop_expr) => self.loop_expr(*loop_expr).map_into(),
+            Expr::Ref(ref_expr) => self.ref_expr(*ref_expr).map_into(),
         }
+    }
+
+    fn ref_expr(&mut self, ref_expr: Ref<'a>) -> Typed<'a, asg::Ref<'a>> {
+        let (expr, typ) = self.expr(ref_expr.expr).into();
+        typed(asg::Ref { expr }, Type::Ptr(Box::new(typ)))
     }
 
     fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
@@ -346,6 +352,10 @@ impl<'a> Analyse<'a> {
             (a, b) if a == b => a,
             (a, Type::Error) => a,
             (Type::Error, b) => b,
+            (Type::Ptr(mut a), Type::Ptr(b)) => {
+                *a = self.unify(location, *a, *b);
+                Type::Ptr(a)
+            }
             (a, Type::Number) if a.is_number() => a,
             (expected, found) => {
                 self.errors.push(
