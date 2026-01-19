@@ -1,8 +1,10 @@
 fn main() {
     let c = 0;
     loop {
-        read(0, &c, 1)
+        read(0, &c, 1);
+        puts(&c);
       }
   }
 
 extern read: fn(i32, *u8, u64) u64;
+extern puts: fn(*u8);

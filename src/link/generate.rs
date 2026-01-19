@@ -90,6 +90,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let start = self.new_label();
         self.stmts.push(Stmt::Label(start));
         let body = self.block(&loop_expr.body);
+        self.stmts.push(Stmt::Jump(start));
         let end = self.new_label();
         self.stmts.push(Stmt::Label(end));
         body
@@ -129,7 +130,10 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn copy(&mut self, to: Tmp, from: Tmp, size: u32) {
         let stmt = match size {
-            0..=8 => Stmt::Load(to, from),
+            1 => Stmt::Store(Type::Byte, from, to),
+            2 => Stmt::Store(Type::Half, from, to),
+            4 => Stmt::Store(Type::Word, from, to),
+            8 => Stmt::Store(Type::Long, from, to),
             _ => Stmt::Blit(to, from, size),
         };
         self.stmts.push(stmt);

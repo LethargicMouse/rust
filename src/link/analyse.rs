@@ -37,14 +37,16 @@ impl Display for FunType<'_> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 enum Type<'a> {
     Ptr(Box<Type<'a>>),
     Name(&'a str),
     Fun(Box<FunType<'a>>),
     Prime(Prime),
+    #[default]
     Error,
     Number,
+    Var(usize),
 }
 
 impl<'a> From<Prime> for Type<'a> {
@@ -62,6 +64,7 @@ impl Display for Type<'_> {
             Type::Fun(fun_type) => write!(f, "{fun_type}"),
             Type::Prime(prime) => write!(f, "{prime}"),
             Type::Number => write!(f, "<number>"),
+            Type::Var(id) => write!(f, "<#{id}>"),
         }
     }
 }
@@ -88,6 +91,7 @@ impl<'a> Type<'a> {
             Type::Prime(prime) => prime.is_number(),
             Type::Error => true,
             Type::Number => true,
+            Type::Var(_) => false,
         }
     }
 }
@@ -143,6 +147,7 @@ struct Analyse<'a> {
     corrupt: HashSet<&'a str>,
     sizes: Vec<(Type<'a>, Location<'a>)>,
     aligns: Vec<Type<'a>>,
+    types: Vec<Type<'a>>,
 }
 
 impl<'a> Analyse<'a> {
@@ -155,6 +160,7 @@ impl<'a> Analyse<'a> {
             corrupt: HashSet::new(),
             sizes: Vec::new(),
             aligns: Vec::new(),
+            types: Vec::new(),
         }
     }
 
@@ -352,6 +358,11 @@ impl<'a> Analyse<'a> {
             (a, b) if a == b => a,
             (a, Type::Error) => a,
             (Type::Error, b) => b,
+            (a, Type::Var(id)) => {
+                let b = std::mem::take(&mut self.types[id]);
+                self.types[id] = self.unify(location, a, b);
+                Type::Var(id)
+            }
             (Type::Ptr(mut a), Type::Ptr(b)) => {
                 *a = self.unify(location, *a, *b);
                 Type::Ptr(a)
@@ -458,16 +469,22 @@ impl<'a> Analyse<'a> {
         }
     }
 
-    fn literal(&self, literal: Literal<'a>) -> Typed<'a, asg::Literal<'a>> {
+    fn literal(&mut self, literal: Literal<'a>) -> Typed<'a, asg::Literal<'a>> {
         match literal {
             Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
-            Literal::Int(i) => typed(asg::Literal::Int(i), Type::Number),
+            Literal::Int(i) => typed(asg::Literal::Int(i), self.new_type_var(Type::Number)),
             Literal::RawStr(s) => typed(
                 asg::Literal::RawStr(s),
                 Type::Ptr(Box::new(Prime::U8.into())),
             ),
             Literal::Str(s) => typed(asg::Literal::Str(s), Type::Name("str")),
         }
+    }
+
+    fn new_type_var(&mut self, typ: Type<'a>) -> Type<'a> {
+        let id = self.types.len();
+        self.types.push(typ);
+        Type::Var(id)
     }
 
     fn struct_type(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
@@ -524,6 +541,7 @@ impl<'a> Analyse<'a> {
             Type::Prime(prime) => Some(prime.size()),
             Type::Error => Some(0),
             Type::Number => None,
+            &Type::Var(id) => self.try_hot_size(&self.types[id]),
         }
     }
 

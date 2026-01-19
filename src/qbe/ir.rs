@@ -64,6 +64,8 @@ pub type Tmp = u32;
 pub enum Type {
     Word,
     Long,
+    Byte,
+    Half,
 }
 
 impl Display for Type {
@@ -71,6 +73,8 @@ impl Display for Type {
         match self {
             Type::Word => write!(f, "w"),
             Type::Long => write!(f, "l"),
+            Type::Byte => write!(f, "b"),
+            Type::Half => write!(f, "h"),
         }
     }
 }
@@ -86,6 +90,7 @@ pub enum Stmt {
     Jnz(Tmp, u16, u16),
     Label(u16),
     Jump(u16),
+    Store(Type, Tmp, Tmp),
 }
 
 impl From<Call> for Stmt {
@@ -107,6 +112,7 @@ impl Display for Stmt {
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
             Stmt::Blit(a, b, c) => write!(f, "blit %t{a}, %t{b}, {c}"),
             Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),
+            Stmt::Store(t, a, b) => write!(f, "store{t} %t{a}, %t{b}"),
         }
     }
 }
