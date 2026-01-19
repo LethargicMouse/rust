@@ -1,6 +1,6 @@
 use crate::{
     link::{Context, analyse::Size, asg::*},
-    qbe::ir::{self, Const, IR, Stmt, Tmp, Type, Value},
+    qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Type, Value},
 };
 
 pub fn generate(asg: &Asg) -> IR {
@@ -34,7 +34,7 @@ struct GenFun<'a, 'b> {
     stmts: Vec<Stmt>,
     tmp: Tmp,
     label: u16,
-    context: Context<'a, Tmp>,
+    context: Context<'a, (Tmp, u32)>,
 }
 
 impl<'a, 'b> GenFun<'a, 'b> {
@@ -51,8 +51,8 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn run(mut self, name: &str, fun: &Fun<'a>) -> ir::Fun {
         let name = name.into();
         let params = fun.params.iter().map(|_| self.new_tmp()).collect();
-        for (param, &tmp) in fun.params.iter().zip(&params) {
-            self.context.insert(param, tmp);
+        for ((param, size), &tmp) in fun.params.iter().zip(&params) {
+            self.context.insert(param, (tmp, *size));
         }
         let tmp = self.expr(&fun.body);
         self.stmts.push(Stmt::Ret(tmp));
@@ -79,7 +79,16 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Expr::Tuple(exprs) => self.tuple(exprs),
             Expr::Loop(loop_expr) => self.loop_expr(loop_expr),
             Expr::Ref(ref_expr) => self.ref_expr(ref_expr),
+            Expr::Return(ret) => self.ret(ret),
         }
+    }
+
+    fn ret(&mut self, ret: &Return<'a>) -> Tmp {
+        let expr = self.expr(&ret.expr);
+        self.stmts.push(Stmt::Ret(expr));
+        let label = self.new_label();
+        self.stmts.push(Stmt::Label(label));
+        self.int(0)
     }
 
     fn ref_expr(&mut self, ref_expr: &Ref<'a>) -> Tmp {
@@ -141,7 +150,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn expr_ref(&mut self, expr: &Expr<'a>) -> Tmp {
         match expr {
-            Expr::Var(s) => self.var(s),
+            Expr::Var(s) => self.var_ref(s).0,
             Expr::Field(field) => self.field_ref(field),
             e => unreachable!("{e:?}"),
         }
@@ -157,20 +166,18 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn field(&mut self, field: &Field<'a>) -> Tmp {
+        let typ = self.signed(field.size);
         let field = self.field_ref(field);
         let tmp = self.new_tmp();
-        self.stmts.push(Stmt::Load(tmp, field));
+        self.stmts.push(Stmt::Load(tmp, typ, field));
         tmp
     }
 
     fn let_expr(&mut self, let_expr: &Let<'a>) -> Tmp {
         let tmp = self.expr(&let_expr.expr);
-        let tmp = self.store(
-            tmp,
-            self.size(let_expr.expr_align),
-            self.size(let_expr.expr_size),
-        );
-        self.context.insert(let_expr.name, tmp);
+        let size = self.size(let_expr.expr_size);
+        let tmp = self.store(tmp, self.size(let_expr.expr_align), size);
+        self.context.insert(let_expr.name, (tmp, size));
         self.int(0)
     }
 
@@ -181,10 +188,11 @@ impl<'a, 'b> GenFun<'a, 'b> {
         res
     }
 
-    fn deref(&mut self, expr: &Expr<'a>) -> Tmp {
-        let expr = self.expr(expr);
+    fn deref(&mut self, deref: &Deref<'a>) -> Tmp {
+        let expr = self.expr(&deref.expr);
         let tmp = self.new_tmp();
-        self.stmts.push(Stmt::Load(tmp, expr));
+        self.stmts
+            .push(Stmt::Load(tmp, self.signed(deref.size), expr));
         tmp
     }
 
@@ -209,8 +217,25 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.label
     }
 
-    fn var(&self, name: &str) -> Tmp {
+    fn var_ref(&self, name: &str) -> (Tmp, u32) {
         *self.context.get(name).unwrap()
+    }
+
+    fn var(&mut self, name: &str) -> Tmp {
+        let (tmp, size) = self.var_ref(name);
+        let res = self.new_tmp();
+        self.stmts.push(Stmt::Load(res, self.signed(size), tmp));
+        res
+    }
+
+    fn signed(&self, size: u32) -> Signed {
+        match size {
+            1 => Signed::UnsignedByte,
+            2 => Signed::UnsignedHalf,
+            4 => Signed::Word,
+            8 => Signed::Long,
+            _ => unreachable!(),
+        }
     }
 
     fn call(&mut self, call: &Call<'a>) -> Tmp {

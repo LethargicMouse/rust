@@ -47,6 +47,7 @@ enum Type<'a> {
     Error,
     Number,
     Var(usize),
+    Unreachable,
 }
 
 impl<'a> From<Prime> for Type<'a> {
@@ -65,6 +66,7 @@ impl Display for Type<'_> {
             Type::Prime(prime) => write!(f, "{prime}"),
             Type::Number => write!(f, "<number>"),
             Type::Var(id) => write!(f, "<#{id}>"),
+            Type::Unreachable => write!(f, "<unreachable>"),
         }
     }
 }
@@ -92,6 +94,7 @@ impl<'a> Type<'a> {
             Type::Error => true,
             Type::Number => true,
             Type::Var(_) => false,
+            Type::Unreachable => true,
         }
     }
 }
@@ -126,6 +129,7 @@ pub fn analyse(ast: Ast) -> Asg {
 
 struct Field<'a> {
     pub offset: u32,
+    pub size: u32,
     pub typ: Type<'a>,
 }
 
@@ -211,7 +215,7 @@ impl<'a> Analyse<'a> {
             Expr::Literal(literal, _) => self.literal(literal).map_into(),
             Expr::Var(name) => self.var(name).map_into(),
             Expr::If(if_expr) => self.if_expr(*if_expr).map_into(),
-            Expr::Get(get) => self.get(*get),
+            Expr::Get(get) => self.get(*get).map_into(),
             Expr::Block(block) => self.block(*block).map_into(),
             Expr::Let(let_expr) => self.let_expr(*let_expr).map_into(),
             Expr::Field(field) => match self.field(*field) {
@@ -222,7 +226,13 @@ impl<'a> Analyse<'a> {
             Expr::New(new) => self.new_expr(new),
             Expr::Loop(loop_expr) => self.loop_expr(*loop_expr).map_into(),
             Expr::Ref(ref_expr) => self.ref_expr(*ref_expr).map_into(),
+            Expr::Return(ret) => self.ret(*ret).map_into(),
         }
+    }
+
+    fn ret(&mut self, ret: Return<'a>) -> Typed<'a, asg::Return<'a>> {
+        let expr = self.expr(ret.expr).sup;
+        typed(asg::Return { expr }, Type::Unreachable)
     }
 
     fn ref_expr(&mut self, ref_expr: Ref<'a>) -> Typed<'a, asg::Ref<'a>> {
@@ -298,8 +308,9 @@ impl<'a> Analyse<'a> {
             })),
         }?;
         let offset = field.offset;
+        let size = field.size;
         let typ = field.typ.clone();
-        Ok(typed(asg::Field { from, offset }, typ))
+        Ok(typed(asg::Field { from, offset, size }, typ))
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
@@ -330,15 +341,15 @@ impl<'a> Analyse<'a> {
         typed(asg::Block { stmts, ret }, typ)
     }
 
-    fn get(&mut self, get: Get<'a>) -> Typed<'a, asg::Expr<'a>> {
+    fn get(&mut self, get: Get<'a>) -> Typed<'a, asg::Deref<'a>> {
         let location = get.from.location();
         let from = self.expr(get.from);
-        let typ = self.index_type(from.typ, location);
+        let typ = self.get_type(from.typ, location);
         let location = get.index.location();
         let index = self.expr(get.index);
         self.unify(location, Prime::U64.into(), index.typ);
-        let res = asg::Expr::Deref(Box::new(
-            asg::Binary {
+        let res = asg::Deref {
+            expr: asg::Binary {
                 left: from.sup,
                 op: asg::BinOp::Add,
                 right: asg::Binary {
@@ -349,7 +360,8 @@ impl<'a> Analyse<'a> {
                 .into(),
             }
             .into(),
-        ));
+            size: self.hot_size(&typ, get.location),
+        };
         typed(res, typ)
     }
 
@@ -358,6 +370,7 @@ impl<'a> Analyse<'a> {
             (a, b) if a == b => a,
             (a, Type::Error) => a,
             (Type::Error, b) => b,
+            (a, Type::Unreachable) => a,
             (a, Type::Var(id)) => {
                 let b = std::mem::take(&mut self.types[id]);
                 self.types[id] = self.unify(location, a, b);
@@ -382,7 +395,7 @@ impl<'a> Analyse<'a> {
         }
     }
 
-    fn index_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
+    fn get_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Type<'a> {
         match typ {
             Type::Error => Type::Error,
             Type::Ptr(typ) => *typ,
@@ -397,9 +410,16 @@ impl<'a> Analyse<'a> {
         let location = if_expr.condition.location();
         let (condition, typ) = self.expr(if_expr.condition).into();
         self.unify(location, Prime::Bool.into(), typ);
-        let (then_expr, then_typ) = self.expr(if_expr.then_expr).into();
-        let location = if_expr.else_expr.location();
-        let (else_expr, else_typ) = self.expr(if_expr.else_expr).into();
+        let then_location = if_expr.then_expr.location();
+        let (then_expr, mut then_typ) = self.expr(if_expr.then_expr).into();
+        let mut location = if_expr.else_expr.location();
+        let (else_expr, mut else_typ) = self.expr(if_expr.else_expr).into();
+        if matches!(else_typ, Type::Prime(Prime::Unit))
+            && matches!(else_expr, asg::Expr::Literal(_))
+        {
+            std::mem::swap(&mut then_typ, &mut else_typ);
+            location = then_location;
+        }
         let typ = self.unify(location, then_typ, else_typ);
         let res = asg::If {
             condition,
@@ -522,7 +542,7 @@ impl<'a> Analyse<'a> {
             let typ = self.typ(field.typ);
             let size = self.try_hot_size(&typ).unwrap();
             align = align.max(self.try_hot_align(&typ).unwrap());
-            fields.insert(field.name, Field { offset, typ });
+            fields.insert(field.name, Field { offset, size, typ });
             offset += size;
         }
         let r#struct = Struct {
@@ -542,6 +562,7 @@ impl<'a> Analyse<'a> {
             Type::Error => Some(0),
             Type::Number => None,
             &Type::Var(id) => self.try_hot_size(&self.types[id]),
+            Type::Unreachable => Some(0),
         }
     }
 
@@ -583,12 +604,19 @@ impl<'a> Analyse<'a> {
 
     fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
         self.context.new_layer();
-        for (param, typ) in fun.header.params.iter().zip(fun.header.typ.params) {
-            let typ = self.typ(typ);
-            self.context.insert(param, typ);
-        }
+        let params = fun
+            .header
+            .params
+            .iter()
+            .zip(fun.header.typ.params)
+            .map(|(param, typ)| {
+                let typ = self.typ(typ);
+                let size = self.try_hot_size(&typ).unwrap();
+                self.context.insert(param, typ);
+                (*param, size)
+            })
+            .collect();
         let ret_typ = self.typ(fun.header.typ.ret);
-        let params = fun.header.params;
         let location = fun.body.location();
         let (body, typ) = self.expr(fun.body).into();
         self.unify(location, ret_typ, typ);

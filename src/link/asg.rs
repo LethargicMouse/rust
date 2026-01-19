@@ -14,7 +14,7 @@ pub struct Asg<'a> {
 }
 
 pub struct Fun<'a> {
-    pub params: Vec<&'a str>,
+    pub params: Vec<(&'a str, u32)>,
     pub body: Expr<'a>,
 }
 
@@ -37,10 +37,12 @@ pub struct Let<'a> {
 pub struct Field<'a> {
     pub from: Expr<'a>,
     pub offset: u32,
+    pub size: u32,
 }
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Return(Box<Return<'a>>),
     Ref(Box<Ref<'a>>),
     Loop(Box<Loop<'a>>),
     Tuple(Tuple<'a>),
@@ -48,12 +50,24 @@ pub enum Expr<'a> {
     Field(Box<Field<'a>>),
     Let(Box<Let<'a>>),
     Block(Box<Block<'a>>),
-    Deref(Box<Expr<'a>>),
+    Deref(Box<Deref<'a>>),
     Call(Call<'a>),
     Binary(Box<Binary<'a>>),
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Deref<'a>> for Expr<'a> {
+    fn from(v: Deref<'a>) -> Self {
+        Self::Deref(Box::new(v))
+    }
+}
+
+impl<'a> From<Return<'a>> for Expr<'a> {
+    fn from(v: Return<'a>) -> Self {
+        Self::Return(Box::new(v))
+    }
 }
 
 impl<'a> From<Ref<'a>> for Expr<'a> {
@@ -184,4 +198,15 @@ pub struct Loop<'a> {
 #[derive(Debug)]
 pub struct Ref<'a> {
     pub expr: Expr<'a>,
+}
+
+#[derive(Debug)]
+pub struct Return<'a> {
+    pub expr: Expr<'a>,
+}
+
+#[derive(Debug)]
+pub struct Deref<'a> {
+    pub expr: Expr<'a>,
+    pub size: u32,
 }

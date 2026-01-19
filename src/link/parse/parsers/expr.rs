@@ -3,7 +3,7 @@ use crate::{
     link::{
         ast::{
             Assign, BinOp, Binary, Block, Call, Expr, FieldExpr, Get, If, Let, Literal, Loop, New,
-            Postfix, Ref,
+            Postfix, Ref, Return,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -22,10 +22,20 @@ impl<'a> Parse<'a> {
             |p| Ok(p.new_expr_()?.into()),
             |p| Ok(p.loop_expr_()?.into()),
             |p| Ok(p.ref_expr_()?.into()),
+            |p| Ok(p.ret_()?.into()),
             |p| Ok(Expr::Call(p.call(false)?)),
             |p| Ok(Expr::Var(p.lame(false)?)),
         ])
         .or_else(|_| self.fail("expression"))
+    }
+
+    fn ret_(&mut self) -> Result<Return<'a>, Fail> {
+        let location = self.here();
+        self.expect_(Name("return"))?;
+        let expr = self
+            .maybe(Self::expr)
+            .unwrap_or_else(|| self.implicit_unit(self.here()));
+        Ok(Return { expr, location })
     }
 
     fn ref_expr_(&mut self) -> Result<Ref<'a>, Fail> {
@@ -177,11 +187,11 @@ impl<'a> Parse<'a> {
 
     pub fn expr(&mut self) -> Result<Expr<'a>, Fail> {
         let mut expr = self.expr_1()?;
-        while let Some((op, op_location, right)) = self.maybe(|p| p.bin_postfix_()) {
+        while let Some((op, right)) = self.maybe(|p| p.bin_postfix_()) {
             expr = Binary {
+                location: expr.location().combine(right.location()),
                 left: expr,
                 op,
-                op_location,
                 right,
             }
             .into()
@@ -189,11 +199,10 @@ impl<'a> Parse<'a> {
         Ok(expr)
     }
 
-    fn bin_postfix_(&mut self) -> Result<(BinOp, Location<'a>, Expr<'a>), Fail> {
+    fn bin_postfix_(&mut self) -> Result<(BinOp, Expr<'a>), Fail> {
         let op = self.bin_op_()?;
-        let location = self.here();
         let expr = self.expr_1()?;
-        Ok((op, location, expr))
+        Ok((op, expr))
     }
 
     fn bin_op_(&mut self) -> Result<BinOp, Fail> {

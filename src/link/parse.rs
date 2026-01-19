@@ -23,7 +23,7 @@ struct Parse<'a> {
 }
 
 impl<'a> Parse<'a> {
-    const RESERVED: &'static [&'static str] = &["do", "new"];
+    const RESERVED: &'static [&'static str] = &["do", "new", "return"];
 
     fn new(tokens: Vec<Token<'a>>) -> Self {
         Self {

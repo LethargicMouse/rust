@@ -61,6 +61,24 @@ impl Display for Fun {
 
 pub type Tmp = u32;
 
+pub enum Signed {
+    Long,
+    Word,
+    UnsignedByte,
+    UnsignedHalf,
+}
+
+impl Display for Signed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Signed::Long => write!(f, "l"),
+            Signed::Word => write!(f, "w"),
+            Signed::UnsignedByte => write!(f, "ub"),
+            Signed::UnsignedHalf => write!(f, "uh"),
+        }
+    }
+}
+
 pub enum Type {
     Word,
     Long,
@@ -82,7 +100,7 @@ impl Display for Type {
 pub enum Stmt {
     Alloc(Tmp, u32, u32),
     Blit(Tmp, Tmp, u32),
-    Load(Tmp, Tmp),
+    Load(Tmp, Signed, Tmp),
     Ret(Tmp),
     Copy(Tmp, Type, Value),
     Call(Call),
@@ -108,7 +126,7 @@ impl Display for Stmt {
             Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =l {bin_op} %t{l}, %t{r}"),
             Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
             Stmt::Label(l) => write!(f, "@l{l}"),
-            Stmt::Load(t, l) => write!(f, "%t{t} =l loadl %t{l}"),
+            Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} =l load{typ} %t{l}"),
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
             Stmt::Blit(a, b, c) => write!(f, "blit %t{a}, %t{b}, {c}"),
             Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),

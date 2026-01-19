@@ -2,6 +2,7 @@ fn main() {
     let c = 0;
     loop {
         read(0, &c, 1);
+        if c == 97 do return;
         puts(&c);
       }
   }

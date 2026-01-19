@@ -101,6 +101,7 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    Return(Box<Return<'a>>),
     Ref(Box<Ref<'a>>),
     Loop(Box<Loop<'a>>),
     New(New<'a>),
@@ -114,6 +115,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Return<'a>> for Expr<'a> {
+    fn from(v: Return<'a>) -> Self {
+        Self::Return(Box::new(v))
+    }
 }
 
 impl<'a> From<Ref<'a>> for Expr<'a> {
@@ -170,7 +177,7 @@ impl<'a> Expr<'a> {
             Expr::Field(field) => field.name_location,
             Expr::Let(let_expr) => let_expr.location,
             Expr::Call(call) => call.var.location,
-            Expr::Binary(binary) => binary.op_location,
+            Expr::Binary(binary) => binary.location,
             Expr::Literal(_, location) => *location,
             Expr::If(if_expr) => if_expr.location,
             Expr::Var(var) => var.location,
@@ -180,6 +187,7 @@ impl<'a> Expr<'a> {
             Expr::New(new) => new.location,
             Expr::Loop(loop_expr) => loop_expr.body.ret.location(),
             Expr::Ref(ref_expr) => ref_expr.location,
+            Expr::Return(ret) => ret.location,
         }
     }
 
@@ -204,6 +212,7 @@ impl<'a> Expr<'a> {
             Expr::New(_) => true,
             Expr::Loop(_) => false,
             Expr::Ref(_) => true,
+            Expr::Return(_) => true,
         }
     }
 }
@@ -234,7 +243,7 @@ pub struct Call<'a> {
 pub struct Binary<'a> {
     pub left: Expr<'a>,
     pub op: BinOp,
-    pub op_location: Location<'a>,
+    pub location: Location<'a>,
     pub right: Expr<'a>,
 }
 
@@ -357,6 +366,11 @@ pub struct Loop<'a> {
 }
 
 pub struct Ref<'a> {
+    pub expr: Expr<'a>,
+    pub location: Location<'a>,
+}
+
+pub struct Return<'a> {
     pub expr: Expr<'a>,
     pub location: Location<'a>,
 }
