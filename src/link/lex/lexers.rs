@@ -46,8 +46,8 @@ impl<'a> Lex<'a> {
         }
         let res = &self.source.code[start..self.cursor];
         let lexeme = lexeme(str::from_utf8(res).unwrap());
-        self.cursor -= res.len() + 2 + left.len();
-        let tok = self.token(lexeme, res.len() + 3 + left.len());
+        self.cursor -= res.len() + left.len();
+        let tok = self.token(lexeme, res.len() + left.len() + 1);
         Some(tok)
     }
 

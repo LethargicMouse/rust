@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{self, Extern, FunType, Header, Item, Prime, Struct},
+    ast::{self, Extern, FunType, Header, Item, Lame, Prime, Struct, Type},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -40,7 +40,7 @@ impl<'a> Parse<'a> {
 
     fn header_(&mut self) -> Result<Header<'a>, Fail> {
         self.expect_(Name("fn"))?;
-        let name = self.name(true)?;
+        let Lame { name, location } = self.lame(true)?;
         self.expect(ParL)?;
         let mut params = Vec::new();
         let mut type_params = Vec::new();
@@ -49,10 +49,13 @@ impl<'a> Parse<'a> {
             type_params.push(param.typ);
         }
         self.expect(ParR)?;
-        let ret_type = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
+        let ret_type = self
+            .maybe(Self::typ)
+            .unwrap_or_else(|| Type::Prime(Prime::Unit, self.here()));
         let typ = FunType {
             params: type_params,
             ret: ret_type,
+            location,
         };
         Ok(Header { name, params, typ })
     }

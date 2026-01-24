@@ -61,6 +61,7 @@ pub struct Header<'a> {
 pub struct FunType<'a> {
     pub params: Vec<Type<'a>>,
     pub ret: Type<'a>,
+    pub location: Location<'a>,
 }
 
 pub enum Literal<'a> {
@@ -275,15 +276,20 @@ pub struct Get<'a> {
 
 #[derive(Clone)]
 pub enum Type<'a> {
-    Ptr(Box<Type<'a>>),
+    Ptr(Box<Type<'a>>, Location<'a>),
     Name(Lame<'a>),
     Fun(Box<FunType<'a>>),
-    Prime(Prime),
+    Prime(Prime, Location<'a>),
 }
 
-impl<'a> From<Prime> for Type<'a> {
-    fn from(v: Prime) -> Self {
-        Self::Prime(v)
+impl<'a> Type<'a> {
+    pub fn location(&self) -> Location<'a> {
+        match self {
+            Type::Ptr(_, location) => *location,
+            Type::Name(lame) => lame.location,
+            Type::Fun(fun_type) => fun_type.location,
+            Type::Prime(_, location) => *location,
+        }
     }
 }
 

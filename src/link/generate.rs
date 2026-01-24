@@ -1,6 +1,6 @@
 use crate::{
-    link::{Context, analyse::Size, asg::*},
-    qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Type, Value},
+    link::{Context, asg::*},
+    qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Unsigned, Value},
 };
 
 pub fn generate(asg: &Asg) -> IR {
@@ -34,7 +34,7 @@ struct GenFun<'a, 'b> {
     stmts: Vec<Stmt>,
     tmp: Tmp,
     label: u16,
-    context: Context<'a, (Tmp, u32)>,
+    context: Context<'a, (Tmp, Type<'a>)>,
 }
 
 impl<'a, 'b> GenFun<'a, 'b> {
@@ -49,18 +49,28 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn run(mut self, name: &str, fun: &Fun<'a>) -> ir::Fun {
-        let name = name.into();
         let params = fun.params.iter().map(|_| self.new_tmp()).collect();
-        for ((param, size), &tmp) in fun.params.iter().zip(&params) {
-            self.context.insert(param, (tmp, *size));
+        for ((param, typ), &tmp) in fun.params.iter().zip(&params) {
+            let tmp = self.store(tmp, self.align(typ), self.size(typ));
+            self.context.insert(param, (tmp, typ.clone()));
         }
         let tmp = self.expr(&fun.body);
         self.stmts.push(Stmt::Ret(tmp));
-        let stmts = self.stmts;
         ir::Fun {
-            name,
+            ret_type: self.abi_type(&fun.ret_type),
+            name: name.into(),
             params,
-            stmts,
+            stmts: self.stmts,
+        }
+    }
+
+    fn abi_type(&self, typ: &Type<'a>) -> ir::AbiType {
+        match typ {
+            Type::Name { name, .. } => ir::AbiType::Name(name.to_string()),
+            Type::U64 => ir::Type::Long.into(),
+            Type::I32 => ir::Type::Word.into(),
+            Type::U8 => Signed::UnsignedByte.into(),
+            Type::Cold(id) => self.abi_type(&self.sup.asg.info.types[*id]),
         }
     }
 
@@ -113,8 +123,11 @@ impl<'a, 'b> GenFun<'a, 'b> {
         for sized in &tuple.exprs {
             let expr = self.expr(&sized.expr);
             let offset_tmp = self.new_tmp();
-            self.stmts
-                .push(Stmt::Copy(offset_tmp, Type::Long, (offset as i64).into()));
+            self.stmts.push(Stmt::Copy(
+                offset_tmp,
+                ir::Type::Long,
+                (offset as i64).into(),
+            ));
             let with_offset = self.new_tmp();
             self.stmts
                 .push(Stmt::Bin(with_offset, ir::BinOp::Add, tmp, offset));
@@ -126,23 +139,34 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn assign(&mut self, assign: &Assign<'a>) -> Tmp {
         let to = self.expr_ref(&assign.to);
         let expr = self.expr(&assign.expr);
-        self.copy(to, expr, self.size(assign.expr_size));
+        self.copy(to, expr, self.size(&assign.expr_type));
         self.int(0)
     }
 
-    fn size(&self, size: Size) -> u32 {
-        match size {
-            Size::Hot(size) => size,
-            Size::Cold(id) => self.sup.asg.info.sizes[id],
+    fn size(&self, typ: &Type<'a>) -> u32 {
+        match typ {
+            Type::Name { size, .. } => *size,
+            Type::Cold(id) => self.size(&self.sup.asg.info.types[*id]),
+            Type::U64 => 8,
+            Type::I32 => 4,
+            Type::U8 => 1,
+        }
+    }
+
+    fn align(&self, typ: &Type<'a>) -> u32 {
+        match typ {
+            Type::Name { align, .. } => *align,
+            Type::Cold(id) => self.align(&self.sup.asg.info.types[*id]),
+            _ => self.size(typ),
         }
     }
 
     fn copy(&mut self, to: Tmp, from: Tmp, size: u32) {
         let stmt = match size {
-            1 => Stmt::Store(Type::Byte, from, to),
-            2 => Stmt::Store(Type::Half, from, to),
-            4 => Stmt::Store(Type::Word, from, to),
-            8 => Stmt::Store(Type::Long, from, to),
+            1 => Stmt::Store(Unsigned::Byte, from, to),
+            2 => Stmt::Store(Unsigned::Half, from, to),
+            4 => Stmt::Store(ir::Type::Word.into(), from, to),
+            8 => Stmt::Store(ir::Type::Long.into(), from, to),
             _ => Stmt::Blit(to, from, size),
         };
         self.stmts.push(stmt);
@@ -166,18 +190,29 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn field(&mut self, field: &Field<'a>) -> Tmp {
-        let typ = self.signed(field.size);
+        let typ = self.signed(&field.typ);
         let field = self.field_ref(field);
         let tmp = self.new_tmp();
         self.stmts.push(Stmt::Load(tmp, typ, field));
         tmp
     }
 
+    fn signed(&self, typ: &Type<'a>) -> Signed {
+        match typ {
+            Type::Name { .. } => ir::Type::Long.into(),
+            Type::U64 => ir::Type::Long.into(),
+            Type::I32 => ir::Type::Word.into(),
+            Type::U8 => Signed::UnsignedByte,
+            Type::Cold(id) => self.signed(&self.sup.asg.info.types[*id]),
+        }
+    }
+
     fn let_expr(&mut self, let_expr: &Let<'a>) -> Tmp {
         let tmp = self.expr(&let_expr.expr);
-        let size = self.size(let_expr.expr_size);
-        let tmp = self.store(tmp, self.size(let_expr.expr_align), size);
-        self.context.insert(let_expr.name, (tmp, size));
+        let size = self.size(&let_expr.typ);
+        let tmp = self.store(tmp, self.align(&let_expr.typ), size);
+        self.context
+            .insert(let_expr.name, (tmp, let_expr.typ.clone()));
         self.int(0)
     }
 
@@ -192,7 +227,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let expr = self.expr(&deref.expr);
         let tmp = self.new_tmp();
         self.stmts
-            .push(Stmt::Load(tmp, self.signed(deref.size), expr));
+            .push(Stmt::Load(tmp, self.signed(&deref.typ), expr));
         tmp
     }
 
@@ -217,25 +252,15 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.label
     }
 
-    fn var_ref(&self, name: &str) -> (Tmp, u32) {
-        *self.context.get(name).unwrap()
+    fn var_ref(&self, name: &str) -> (Tmp, Type<'a>) {
+        self.context.get(name).unwrap().clone()
     }
 
     fn var(&mut self, name: &str) -> Tmp {
-        let (tmp, size) = self.var_ref(name);
+        let (tmp, typ) = self.var_ref(name);
         let res = self.new_tmp();
-        self.stmts.push(Stmt::Load(res, self.signed(size), tmp));
+        self.stmts.push(Stmt::Load(res, self.signed(&typ), tmp));
         res
-    }
-
-    fn signed(&self, size: u32) -> Signed {
-        match size {
-            1 => Signed::UnsignedByte,
-            2 => Signed::UnsignedHalf,
-            4 => Signed::Word,
-            8 => Signed::Long,
-            _ => unreachable!(),
-        }
     }
 
     fn call(&mut self, call: &Call<'a>) -> Tmp {
@@ -280,7 +305,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn int(&mut self, n: i64) -> Tmp {
         let tmp = self.new_tmp();
-        self.stmts.push(Stmt::Copy(tmp, Type::Long, n.into()));
+        self.stmts.push(Stmt::Copy(tmp, ir::Type::Long, n.into()));
         tmp
     }
 
@@ -288,7 +313,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let c = self.new_const(Const::String(s.into()));
         let tmp = self.new_tmp();
         self.stmts
-            .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
+            .push(Stmt::Copy(tmp, ir::Type::Long, Value::Const(c)));
         tmp
     }
 
@@ -297,7 +322,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let c = self.new_const(Const::Struct(vec![Value::Const(cs), Value::Int(strlen(s))]));
         let tmp = self.new_tmp();
         self.stmts
-            .push(Stmt::Copy(tmp, Type::Long, Value::Const(c)));
+            .push(Stmt::Copy(tmp, ir::Type::Long, Value::Const(c)));
         tmp
     }
 

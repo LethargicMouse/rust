@@ -40,6 +40,7 @@ impl Display for Const {
 }
 
 pub struct Fun {
+    pub ret_type: AbiType,
     pub name: String,
     pub params: Vec<Tmp>,
     pub stmts: Vec<Stmt>,
@@ -47,7 +48,7 @@ pub struct Fun {
 
 impl Display for Fun {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\nfunction w ${}(", self.name)?;
+        write!(f, "\nfunction {} ${}(", self.ret_type, self.name)?;
         for param in &self.params {
             write!(f, "l %t{param},")?;
         }
@@ -61,29 +62,10 @@ impl Display for Fun {
 
 pub type Tmp = u32;
 
-pub enum Signed {
-    Long,
-    Word,
-    UnsignedByte,
-    UnsignedHalf,
-}
-
-impl Display for Signed {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Signed::Long => write!(f, "l"),
-            Signed::Word => write!(f, "w"),
-            Signed::UnsignedByte => write!(f, "ub"),
-            Signed::UnsignedHalf => write!(f, "uh"),
-        }
-    }
-}
-
+#[derive(Clone, Copy)]
 pub enum Type {
     Word,
     Long,
-    Byte,
-    Half,
 }
 
 impl Display for Type {
@@ -91,8 +73,64 @@ impl Display for Type {
         match self {
             Type::Word => write!(f, "w"),
             Type::Long => write!(f, "l"),
-            Type::Byte => write!(f, "b"),
-            Type::Half => write!(f, "h"),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Signed {
+    Base(Type),
+    UnsignedByte,
+    UnsignedHalf,
+    SignedByte,
+    SignedHalf,
+}
+
+impl From<Type> for Signed {
+    fn from(v: Type) -> Self {
+        Self::Base(v)
+    }
+}
+
+impl Display for Signed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Signed::Base(typ) => write!(f, "{typ}"),
+            Signed::UnsignedByte => write!(f, "ub"),
+            Signed::UnsignedHalf => write!(f, "uh"),
+            Signed::SignedByte => write!(f, "sb"),
+            Signed::SignedHalf => write!(f, "sh"),
+        }
+    }
+}
+
+impl Signed {
+    fn fit_in_base(self) -> Type {
+        match self {
+            Signed::Base(typ) => typ,
+            _ => Type::Word,
+        }
+    }
+}
+
+pub enum Unsigned {
+    Base(Type),
+    Half,
+    Byte,
+}
+
+impl From<Type> for Unsigned {
+    fn from(v: Type) -> Self {
+        Self::Base(v)
+    }
+}
+
+impl Display for Unsigned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Unsigned::Base(typ) => write!(f, "{typ}"),
+            Unsigned::Half => write!(f, "h"),
+            Unsigned::Byte => write!(f, "b"),
         }
     }
 }
@@ -108,7 +146,7 @@ pub enum Stmt {
     Jnz(Tmp, u16, u16),
     Label(u16),
     Jump(u16),
-    Store(Type, Tmp, Tmp),
+    Store(Unsigned, Tmp, Tmp),
 }
 
 impl From<Call> for Stmt {
@@ -126,7 +164,7 @@ impl Display for Stmt {
             Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =l {bin_op} %t{l}, %t{r}"),
             Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
             Stmt::Label(l) => write!(f, "@l{l}"),
-            Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} =l load{typ} %t{l}"),
+            Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} ={} load{typ} %t{l}", typ.fit_in_base()),
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
             Stmt::Blit(a, b, c) => write!(f, "blit %t{a}, %t{b}, {c}"),
             Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),
@@ -187,6 +225,32 @@ impl Display for Value {
         match self {
             Value::Int(n) => write!(f, "{n}"),
             Value::Const(n) => write!(f, "$s{n}"),
+        }
+    }
+}
+
+pub enum AbiType {
+    Signed(Signed),
+    Name(String),
+}
+
+impl From<Signed> for AbiType {
+    fn from(v: Signed) -> Self {
+        Self::Signed(v)
+    }
+}
+
+impl From<Type> for AbiType {
+    fn from(v: Type) -> Self {
+        Self::Signed(v.into())
+    }
+}
+
+impl Display for AbiType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AbiType::Signed(t) => write!(f, "{t}"),
+            AbiType::Name(n) => write!(f, ":{n}"),
         }
     }
 }

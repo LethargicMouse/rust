@@ -60,11 +60,17 @@ impl<'a> Parse<'a> {
 
     fn typ(&mut self) -> Result<Type<'a>, Fail> {
         self.either(&[
-            |p| Ok(p.prime_()?.into()),
+            |p| {
+                let location = p.here();
+                let prime = p.prime_()?;
+                Ok(Type::Prime(prime, location))
+            },
             |p| Ok(p.fun_type_()?.into()),
             |p| {
+                let location = p.here();
                 p.expect_(Star)?;
-                Ok(Type::Ptr(Box::new(p.typ()?)))
+                let typ = p.typ()?;
+                Ok(Type::Ptr(Box::new(typ), location))
             },
             |p| Ok(p.lame(false)?.into()),
         ])
@@ -82,12 +88,19 @@ impl<'a> Parse<'a> {
     }
 
     fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {
+        let location = self.here();
         self.expect_(Name("fn"))?;
         self.expect(ParL)?;
         let params = self.sep(Self::typ).collect();
         self.expect(ParR)?;
-        let ret = self.maybe(Self::typ).unwrap_or(Prime::Unit.into());
-        Ok(FunType { params, ret })
+        let ret = self
+            .maybe(Self::typ)
+            .unwrap_or_else(|| Type::Prime(Prime::Unit, self.here()));
+        Ok(FunType {
+            params,
+            ret,
+            location,
+        })
     }
 
     fn field(&mut self) -> Result<Field<'a>, Fail> {

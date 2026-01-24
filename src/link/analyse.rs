@@ -19,12 +19,6 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Copy)]
-pub enum Size {
-    Hot(u32),
-    Cold(usize),
-}
-
 #[derive(Clone, PartialEq)]
 struct FunType<'a> {
     params: Vec<Type<'a>>,
@@ -129,7 +123,6 @@ pub fn analyse(ast: Ast) -> Asg {
 
 struct Field<'a> {
     pub offset: u32,
-    pub size: u32,
     pub typ: Type<'a>,
 }
 
@@ -139,8 +132,8 @@ struct Struct<'a> {
     align: u32,
 }
 
-pub struct Info {
-    pub sizes: Vec<u32>,
+pub struct Info<'a> {
+    pub types: Vec<asg::Type<'a>>,
 }
 
 struct Analyse<'a> {
@@ -149,8 +142,7 @@ struct Analyse<'a> {
     errors: Vec<CheckError<'a>>,
     context: Context<'a, Type<'a>>,
     corrupt: HashSet<&'a str>,
-    sizes: Vec<(Type<'a>, Location<'a>)>,
-    aligns: Vec<Type<'a>>,
+    cold_types: Vec<(Type<'a>, Location<'a>)>,
     types: Vec<Type<'a>>,
 }
 
@@ -162,8 +154,7 @@ impl<'a> Analyse<'a> {
             context: Context::new(),
             errors: Vec::new(),
             corrupt: HashSet::new(),
-            sizes: Vec::new(),
-            aligns: Vec::new(),
+            cold_types: Vec::new(),
             types: Vec::new(),
         }
     }
@@ -190,19 +181,20 @@ impl<'a> Analyse<'a> {
         Asg { funs, info }
     }
 
-    fn info(&mut self) -> Info {
-        let sizes = std::mem::take(&mut self.sizes);
-        let aligns = std::mem::take(&mut self.aligns);
-        let mut sizes: Vec<_> = sizes
+    fn info(&mut self) -> Info<'a> {
+        let cold_types = std::mem::take(&mut self.cold_types);
+        let types: Vec<_> = cold_types
             .into_iter()
-            .map(|(typ, location)| self.hot_size(&typ, location))
+            .map(|(typ, location)| self.hot_type(&typ, location))
             .collect();
-        sizes.extend(
-            aligns
-                .into_iter()
-                .map(|typ| self.try_hot_align(&typ).unwrap_or(0)),
-        );
-        Info { sizes }
+        Info { types }
+    }
+
+    fn hot_type(&mut self, typ: &Type<'a>, location: Location<'a>) -> asg::Type<'a> {
+        self.try_hot_type(typ).unwrap_or_else(|| {
+            self.fail(ShouldKnowType { location });
+            asg::Type::I32
+        })
     }
 
     fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -258,59 +250,40 @@ impl<'a> Analyse<'a> {
             asg::Assign {
                 expr,
                 to: self.expr(assign.to).sup,
-                expr_size: self.size(&typ, assign.location),
+                expr_type: self.asg_type(&typ, assign.location),
             },
             Prime::Unit.into(),
         )
-    }
-
-    fn size(&mut self, typ: &Type<'a>, location: Location<'a>) -> Size {
-        match self.try_hot_size(typ) {
-            Some(size) => Size::Hot(size),
-            None => self.new_cold_size(typ.clone(), location),
-        }
-    }
-
-    fn new_cold_size(&mut self, typ: Type<'a>, location: Location<'a>) -> Size {
-        let id = self.sizes.len();
-        self.sizes.push((typ, location));
-        Size::Cold(id)
-    }
-
-    fn new_cold_align(&mut self, typ: Type<'a>) -> Size {
-        let id = self.aligns.len();
-        self.aligns.push(typ);
-        Size::Cold(id)
     }
 
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
         typed(asg::Literal::Int(0).into(), Type::Error)
     }
 
-    fn field(&mut self, field: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
-        let (from, typ) = self.expr(field.from).into();
+    fn field(&mut self, field_expr: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
+        let (from, typ) = self.expr(field_expr.from).into();
         if matches!(typ, Type::Error) {
             return Err(Fail);
         }
         let name = typ.name().ok_or_else(|| {
             self.fail(NoField {
-                location: field.name_location,
-                name: field.name,
+                location: field_expr.name_location,
+                name: field_expr.name,
                 typ: typ.clone(),
             })
         })?;
-        let field = match self.structs[name].fields.get(field.name) {
+        let field = match self.structs[name].fields.get(field_expr.name) {
             Some(field) => Ok(field),
             None => Err(self.fail(NoField {
-                location: field.name_location,
-                name: field.name,
+                location: field_expr.name_location,
+                name: field_expr.name,
                 typ,
             })),
         }?;
         let offset = field.offset;
-        let size = field.size;
-        let typ = field.typ.clone();
-        Ok(typed(asg::Field { from, offset, size }, typ))
+        let typ_ = field.typ.clone();
+        let typ = self.asg_type(&typ_, field_expr.name_location);
+        Ok(typed(asg::Field { from, offset, typ }, typ_))
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
@@ -320,19 +293,12 @@ impl<'a> Analyse<'a> {
 
     fn let_expr(&mut self, let_expr: Let<'a>) -> Typed<'a, asg::Let<'a>> {
         let name = let_expr.name;
-        let (expr, typ) = self.expr(let_expr.expr).into();
-        let expr_align = self.align(&typ);
-        let expr_size = self.size(&typ, let_expr.location);
-        self.context.insert(name, typ);
-        typed(
-            asg::Let {
-                name: let_expr.name,
-                expr,
-                expr_align,
-                expr_size,
-            },
-            Prime::Unit.into(),
-        )
+        let location = let_expr.expr.location();
+        let (expr, typ_) = self.expr(let_expr.expr).into();
+        let typ = self.asg_type(&typ_, location);
+        self.context.insert(name, typ_);
+        let name = let_expr.name;
+        typed(asg::Let { name, expr, typ }, Prime::Unit.into())
     }
 
     fn block(&mut self, block: Block<'a>) -> Typed<'a, asg::Block<'a>> {
@@ -360,7 +326,7 @@ impl<'a> Analyse<'a> {
                 .into(),
             }
             .into(),
-            size: self.hot_size(&typ, get.location),
+            typ: self.asg_type(&typ, get.location),
         };
         typed(res, typ)
     }
@@ -543,7 +509,7 @@ impl<'a> Analyse<'a> {
             let typ = self.typ(field.typ);
             let size = self.try_hot_size(&typ).unwrap();
             align = align.max(self.try_hot_align(&typ).unwrap());
-            fields.insert(field.name, Field { offset, size, typ });
+            fields.insert(field.name, Field { offset, typ });
             offset += size;
         }
         let r#struct = Struct {
@@ -567,13 +533,6 @@ impl<'a> Analyse<'a> {
         }
     }
 
-    fn hot_size(&mut self, typ: &Type<'a>, location: Location<'a>) -> u32 {
-        self.try_hot_size(typ).unwrap_or_else(|| {
-            self.fail(ShouldKnowType { location });
-            0
-        })
-    }
-
     fn try_hot_align(&mut self, typ: &Type<'a>) -> Option<u32> {
         match typ {
             Type::Name(name) => Some(self.structs[name].align),
@@ -581,19 +540,12 @@ impl<'a> Analyse<'a> {
         }
     }
 
-    fn align(&mut self, typ: &Type<'a>) -> Size {
-        match self.try_hot_align(typ) {
-            Some(align) => Size::Hot(align),
-            None => self.new_cold_align(typ.clone()),
-        }
-    }
-
     fn typ(&mut self, typ: ast::Type<'a>) -> Type<'a> {
         match typ {
-            ast::Type::Ptr(t) => Type::Ptr(Box::new(self.typ(*t))),
+            ast::Type::Ptr(t, _) => Type::Ptr(Box::new(self.typ(*t))),
             ast::Type::Name(var) => self.struct_type(var),
             ast::Type::Fun(fun_type) => self.fun_type(*fun_type).into(),
-            ast::Type::Prime(prime) => Type::Prime(prime),
+            ast::Type::Prime(prime, _) => Type::Prime(prime),
         }
     }
 
@@ -611,16 +563,63 @@ impl<'a> Analyse<'a> {
             .iter()
             .zip(fun.header.typ.params)
             .map(|(param, typ)| {
-                let typ = self.typ(typ);
-                let size = self.try_hot_size(&typ).unwrap();
-                self.context.insert(param, typ);
-                (*param, size)
+                let location = typ.location();
+                let typ_ = self.typ(typ);
+                let typ = self.asg_type(&typ_, location);
+                self.context.insert(param, typ_);
+                (*param, typ)
             })
             .collect();
+        let location = fun.header.typ.ret.location();
         let ret_typ = self.typ(fun.header.typ.ret);
+        let ret_type = self.asg_type(&ret_typ, location);
         let location = fun.body.location();
         let (body, typ) = self.expr(fun.body).into();
         self.unify(location, ret_typ, typ);
-        asg::Fun { params, body }
+        asg::Fun {
+            params,
+            body,
+            ret_type,
+        }
+    }
+
+    fn asg_type(&mut self, typ: &Type<'a>, location: Location<'a>) -> asg::Type<'a> {
+        match self.try_hot_type(typ) {
+            Some(typ) => typ,
+            None => self.new_cold_type(typ.clone(), location),
+        }
+    }
+
+    fn try_hot_type(&self, typ: &Type<'a>) -> Option<asg::Type<'a>> {
+        match typ {
+            Type::Ptr(_) => Some(asg::Type::U64),
+            Type::Name(name) => Some(asg::Type::Name {
+                name,
+                size: self.structs[name].size,
+                align: self.structs[name].align,
+            }),
+            Type::Fun(_) => Some(asg::Type::U64),
+            Type::Prime(prime) => Some(self.asg_prime(prime)),
+            Type::Error => Some(asg::Type::I32),
+            Type::Number => None,
+            &Type::Var(id) => self.try_hot_type(&self.types[id]),
+            Type::Unreachable => Some(asg::Type::I32),
+        }
+    }
+
+    fn new_cold_type(&mut self, typ: Type<'a>, location: Location<'a>) -> asg::Type<'a> {
+        let id = self.cold_types.len();
+        self.cold_types.push((typ, location));
+        asg::Type::Cold(id)
+    }
+
+    fn asg_prime(&self, prime: &Prime) -> asg::Type<'a> {
+        match prime {
+            Prime::Unit => asg::Type::I32,
+            Prime::Bool => asg::Type::U8,
+            Prime::I32 => asg::Type::I32,
+            Prime::U8 => asg::Type::U8,
+            Prime::U64 => asg::Type::U64,
+        }
     }
 }

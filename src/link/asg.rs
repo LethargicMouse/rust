@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::link::analyse::{Info, Size};
+use crate::link::analyse::Info;
 
 #[derive(Debug)]
 pub struct Block<'a> {
@@ -10,11 +10,12 @@ pub struct Block<'a> {
 
 pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
-    pub info: Info,
+    pub info: Info<'a>,
 }
 
 pub struct Fun<'a> {
-    pub params: Vec<(&'a str, u32)>,
+    pub params: Vec<(&'a str, Type<'a>)>,
+    pub ret_type: Type<'a>,
     pub body: Expr<'a>,
 }
 
@@ -29,15 +30,14 @@ pub struct If<'a> {
 pub struct Let<'a> {
     pub name: &'a str,
     pub expr: Expr<'a>,
-    pub expr_align: Size,
-    pub expr_size: Size,
+    pub typ: Type<'a>,
 }
 
 #[derive(Debug)]
 pub struct Field<'a> {
     pub from: Expr<'a>,
     pub offset: u32,
-    pub size: u32,
+    pub typ: Type<'a>,
 }
 
 #[derive(Debug)]
@@ -174,7 +174,7 @@ pub enum Literal<'a> {
 #[derive(Debug)]
 pub struct Assign<'a> {
     pub expr: Expr<'a>,
-    pub expr_size: Size,
+    pub expr_type: Type<'a>,
     pub to: Expr<'a>,
 }
 
@@ -209,5 +209,18 @@ pub struct Return<'a> {
 #[derive(Debug)]
 pub struct Deref<'a> {
     pub expr: Expr<'a>,
-    pub size: u32,
+    pub typ: Type<'a>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Type<'a> {
+    Name {
+        name: &'a str,
+        size: u32,
+        align: u32,
+    },
+    Cold(usize),
+    U64,
+    I32,
+    U8,
 }
