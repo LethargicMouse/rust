@@ -22,32 +22,24 @@ impl<'a> Lex<'a> {
         }
     }
 
-    pub fn raw_str(&mut self) -> Option<Token<'a>> {
-        self.str_with(Lexeme::RawStr, b"r\"")
-    }
-
     pub fn str(&mut self) -> Option<Token<'a>> {
-        self.str_with(Lexeme::Str, b"\"")
-    }
-
-    fn str_with(&mut self, lexeme: fn(&'a str) -> Lexeme<'a>, left: &[u8]) -> Option<Token<'a>> {
         self.skip();
-        if !self.source.code[self.cursor..].starts_with(left) {
+        if !self.source.code[self.cursor..].starts_with(b"\"") {
             return None;
         }
-        self.cursor += left.len();
+        self.cursor += 1;
         let start = self.cursor;
         while self.cursor != self.source.code.len() && self.source.code[self.cursor] != b'\"' {
             self.cursor += 1;
         }
         if self.cursor == self.source.code.len() {
-            self.cursor = start - left.len();
+            self.cursor = start - 1;
             die(Unclosed(self.location(1)))
         }
         let res = &self.source.code[start..self.cursor];
-        let lexeme = lexeme(str::from_utf8(res).unwrap());
-        self.cursor -= res.len() + left.len();
-        let tok = self.token(lexeme, res.len() + left.len() + 1);
+        let lexeme = Lexeme::Str(str::from_utf8(res).unwrap());
+        self.cursor -= res.len() + 1;
+        let tok = self.token(lexeme, res.len() + 2);
         Some(tok)
     }
 

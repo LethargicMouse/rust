@@ -33,7 +33,6 @@ impl<'a> Lex<'a> {
         while self.cursor < self.source.code.len() {
             let tok = self
                 .list(list)
-                .or_else(|| self.raw_str())
                 .or_else(|| self.str())
                 .or_else(|| self.name())
                 .or_else(|| self.int())

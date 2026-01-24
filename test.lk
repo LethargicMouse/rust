@@ -1,5 +1,5 @@
 fn main() {
-    let a = id(r"hello\n");
+    let a = id("hello".buf);
     puts(a);
   }
 

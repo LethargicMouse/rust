@@ -176,6 +176,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         match expr {
             Expr::Var(s) => self.var_ref(s).0,
             Expr::Field(field) => self.field_ref(field),
+            Expr::Literal(Literal::Str(s)) => self.str(s),
             e => unreachable!("{e:?}"),
         }
     }
@@ -298,7 +299,6 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn literal(&mut self, literal: &Literal) -> Tmp {
         match literal {
             Literal::Int(n) => self.int(*n),
-            Literal::RawStr(s) => self.raw_str(s),
             Literal::Str(s) => self.str(s),
         }
     }
@@ -306,14 +306,6 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn int(&mut self, n: i64) -> Tmp {
         let tmp = self.new_tmp();
         self.stmts.push(Stmt::Copy(tmp, ir::Type::Long, n.into()));
-        tmp
-    }
-
-    fn raw_str(&mut self, s: &str) -> Tmp {
-        let c = self.new_const(Const::String(s.into()));
-        let tmp = self.new_tmp();
-        self.stmts
-            .push(Stmt::Copy(tmp, ir::Type::Long, Value::Const(c)));
         tmp
     }
 

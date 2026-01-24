@@ -167,7 +167,6 @@ pub struct Call<'a> {
 #[derive(Debug)]
 pub enum Literal<'a> {
     Int(i64),
-    RawStr(&'a str),
     Str(&'a str),
 }
 

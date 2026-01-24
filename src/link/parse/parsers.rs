@@ -17,6 +17,7 @@ pub type Parser<'a, T> = fn(&mut Parse<'a>) -> Result<T, Fail>;
 
 impl<'a> Parse<'a> {
     pub fn ast(&mut self) -> Result<Ast<'a>, Fail> {
+        let begin = self.here();
         let mut funs = Vec::new();
         let mut externs = Vec::new();
         let mut structs = HashMap::new();
@@ -31,6 +32,7 @@ impl<'a> Parse<'a> {
         }
         self.expect(Eof)?;
         Ok(Ast {
+            begin,
             funs,
             externs,
             structs,

@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 use crate::Location;
 
 pub struct Ast<'a> {
+    pub begin: Location<'a>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub funs: Vec<Fun<'a>>,
     pub externs: Vec<Extern<'a>>,
@@ -67,7 +68,6 @@ pub struct FunType<'a> {
 pub enum Literal<'a> {
     Unit,
     Int(i64),
-    RawStr(&'a str),
     Str(&'a str),
 }
 

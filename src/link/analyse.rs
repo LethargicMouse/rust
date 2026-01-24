@@ -161,6 +161,10 @@ impl<'a> Analyse<'a> {
 
     pub fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
         self.ast_structs = ast.structs;
+        self.typ(ast::Type::Name(Lame {
+            name: "str",
+            location: ast.begin,
+        }));
         for extrn in ast.externs {
             let typ = self.typ(extrn.typ);
             self.context.insert(extrn.name, typ);
@@ -460,10 +464,6 @@ impl<'a> Analyse<'a> {
         match literal {
             Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
             Literal::Int(i) => typed(asg::Literal::Int(i), self.new_type_var(Type::Number)),
-            Literal::RawStr(s) => typed(
-                asg::Literal::RawStr(s),
-                Type::Ptr(Box::new(Prime::U8.into())),
-            ),
             Literal::Str(s) => typed(asg::Literal::Str(s), Type::Name("str")),
         }
     }
