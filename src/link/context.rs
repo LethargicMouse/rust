@@ -22,8 +22,8 @@ impl<'a, T> Context<'a, T> {
         self.sup.push(HashMap::new());
     }
 
-    pub fn pop_layer(&mut self) {
-        self.sup.pop();
+    pub fn pop_layer(&mut self) -> HashMap<&'a str, T> {
+        self.sup.pop().unwrap()
     }
 }
 

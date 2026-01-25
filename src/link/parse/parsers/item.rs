@@ -41,6 +41,7 @@ impl<'a> Parse<'a> {
     fn header_(&mut self) -> Result<Header<'a>, Fail> {
         self.expect_(Name("fn"))?;
         let Lame { name, location } = self.lame(true)?;
+        let generics = self.maybe(Self::generics).unwrap_or_default();
         self.expect(ParL)?;
         let mut params = Vec::new();
         let mut type_params = Vec::new();
@@ -49,14 +50,17 @@ impl<'a> Parse<'a> {
             type_params.push(param.typ);
         }
         self.expect(ParR)?;
-        let ret_type = self
-            .maybe(Self::typ)
-            .unwrap_or_else(|| Type::Prime(Prime::Unit, self.here()));
-        let typ = FunType {
-            params: type_params,
-            ret: ret_type,
-            location,
-        };
-        Ok(Header { name, params, typ })
+        Ok(Header {
+            name,
+            params,
+            typ: FunType {
+                generics,
+                params: type_params,
+                ret: self
+                    .maybe(Self::typ)
+                    .unwrap_or_else(|| Type::Prime(Prime::Unit, self.here())),
+                location,
+            },
+        })
     }
 }

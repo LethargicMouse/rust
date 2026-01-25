@@ -21,6 +21,7 @@ use crate::{
 
 #[derive(Clone, PartialEq)]
 struct FunType<'a> {
+    generics: Vec<&'a str>,
     params: Vec<Type<'a>>,
     ret_type: Type<'a>,
 }
@@ -42,6 +43,8 @@ enum Type<'a> {
     Number,
     Var(usize),
     Unreachable,
+    Generic(&'a str),
+    Unknown,
 }
 
 impl<'a> From<Prime> for Type<'a> {
@@ -61,6 +64,8 @@ impl Display for Type<'_> {
             Type::Number => write!(f, "<number>"),
             Type::Var(id) => write!(f, "<#{id}>"),
             Type::Unreachable => write!(f, "<unreachable>"),
+            Type::Generic(n) => write!(f, "<#{n}>"),
+            Type::Unknown => write!(f, "<?>"),
         }
     }
 }
@@ -72,13 +77,6 @@ impl<'a> From<FunType<'a>> for Type<'a> {
 }
 
 impl<'a> Type<'a> {
-    fn name(&self) -> Option<&'a str> {
-        match self {
-            Type::Name(n) => Some(n),
-            _ => None,
-        }
-    }
-
     fn is_number(&self) -> bool {
         match self {
             Type::Ptr(_) => false,
@@ -89,6 +87,8 @@ impl<'a> Type<'a> {
             Type::Number => true,
             Type::Var(_) => false,
             Type::Unreachable => true,
+            Type::Generic(_) => false,
+            Type::Unknown => false,
         }
     }
 }
@@ -122,14 +122,12 @@ pub fn analyse(ast: Ast) -> Asg {
 }
 
 struct Field<'a> {
-    pub offset: u32,
+    pub id: usize,
     pub typ: Type<'a>,
 }
 
 struct Struct<'a> {
     fields: HashMap<&'a str, Field<'a>>,
-    size: u32,
-    align: u32,
 }
 
 pub struct Info<'a> {
@@ -138,9 +136,11 @@ pub struct Info<'a> {
 
 struct Analyse<'a> {
     ast_structs: HashMap<&'a str, ast::Struct<'a>>,
+    asg_structs: HashMap<&'a str, asg::Struct<'a>>,
     structs: HashMap<&'a str, Struct<'a>>,
     errors: Vec<CheckError<'a>>,
     context: Context<'a, Type<'a>>,
+    type_context: Context<'a, Type<'a>>,
     corrupt: HashSet<&'a str>,
     cold_types: Vec<(Type<'a>, Location<'a>)>,
     types: Vec<Type<'a>>,
@@ -156,6 +156,8 @@ impl<'a> Analyse<'a> {
             corrupt: HashSet::new(),
             cold_types: Vec::new(),
             types: Vec::new(),
+            type_context: Context::new(),
+            asg_structs: HashMap::new(),
         }
     }
 
@@ -182,7 +184,12 @@ impl<'a> Analyse<'a> {
         if !self.errors.is_empty() {
             die(Error(self.errors))
         }
-        Asg { funs, info }
+        Asg {
+            funs,
+            info,
+            structs: self.asg_structs,
+            main_generics: HashMap::new(),
+        }
     }
 
     fn info(&mut self) -> Info<'a> {
@@ -269,7 +276,7 @@ impl<'a> Analyse<'a> {
         if matches!(typ, Type::Error) {
             return Err(Fail);
         }
-        let name = typ.name().ok_or_else(|| {
+        let name = self.type_name(&typ).ok_or_else(|| {
             self.fail(NoField {
                 location: field_expr.name_location,
                 name: field_expr.name,
@@ -284,10 +291,24 @@ impl<'a> Analyse<'a> {
                 typ,
             })),
         }?;
-        let offset = field.offset;
         let typ_ = field.typ.clone();
-        let typ = self.asg_type(&typ_, field_expr.name_location);
-        Ok(typed(asg::Field { from, offset, typ }, typ_))
+        Ok(typed(
+            asg::Field {
+                from,
+                id: field.id,
+                typ: self.asg_type(&typ_, field_expr.name_location),
+                struct_name: name,
+            },
+            typ_,
+        ))
+    }
+
+    fn type_name(&self, typ: &Type<'a>) -> Option<&'a str> {
+        match typ {
+            Type::Name(name) => Some(name),
+            Type::Var(id) => self.type_name(&self.types[*id]),
+            _ => None,
+        }
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
@@ -340,7 +361,13 @@ impl<'a> Analyse<'a> {
             (a, b) if a == b => a,
             (a, Type::Error) => a,
             (Type::Error, b) => b,
+            (Type::Unknown, b) => b,
             (a, Type::Unreachable) => a,
+            (Type::Var(id), b) => {
+                let a = std::mem::take(&mut self.types[id]);
+                self.types[id] = self.unify(location, a, b);
+                Type::Var(id)
+            }
             (a, Type::Var(id)) => {
                 let b = std::mem::take(&mut self.types[id]);
                 self.types[id] = self.unify(location, a, b);
@@ -400,19 +427,64 @@ impl<'a> Analyse<'a> {
     }
 
     fn call(&mut self, call: Call<'a>) -> Result<Typed<'a, asg::Call<'a>>, Fail> {
-        let name = call.var.name;
-        let location = call.var.location;
-        let typ = self.var(call.var).typ;
+        let name = call.lame.name;
+        let location = call.lame.location;
+        let typ = self.var(call.lame).typ;
         let args_locations: Vec<_> = call.args.iter().map(|a| a.location()).collect();
         let (args, args_types): (_, Vec<_>) =
             call.args.into_iter().map(|e| self.expr(e).into()).unzip();
-        let typ = self.get_fun_type(typ, location)?;
+        let mut typ = self.get_fun_type(typ, location)?;
+        self.type_context.new_layer();
+        for generic in &typ.generics {
+            let typ = self.new_type_var(Type::Unknown);
+            self.type_context.insert(generic, typ);
+        }
+        self.specify_fun_type(&mut typ);
+        let generics = self
+            .type_context
+            .pop_layer()
+            .into_iter()
+            .map(|(n, t)| (n, self.asg_type(&t, location)))
+            .collect();
         for ((found, expected), location) in
             args_types.into_iter().zip(typ.params).zip(args_locations)
         {
             self.unify(location, expected, found);
         }
-        Ok(typed(asg::Call { name, args }, typ.ret_type))
+        Ok(typed(
+            asg::Call {
+                name,
+                args,
+                generics,
+            },
+            typ.ret_type,
+        ))
+    }
+
+    fn specify_fun_type(&self, fun_type: &mut FunType<'a>) {
+        for param in &mut fun_type.params {
+            self.specify(param);
+        }
+        self.specify(&mut fun_type.ret_type)
+    }
+
+    fn specify(&self, typ: &mut Type<'a>) {
+        match typ {
+            Type::Ptr(typ) => self.specify(typ),
+            Type::Name(_) => {}
+            Type::Fun(fun_type) => self.specify_fun_type(fun_type),
+            Type::Prime(_) => {}
+            Type::Error => {}
+            Type::Number => {}
+            Type::Var(_) => {}
+            Type::Unreachable => {}
+            Type::Generic(g) => {
+                if let Some(t) = self.type_context.get(g) {
+                    *typ = t.clone()
+                }
+            }
+            Type::Unknown => todo!(),
+        }
     }
 
     fn get_fun_type(&mut self, typ: Type<'a>, location: Location<'a>) -> Result<FunType<'a>, Fail> {
@@ -474,7 +546,7 @@ impl<'a> Analyse<'a> {
         Type::Var(id)
     }
 
-    fn struct_type(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
+    fn lame_type(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
         if self.structs.contains_key(name) {
             Type::Name(name)
         } else if self.corrupt.contains(name) {
@@ -503,60 +575,51 @@ impl<'a> Analyse<'a> {
 
     fn r#struct(&mut self, name: &'a str, r#struct: ast::Struct<'a>) {
         let mut fields = HashMap::new();
-        let mut offset = 0;
-        let mut align = 1;
-        for field in r#struct.fields {
+        let mut asg_fields = Vec::new();
+        for (id, field) in r#struct.fields.into_iter().enumerate() {
+            let location = field.typ.location();
             let typ = self.typ(field.typ);
-            let size = self.try_hot_size(&typ).unwrap();
-            align = align.max(self.try_hot_align(&typ).unwrap());
-            fields.insert(field.name, Field { offset, typ });
-            offset += size;
+            asg_fields.push(self.asg_type(&typ, location));
+            fields.insert(field.name, Field { id, typ });
         }
-        let r#struct = Struct {
-            fields,
-            size: offset,
-            align,
-        };
+        let r#struct = Struct { fields };
+        let asg_struct = asg::Struct { fields: asg_fields };
         self.structs.insert(name, r#struct);
-    }
-
-    fn try_hot_size(&self, typ: &Type<'a>) -> Option<u32> {
-        match typ {
-            Type::Ptr(_) => Some(8),
-            Type::Name(name) => Some(self.structs[name].size),
-            Type::Fun(_) => Some(8),
-            Type::Prime(prime) => Some(prime.size()),
-            Type::Error => Some(0),
-            Type::Number => None,
-            &Type::Var(id) => self.try_hot_size(&self.types[id]),
-            Type::Unreachable => Some(0),
-        }
-    }
-
-    fn try_hot_align(&mut self, typ: &Type<'a>) -> Option<u32> {
-        match typ {
-            Type::Name(name) => Some(self.structs[name].align),
-            _ => self.try_hot_size(typ),
-        }
+        self.asg_structs.insert(name, asg_struct);
     }
 
     fn typ(&mut self, typ: ast::Type<'a>) -> Type<'a> {
         match typ {
             ast::Type::Ptr(t, _) => Type::Ptr(Box::new(self.typ(*t))),
-            ast::Type::Name(var) => self.struct_type(var),
+            ast::Type::Name(lame) => match self.type_context.get(lame.name) {
+                Some(typ) => typ.clone(),
+                None => self.lame_type(lame),
+            },
             ast::Type::Fun(fun_type) => self.fun_type(*fun_type).into(),
             ast::Type::Prime(prime, _) => Type::Prime(prime),
         }
     }
 
     fn fun_type(&mut self, fun_type: ast::FunType<'a>) -> FunType<'a> {
-        let params = fun_type.params.into_iter().map(|t| self.typ(t)).collect();
-        let ret_type = self.typ(fun_type.ret);
-        FunType { params, ret_type }
+        self.type_context.new_layer();
+        for generic in &fun_type.generics {
+            self.type_context.insert(generic, Type::Generic(generic));
+        }
+        let res = FunType {
+            generics: fun_type.generics,
+            params: fun_type.params.into_iter().map(|t| self.typ(t)).collect(),
+            ret_type: self.typ(fun_type.ret),
+        };
+        self.type_context.pop_layer();
+        res
     }
 
     fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
         self.context.new_layer();
+        self.type_context.new_layer();
+        for generic in fun.header.typ.generics {
+            self.type_context.insert(generic, Type::Generic(generic));
+        }
         let params = fun
             .header
             .params
@@ -576,6 +639,8 @@ impl<'a> Analyse<'a> {
         let location = fun.body.location();
         let (body, typ) = self.expr(fun.body).into();
         self.unify(location, ret_typ, typ);
+        self.context.pop_layer();
+        self.type_context.pop_layer();
         asg::Fun {
             params,
             body,
@@ -593,17 +658,15 @@ impl<'a> Analyse<'a> {
     fn try_hot_type(&self, typ: &Type<'a>) -> Option<asg::Type<'a>> {
         match typ {
             Type::Ptr(_) => Some(asg::Type::U64),
-            Type::Name(name) => Some(asg::Type::Name {
-                name,
-                size: self.structs[name].size,
-                align: self.structs[name].align,
-            }),
+            Type::Name(name) => Some(asg::Type::Name(name)),
             Type::Fun(_) => Some(asg::Type::U64),
             Type::Prime(prime) => Some(self.asg_prime(prime)),
             Type::Error => Some(asg::Type::I32),
             Type::Number => None,
-            &Type::Var(id) => self.try_hot_type(&self.types[id]),
+            Type::Var(id) => self.try_hot_type(&self.types[*id]),
             Type::Unreachable => Some(asg::Type::I32),
+            Type::Generic(g) => Some(asg::Type::Generic(g)),
+            Type::Unknown => None,
         }
     }
 

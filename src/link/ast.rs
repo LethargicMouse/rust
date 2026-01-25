@@ -60,6 +60,7 @@ pub struct Header<'a> {
 
 #[derive(Clone)]
 pub struct FunType<'a> {
+    pub generics: Vec<&'a str>,
     pub params: Vec<Type<'a>>,
     pub ret: Type<'a>,
     pub location: Location<'a>,
@@ -177,7 +178,7 @@ impl<'a> Expr<'a> {
         match self {
             Expr::Field(field) => field.name_location,
             Expr::Let(let_expr) => let_expr.location,
-            Expr::Call(call) => call.var.location,
+            Expr::Call(call) => call.lame.location,
             Expr::Binary(binary) => binary.location,
             Expr::Literal(_, location) => *location,
             Expr::If(if_expr) => if_expr.location,
@@ -237,7 +238,7 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
 }
 
 pub struct Call<'a> {
-    pub var: Lame<'a>,
+    pub lame: Lame<'a>,
     pub args: Vec<Expr<'a>>,
 }
 

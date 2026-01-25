@@ -1,12 +1,20 @@
 use std::fmt::Display;
 
 pub struct IR {
+    pub types: Vec<TypeDecl>,
     pub consts: Vec<Const>,
     pub funs: Vec<Fun>,
 }
 
 impl Display for IR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for decl in &self.types {
+            write!(f, "\ntype :{} = {{ ", decl.name)?;
+            for field in &decl.fields {
+                write!(f, "{field},")?;
+            }
+            write!(f, "}}")?;
+        }
         for (i, c) in self.consts.iter().enumerate() {
             write!(f, "\ndata $s{} = {{ {c} }}", i + 1)?;
         }
@@ -253,4 +261,9 @@ impl Display for AbiType {
             AbiType::Name(n) => write!(f, ":{n}"),
         }
     }
+}
+
+pub struct TypeDecl {
+    pub name: String,
+    pub fields: Vec<AbiType>,
 }

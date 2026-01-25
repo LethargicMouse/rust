@@ -8,9 +8,15 @@ pub struct Block<'a> {
     pub ret: Expr<'a>,
 }
 
+pub struct Struct<'a> {
+    pub fields: Vec<Type<'a>>,
+}
+
 pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
+    pub structs: HashMap<&'a str, Struct<'a>>,
     pub info: Info<'a>,
+    pub main_generics: HashMap<&'a str, Type<'a>>, // i fucking HATE this FUCKING language
 }
 
 pub struct Fun<'a> {
@@ -36,8 +42,9 @@ pub struct Let<'a> {
 #[derive(Debug)]
 pub struct Field<'a> {
     pub from: Expr<'a>,
-    pub offset: u32,
+    pub id: usize,
     pub typ: Type<'a>,
+    pub struct_name: &'a str,
 }
 
 #[derive(Debug)]
@@ -162,6 +169,7 @@ pub enum BinOp {
 pub struct Call<'a> {
     pub name: &'a str,
     pub args: Vec<Expr<'a>>,
+    pub generics: HashMap<&'a str, Type<'a>>,
 }
 
 #[derive(Debug)]
@@ -213,12 +221,9 @@ pub struct Deref<'a> {
 
 #[derive(Debug, Clone)]
 pub enum Type<'a> {
-    Name {
-        name: &'a str,
-        size: u32,
-        align: u32,
-    },
+    Name(&'a str),
     Cold(usize),
+    Generic(&'a str),
     U64,
     I32,
     U8,

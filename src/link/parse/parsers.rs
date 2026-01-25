@@ -92,6 +92,7 @@ impl<'a> Parse<'a> {
     fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {
         let location = self.here();
         self.expect_(Name("fn"))?;
+        let generics = self.maybe(Self::generics).unwrap_or_default();
         self.expect(ParL)?;
         let params = self.sep(Self::typ).collect();
         self.expect(ParR)?;
@@ -102,7 +103,15 @@ impl<'a> Parse<'a> {
             params,
             ret,
             location,
+            generics,
         })
+    }
+
+    fn generics(&mut self) -> Result<Vec<&'a str>, Fail> {
+        self.expect(Less)?;
+        let res: Vec<_> = self.sep(|p| p.name(true)).collect();
+        self.expect(More)?;
+        Ok(res)
     }
 
     fn field(&mut self) -> Result<Field<'a>, Fail> {

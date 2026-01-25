@@ -1,10 +1,10 @@
 fn main() {
-    let a = id("hello".buf);
-    puts(a);
+    let a = id("hello");
+    puts(a.buf);
   }
 
-fn id(cstr: *u8) *u8 
-  do cstr
+fn id<t>(t) t
+  do t
 
 struct str {
   buf: *u8,

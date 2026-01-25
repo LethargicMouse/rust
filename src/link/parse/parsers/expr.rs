@@ -215,11 +215,11 @@ impl<'a> Parse<'a> {
     }
 
     fn call(&mut self, loud: bool) -> Result<Call<'a>, Fail> {
-        let var = self.lame(loud)?;
+        let lame = self.lame(loud)?;
         self.expect_(ParL)?;
         let args = self.sep(Self::expr).collect();
         self.expect(ParR)?;
-        Ok(Call { var, args })
+        Ok(Call { lame, args })
     }
 
     pub fn stmt(&mut self) -> Result<Expr<'a>, Fail> {

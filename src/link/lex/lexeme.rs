@@ -21,6 +21,7 @@ pub enum Lexeme<'a> {
     BraR,
     Equal2,
     Less,
+    More,
     Dot,
     Equal,
     Unknown,
@@ -53,6 +54,7 @@ impl<'a> Lexeme<'a> {
             Str(_) => "<str>",
             Ampersand => "`&`",
             BangEqual => "`!=`",
+            More => "`>`",
         }
     }
 }
