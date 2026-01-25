@@ -69,11 +69,13 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn run(mut self, name: &str, fun: &'a Fun<'a>) -> ir::Fun {
-        let params = fun.params.iter().map(|_| self.new_tmp()).collect();
-        for ((param, typ), &tmp) in fun.params.iter().zip(&params) {
-            let align = self.align(typ);
-            let size = self.size(typ);
-            let tmp = self.store(tmp, align, size);
+        let params = fun
+            .params
+            .iter()
+            .map(|(_, typ)| (self.abi_type(typ), self.new_tmp()))
+            .collect();
+        for ((param, typ), &(_, tmp)) in fun.params.iter().zip(&params) {
+            let tmp = self.store(tmp, typ);
             self.context.insert(param, (tmp, typ.clone()));
         }
         let tmp = self.expr(&fun.body);
@@ -170,9 +172,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn size(&mut self, typ: &Type<'a>) -> u32 {
         match typ {
             Type::Name(name) => {
-                if !self.sup.type_infos.contains_key(name) {
-                    self.typ(name);
-                }
+                self.typ(name);
                 self.sup.type_infos[name].size
             }
             Type::Cold(id) => self.size(&self.sup.asg.info.types[*id]),
@@ -186,9 +186,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn align(&mut self, typ: &Type<'a>) -> u32 {
         match typ {
             Type::Name(name) => {
-                if !self.sup.type_infos.contains_key(name) {
-                    self.typ(name);
-                }
+                self.typ(name);
                 self.sup.type_infos[name].align
             }
             Type::Cold(id) => self.align(&self.sup.asg.info.types[*id]),
@@ -197,6 +195,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn typ(&mut self, name: &'a str) {
+        if self.sup.type_infos.contains_key(name) {
+            return;
+        }
         let mut offset = 0;
         let mut align = 1;
         let mut offsets = Vec::new();
@@ -247,6 +248,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn field_ref(&mut self, field: &Field<'a>) -> Tmp {
         let from = self.expr_ref(&field.from);
         let off = self.new_tmp();
+        self.typ(field.struct_name);
         let offset = self.int(self.sup.type_infos[field.struct_name].offsets[field.id] as i64);
         self.stmts
             .push(Stmt::Bin(off, ir::BinOp::Add, from, offset));
@@ -274,19 +276,30 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn let_expr(&mut self, let_expr: &'a Let<'a>) -> Tmp {
         let tmp = self.expr(&let_expr.expr);
-        let size = self.size(&let_expr.typ);
-        let align = self.align(&let_expr.typ);
-        let tmp = self.store(tmp, align, size);
+        let tmp = self.store(tmp, &let_expr.typ);
         self.context
             .insert(let_expr.name, (tmp, let_expr.typ.clone()));
         self.int(0)
     }
 
-    fn store(&mut self, tmp: Tmp, align: u32, size: u32) -> Tmp {
+    fn store(&mut self, tmp: Tmp, typ: &Type<'a>) -> Tmp {
+        if self.is_name(typ) {
+            return tmp;
+        }
         let res = self.new_tmp();
-        self.stmts.push(Stmt::Alloc(res, align, size));
+        let size = self.size(typ);
+        self.stmts.push(Stmt::Alloc(res, size, size));
         self.copy(res, tmp, size);
         res
+    }
+
+    fn is_name(&self, typ: &Type<'a>) -> bool {
+        match typ {
+            Type::Name(_) => true,
+            Type::Cold(id) => self.is_name(&self.sup.asg.info.types[*id]),
+            Type::Generic(g) => self.is_name(&self.generics[g]),
+            _ => false,
+        }
     }
 
     fn deref(&mut self, deref: &'a Deref<'a>) -> Tmp {
@@ -324,6 +337,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn var(&mut self, name: &str) -> Tmp {
         let (tmp, typ) = self.var_ref(name);
+        if self.is_name(&typ) {
+            return tmp;
+        }
         let res = self.new_tmp();
         self.stmts.push(Stmt::Load(res, self.signed(&typ), tmp));
         res

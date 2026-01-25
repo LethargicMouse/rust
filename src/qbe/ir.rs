@@ -50,15 +50,15 @@ impl Display for Const {
 pub struct Fun {
     pub ret_type: AbiType,
     pub name: String,
-    pub params: Vec<Tmp>,
+    pub params: Vec<(AbiType, Tmp)>,
     pub stmts: Vec<Stmt>,
 }
 
 impl Display for Fun {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\nfunction {} ${}(", self.ret_type, self.name)?;
-        for param in &self.params {
-            write!(f, "l %t{param},")?;
+        for (typ, param) in &self.params {
+            write!(f, "{typ} %t{param},")?;
         }
         write!(f, ") {{\n@start")?;
         for stmt in &self.stmts {
