@@ -1,15 +1,33 @@
 fn main() {
-    let a = id("hello");
-    puts(a.buf);
-  }
+  let a = [123];
+  putiln(a[0]);
+}
 
-fn id<t>(t) t
-  do t
+fn putiln(i64) {
+  puti(i64);
+  putstr("\n")
+}
+
+fn putstr(str) {
+  write(1, str.buf, str.len);
+}
+
+fn puti(i64) {
+  if (i64 == 0) putstr("0")
+  else puti_not_0(i64)
+}
+
+fn puti_not_0(i64) {
+  if (i64 == 0) return;
+  puti_not_0(i64 / 10);
+  let c = (48 + i64 % 10) as u8;
+  write(1, &c, 1);
+}
 
 struct str {
   buf: *u8,
   len: u64
-  }
+}
 
 extern read: fn(i32, *u8, u64) u64;
-extern puts: fn(*u8);
+extern write: fn(i32, *u8, u64) u64;

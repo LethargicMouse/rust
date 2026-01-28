@@ -23,6 +23,10 @@ impl<'a> Location<'a> {
             end: other.end,
         }
     }
+
+    pub fn hash(&self) -> u128 {
+        self.start.hash() as u128 * self.end.hash() as u128
+    }
 }
 
 impl Display for Location<'_> {
@@ -74,6 +78,10 @@ impl Pos {
             self.symbol += 1;
         }
         self
+    }
+
+    fn hash(&self) -> u64 {
+        self.line as u64 * self.symbol as u64
     }
 }
 

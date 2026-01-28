@@ -27,6 +27,8 @@ pub enum Lexeme<'a> {
     Unknown,
     Ampersand,
     BangEqual,
+    Mod,
+    Slash,
 }
 
 impl<'a> Lexeme<'a> {
@@ -55,6 +57,8 @@ impl<'a> Lexeme<'a> {
             Ampersand => "`&`",
             BangEqual => "`!=`",
             More => "`>`",
+            Mod => "`%`",
+            Slash => "`/`",
         }
     }
 }

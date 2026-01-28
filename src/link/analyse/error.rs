@@ -39,12 +39,19 @@ impl Display for NoField<'_> {
 }
 
 pub enum CheckError<'a> {
+    NCas(NoCast<'a>),
     Snt(ShouldKnowType<'a>),
-    NDec(NotDeclared<'a>),
+    ND(NotDeclared<'a>),
     NF(NoField<'a>),
-    MDer(NoIndex<'a>),
-    NC(NoCall<'a>),
+    NI(NoIndex<'a>),
+    NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<NoCast<'a>> for CheckError<'a> {
+    fn from(v: NoCast<'a>) -> Self {
+        Self::NCas(v)
+    }
 }
 
 impl<'a> From<ShouldKnowType<'a>> for CheckError<'a> {
@@ -61,19 +68,19 @@ impl<'a> From<WrongType<'a>> for CheckError<'a> {
 
 impl<'a> From<NoCall<'a>> for CheckError<'a> {
     fn from(v: NoCall<'a>) -> Self {
-        Self::NC(v)
+        Self::NCal(v)
     }
 }
 
 impl<'a> From<NoIndex<'a>> for CheckError<'a> {
     fn from(v: NoIndex<'a>) -> Self {
-        Self::MDer(v)
+        Self::NI(v)
     }
 }
 
 impl<'a> From<NotDeclared<'a>> for CheckError<'a> {
     fn from(v: NotDeclared<'a>) -> Self {
-        Self::NDec(v)
+        Self::ND(v)
     }
 }
 
@@ -87,12 +94,13 @@ impl Display for CheckError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{Red}! error checking ")?;
         match self {
-            CheckError::NDec(not_declared) => write!(f, "{not_declared}"),
+            CheckError::ND(not_declared) => write!(f, "{not_declared}"),
             CheckError::NF(no_field) => write!(f, "{no_field}"),
-            CheckError::MDer(no_deref) => write!(f, "{no_deref}"),
-            CheckError::NC(no_call) => write!(f, "{no_call}"),
+            CheckError::NI(no_deref) => write!(f, "{no_deref}"),
+            CheckError::NCal(no_call) => write!(f, "{no_call}"),
             CheckError::WT(wrong_type) => write!(f, "{wrong_type}"),
             CheckError::Snt(should_know_type) => write!(f, "{should_know_type}"),
+            CheckError::NCas(no_cast) => write!(f, "{no_cast}"),
         }
     }
 }
@@ -171,6 +179,22 @@ impl Display for ShouldKnowType<'_> {
             f,
             "{}\n{Red}--! type should be known here{Reset}",
             self.location
+        )
+    }
+}
+
+pub struct NoCast<'a> {
+    pub location: Location<'a>,
+    pub from: Type<'a>,
+    pub to: Type<'a>,
+}
+
+impl Display for NoCast<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! cannot cast {Reset}{}{Red} into {Reset}{}",
+            self.location, self.from, self.to
         )
     }
 }

@@ -112,15 +112,6 @@ impl Display for Signed {
     }
 }
 
-impl Signed {
-    fn fit_in_base(self) -> Type {
-        match self {
-            Signed::Base(typ) => typ,
-            _ => Type::Word,
-        }
-    }
-}
-
 pub enum Unsigned {
     Base(Type),
     Half,
@@ -172,7 +163,7 @@ impl Display for Stmt {
             Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =l {bin_op} %t{l}, %t{r}"),
             Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
             Stmt::Label(l) => write!(f, "@l{l}"),
-            Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} ={} load{typ} %t{l}", typ.fit_in_base()),
+            Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} =l load{typ} %t{l}"),
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
             Stmt::Blit(a, b, c) => write!(f, "blit %t{a}, %t{b}, {c}"),
             Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),
@@ -184,25 +175,28 @@ impl Display for Stmt {
 pub struct Call {
     pub tmp: Tmp,
     pub name: String,
-    pub args: Vec<Tmp>,
+    pub args: Vec<(AbiType, Tmp)>,
 }
 
 impl Display for Call {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "%t{} =l call ${}(", self.tmp, self.name)?;
-        for arg in &self.args {
-            write!(f, "l %t{arg},")?;
+        for (typ, arg) in &self.args {
+            write!(f, "{typ} %t{arg},")?;
         }
         write!(f, ")")
     }
 }
 
 pub enum BinOp {
+    And,
     Add,
     Multiply,
     Equal,
     Less,
     Inequal,
+    Urem,
+    Udiv,
 }
 
 impl Display for BinOp {
@@ -213,6 +207,9 @@ impl Display for BinOp {
             BinOp::Equal => write!(f, "ceql"),
             BinOp::Less => write!(f, "csltl"),
             BinOp::Inequal => write!(f, "cnel"),
+            BinOp::Urem => write!(f, "urem"),
+            BinOp::Udiv => write!(f, "udiv"),
+            BinOp::And => write!(f, "and"),
         }
     }
 }

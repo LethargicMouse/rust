@@ -158,17 +158,20 @@ pub struct Binary<'a> {
 
 #[derive(Debug)]
 pub enum BinOp {
+    And,
     Add,
     Multiply,
     Equal,
     Less,
     NotEqual,
+    Mod,
+    Div,
 }
 
 #[derive(Debug)]
 pub struct Call<'a> {
     pub name: &'a str,
-    pub args: Vec<Expr<'a>>,
+    pub args: Vec<(Type<'a>, Expr<'a>)>,
     pub generics: HashMap<&'a str, Type<'a>>,
 }
 
@@ -186,16 +189,8 @@ pub struct Assign<'a> {
 }
 
 #[derive(Debug)]
-pub struct SizedExpr<'a> {
-    pub expr: Expr<'a>,
-    pub align: u32,
-    pub size: u32,
-}
-
-#[derive(Debug)]
 pub struct Tuple<'a> {
-    pub exprs: Vec<SizedExpr<'a>>,
-    pub align: u32,
+    pub exprs: Vec<(Type<'a>, Expr<'a>)>,
 }
 
 #[derive(Debug)]
@@ -227,4 +222,5 @@ pub enum Type<'a> {
     U64,
     I32,
     U8,
+    I64,
 }

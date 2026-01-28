@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     link::{Context, asg::*},
@@ -21,6 +21,7 @@ struct Generate<'a> {
     funs: Vec<ir::Fun>,
     type_infos: HashMap<&'a str, TypeDeclInfo>,
     asg: &'a Asg<'a>,
+    booked: HashSet<String>,
 }
 
 impl<'a> Generate<'a> {
@@ -30,6 +31,7 @@ impl<'a> Generate<'a> {
             consts: Vec::new(),
             funs: Vec::new(),
             type_infos: HashMap::new(),
+            booked: HashSet::new(),
             asg,
         }
     }
@@ -96,6 +98,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Type::U8 => Signed::UnsignedByte.into(),
             Type::Cold(id) => self.abi_type(&self.sup.asg.info.types[*id]),
             Type::Generic(g) => self.abi_type(&self.generics[g]),
+            Type::I64 => ir::Type::Long.into(),
         }
     }
 
@@ -142,11 +145,15 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn tuple(&mut self, tuple: &'a Tuple<'a>) -> Tmp {
         let tmp = self.new_tmp();
-        let size = tuple.exprs.iter().map(|e| e.size).sum();
-        self.stmts.push(Stmt::Alloc(tmp, tuple.align, size));
+        let (align, size) = tuple
+            .exprs
+            .iter()
+            .map(|(typ, _)| (self.align(typ), self.size(typ)))
+            .fold((1, 0), |(fa, fs), (a, s)| (fa.max(a), fs + s));
+        self.stmts.push(Stmt::Alloc(tmp, align, size));
         let offset = 0;
-        for sized in &tuple.exprs {
-            let expr = self.expr(&sized.expr);
+        for (typ, expr) in &tuple.exprs {
+            let expr = self.expr(expr);
             let offset_tmp = self.new_tmp();
             self.stmts.push(Stmt::Copy(
                 offset_tmp,
@@ -155,8 +162,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
             ));
             let with_offset = self.new_tmp();
             self.stmts
-                .push(Stmt::Bin(with_offset, ir::BinOp::Add, tmp, offset));
-            self.copy(with_offset, expr, sized.size);
+                .push(Stmt::Bin(with_offset, ir::BinOp::Add, tmp, offset_tmp));
+            let size = self.size(typ);
+            self.copy(with_offset, expr, size);
         }
         tmp
     }
@@ -166,7 +174,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let expr = self.expr(&assign.expr);
         let size = self.size(&assign.expr_type);
         self.copy(to, expr, size);
-        self.int(0)
+        expr
     }
 
     fn size(&mut self, typ: &Type<'a>) -> u32 {
@@ -180,6 +188,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Type::U64 => 8,
             Type::I32 => 4,
             Type::U8 => 1,
+            Type::I64 => 8,
         }
     }
 
@@ -257,9 +266,12 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn field(&mut self, field: &Field<'a>) -> Tmp {
         let typ = self.signed(&field.typ);
-        let field = self.field_ref(field);
+        let field_tmp = self.field_ref(field);
+        if self.is_name(&field.typ) {
+            return field_tmp;
+        }
         let tmp = self.new_tmp();
-        self.stmts.push(Stmt::Load(tmp, typ, field));
+        self.stmts.push(Stmt::Load(tmp, typ, field_tmp));
         tmp
     }
 
@@ -271,6 +283,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Type::U8 => Signed::UnsignedByte,
             Type::Cold(id) => self.signed(&self.sup.asg.info.types[*id]),
             Type::Generic(g) => self.signed(&self.generics[g]),
+            Type::I64 => ir::Type::Long.into(),
         }
     }
 
@@ -279,7 +292,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let tmp = self.store(tmp, &let_expr.typ);
         self.context
             .insert(let_expr.name, (tmp, let_expr.typ.clone()));
-        self.int(0)
+        tmp
     }
 
     fn store(&mut self, tmp: Tmp, typ: &Type<'a>) -> Tmp {
@@ -304,6 +317,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn deref(&mut self, deref: &'a Deref<'a>) -> Tmp {
         let expr = self.expr(&deref.expr);
+        if self.is_name(&deref.typ) {
+            return expr;
+        }
         let tmp = self.new_tmp();
         self.stmts
             .push(Stmt::Load(tmp, self.signed(&deref.typ), expr));
@@ -347,11 +363,18 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn call(&mut self, call: &'a Call<'a>) -> Tmp {
         let name: String = call.name.into();
-        if let Some(fun) = self.sup.asg.funs.get(name.as_str()) {
+        if let Some(fun) = self.sup.asg.funs.get(name.as_str())
+            && !self.sup.booked.contains(name.as_str())
+        {
+            self.sup.booked.insert(name.clone());
             let fun = GenFun::new(self.sup, &call.generics).run(&name, fun);
             self.sup.funs.push(fun);
         }
-        let args = call.args.iter().map(|e| self.expr(e)).collect();
+        let args = call
+            .args
+            .iter()
+            .map(|(typ, expr)| (self.abi_type(typ), self.expr(expr)))
+            .collect();
         let tmp = self.new_tmp();
         self.stmts.push(ir::Call { tmp, name, args }.into());
         tmp
@@ -378,6 +401,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
             BinOp::Equal => ir::BinOp::Equal,
             BinOp::Less => ir::BinOp::Less,
             BinOp::NotEqual => ir::BinOp::Inequal,
+            BinOp::Mod => ir::BinOp::Urem,
+            BinOp::Div => ir::BinOp::Udiv,
+            BinOp::And => ir::BinOp::And,
         }
     }
 

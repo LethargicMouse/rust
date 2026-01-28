@@ -64,8 +64,8 @@ impl<'a> Parse<'a> {
         self.either(&[
             |p| {
                 let location = p.here();
-                let prime = p.prime_()?;
-                Ok(Type::Prime(prime, location))
+                p.unit_()?;
+                Ok(Type::Prime(Prime::Unit, location))
             },
             |p| Ok(p.fun_type_()?.into()),
             |p| {
@@ -77,16 +77,6 @@ impl<'a> Parse<'a> {
             |p| Ok(p.lame(false)?.into()),
         ])
         .or_else(|_| self.fail("type"))
-    }
-
-    fn prime_(&mut self) -> Result<Prime, Fail> {
-        self.either(&[
-            |p| p.expect_(Name("i32")).map(|_| Prime::I32),
-            |p| p.expect_(Name("u8")).map(|_| Prime::U8),
-            |p| p.expect_(Name("u64")).map(|_| Prime::U64),
-            |p| p.expect_(Name("bool")).map(|_| Prime::Bool),
-            |p| p.unit_().map(|_| Prime::Unit),
-        ])
     }
 
     fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {
@@ -126,7 +116,7 @@ impl<'a> Parse<'a> {
                 let lame = p.lame(true)?;
                 Ok(Field {
                     name: lame.name,
-                    typ: Type::Name(lame),
+                    typ: Type::from(lame),
                 })
             },
         ])

@@ -70,6 +70,7 @@ pub enum Literal<'a> {
     Unit,
     Int(i64),
     Str(&'a str),
+    Bool(bool),
 }
 
 pub struct If<'a> {
@@ -87,6 +88,7 @@ pub struct Block<'a> {
 pub struct Let<'a> {
     pub location: Location<'a>,
     pub name: &'a str,
+    pub typ: Option<Type<'a>>,
     pub expr: Expr<'a>,
 }
 
@@ -103,6 +105,8 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    Array(Array<'a>),
+    Cast(Box<Cast<'a>>),
     Return(Box<Return<'a>>),
     Ref(Box<Ref<'a>>),
     Loop(Box<Loop<'a>>),
@@ -117,6 +121,24 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Array<'a>> for Expr<'a> {
+    fn from(v: Array<'a>) -> Self {
+        Self::Array(v)
+    }
+}
+
+impl<'a> From<Call<'a>> for Expr<'a> {
+    fn from(v: Call<'a>) -> Self {
+        Self::Call(v)
+    }
+}
+
+impl<'a> From<Cast<'a>> for Expr<'a> {
+    fn from(v: Cast<'a>) -> Self {
+        Self::Cast(Box::new(v))
+    }
 }
 
 impl<'a> From<Return<'a>> for Expr<'a> {
@@ -190,6 +212,8 @@ impl<'a> Expr<'a> {
             Expr::Loop(loop_expr) => loop_expr.body.ret.location(),
             Expr::Ref(ref_expr) => ref_expr.location,
             Expr::Return(ret) => ret.location,
+            Expr::Cast(cast) => cast.location,
+            Expr::Array(array) => array.location,
         }
     }
 
@@ -215,6 +239,8 @@ impl<'a> Expr<'a> {
             Expr::Loop(_) => false,
             Expr::Ref(_) => true,
             Expr::Return(_) => true,
+            Expr::Cast(_) => true,
+            Expr::Array(_) => true,
         }
     }
 }
@@ -254,6 +280,20 @@ pub enum BinOp {
     Equal,
     Less,
     NotEqual,
+    Mod,
+    Div,
+    And,
+}
+
+impl BinOp {
+    pub fn priority(&self) -> u8 {
+        match self {
+            BinOp::And => 0,
+            BinOp::Equal | BinOp::Less | BinOp::NotEqual => 1,
+            BinOp::Plus => 2,
+            BinOp::Mod | BinOp::Div => 3,
+        }
+    }
 }
 
 pub enum Postfix<'a> {
@@ -261,6 +301,7 @@ pub enum Postfix<'a> {
     Get(Expr<'a>),
     Call(Call<'a>),
     Field(&'a str, Location<'a>),
+    Cast(Type<'a>),
 }
 
 impl<'a> From<Call<'a>> for Postfix<'a> {
@@ -294,16 +335,28 @@ impl<'a> Type<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Prime {
     Unit,
     Bool,
     I32,
+    I64,
     U8,
     U64,
 }
 
 impl Prime {
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "i32" => Some(Prime::I32),
+            "i64" => Some(Prime::I64),
+            "u8" => Some(Prime::U8),
+            "u64" => Some(Prime::U64),
+            "bool" => Some(Prime::Bool),
+            _ => None,
+        }
+    }
+
     pub fn size(&self) -> u32 {
         match self {
             Prime::Unit => 0,
@@ -311,6 +364,7 @@ impl Prime {
             Prime::I32 => 4,
             Prime::U8 => 1,
             Prime::U64 => 8,
+            Prime::I64 => 8,
         }
     }
 
@@ -321,6 +375,7 @@ impl Prime {
             Prime::I32 => true,
             Prime::U8 => true,
             Prime::U64 => true,
+            Prime::I64 => true,
         }
     }
 }
@@ -333,13 +388,18 @@ impl Display for Prime {
             Prime::I32 => write!(f, "i32"),
             Prime::U8 => write!(f, "u8"),
             Prime::U64 => write!(f, "u64"),
+            Prime::I64 => write!(f, "i64"),
         }
     }
 }
 
 impl<'a> From<Lame<'a>> for Type<'a> {
     fn from(v: Lame<'a>) -> Self {
-        Self::Name(v)
+        if let Some(prime) = Prime::from_name(v.name) {
+            Self::Prime(prime, v.location)
+        } else {
+            Self::Name(v)
+        }
     }
 }
 
@@ -380,5 +440,16 @@ pub struct Ref<'a> {
 
 pub struct Return<'a> {
     pub expr: Expr<'a>,
+    pub location: Location<'a>,
+}
+
+pub struct Cast<'a> {
+    pub expr: Expr<'a>,
+    pub typ: Type<'a>,
+    pub location: Location<'a>,
+}
+
+pub struct Array<'a> {
+    pub elems: Vec<Expr<'a>>,
     pub location: Location<'a>,
 }
