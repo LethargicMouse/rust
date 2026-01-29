@@ -151,7 +151,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
             .map(|(typ, _)| (self.align(typ), self.size(typ)))
             .fold((1, 0), |(fa, fs), (a, s)| (fa.max(a), fs + s));
         self.stmts.push(Stmt::Alloc(tmp, align, size));
-        let offset = 0;
+        let mut offset = 0;
         for (typ, expr) in &tuple.exprs {
             let expr = self.expr(expr);
             let offset_tmp = self.new_tmp();
@@ -165,6 +165,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
                 .push(Stmt::Bin(with_offset, ir::BinOp::Add, tmp, offset_tmp));
             let size = self.size(typ);
             self.copy(with_offset, expr, size);
+            offset += size;
         }
         tmp
     }
@@ -370,13 +371,22 @@ impl<'a, 'b> GenFun<'a, 'b> {
             let fun = GenFun::new(self.sup, &call.generics).run(&name, fun);
             self.sup.funs.push(fun);
         }
+        let ret_type = self.abi_type(&call.ret_type);
         let args = call
             .args
             .iter()
             .map(|(typ, expr)| (self.abi_type(typ), self.expr(expr)))
             .collect();
         let tmp = self.new_tmp();
-        self.stmts.push(ir::Call { tmp, name, args }.into());
+        self.stmts.push(
+            ir::Call {
+                tmp,
+                ret_type,
+                name,
+                args,
+            }
+            .into(),
+        );
         tmp
     }
 
@@ -404,13 +414,18 @@ impl<'a, 'b> GenFun<'a, 'b> {
             BinOp::Mod => ir::BinOp::Urem,
             BinOp::Div => ir::BinOp::Udiv,
             BinOp::And => ir::BinOp::And,
+            BinOp::Subtract => ir::BinOp::Sub,
         }
     }
 
-    fn literal(&mut self, literal: &Literal) -> Tmp {
+    fn literal(&mut self, literal: &Literal<'a>) -> Tmp {
         match literal {
             Literal::Int(n) => self.int(*n),
             Literal::Str(s) => self.str(s),
+            Literal::SizeOf(typ) => {
+                let size = self.size(typ);
+                self.int(size as i64)
+            }
         }
     }
 

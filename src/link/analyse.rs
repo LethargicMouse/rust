@@ -297,8 +297,23 @@ impl<'a> Analyse<'a> {
     }
 
     fn new_expr(&mut self, new: New<'a>) -> Typed<'a, asg::Expr<'a>> {
+        let name = new.lame.name;
         let typ = self.typ(ast::Type::Name(new.lame));
-        let exprs = Vec::new();
+        let exprs = new
+            .fields
+            .into_iter()
+            .map(|f| {
+                let location = f.expr.location();
+                let (expr, typ) = self.expr(f.expr).into();
+                let field_typ = match self.structs[name].fields.get(f.lame.name) {
+                    Some(field) => field.typ.clone(),
+                    None => Type::Error,
+                };
+                let typ = self.unify(location, field_typ, typ);
+                let asg_type = self.asg_type(&typ, location);
+                (asg_type, expr)
+            })
+            .collect();
         typed(asg::Expr::Tuple(Tuple { exprs }), typ)
     }
 
@@ -521,11 +536,13 @@ impl<'a> Analyse<'a> {
         {
             self.unify(location, expected, found);
         }
+        let ret_type = self.asg_type(&typ.ret_type, location);
         Ok(typed(
             asg::Call {
                 name,
                 args,
                 generics,
+                ret_type,
             },
             typ.ret_type,
         ))
@@ -583,14 +600,28 @@ impl<'a> Analyse<'a> {
     }
 
     fn binary(&mut self, binary: Binary<'a>) -> Typed<'a, asg::Binary<'a>> {
-        let (left, typ) = self.expr(binary.left).into();
+        let left_location = binary.left.location();
+        let (left, left_typ) = self.expr(binary.left).into();
         let right = self.expr(binary.right).sup;
+        let op = self.bin_op(binary.op);
+        let expr = match &left_typ {
+            Type::Ptr(typ) => asg::Binary {
+                left,
+                op,
+                right: asg::Binary {
+                    left: right,
+                    op: asg::BinOp::Multiply,
+                    right: asg::Literal::SizeOf(self.asg_type(typ, left_location)).into(),
+                }
+                .into(),
+            },
+            _ => asg::Binary { left, op, right },
+        };
         let typ = match binary.op {
-            BinOp::Plus | BinOp::Mod | BinOp::Div | BinOp::And => typ,
+            BinOp::Plus | BinOp::Mod | BinOp::Div | BinOp::And | BinOp::Subtract => left_typ,
             BinOp::Equal | BinOp::NotEqual | BinOp::Less => Prime::Bool.into(),
         };
-        let op = self.bin_op(binary.op);
-        typed(asg::Binary { left, op, right }, typ)
+        typed(expr, typ)
     }
 
     fn bin_op(&self, bin_op: BinOp) -> asg::BinOp {
@@ -602,6 +633,7 @@ impl<'a> Analyse<'a> {
             BinOp::Mod => asg::BinOp::Mod,
             BinOp::Div => asg::BinOp::Div,
             BinOp::And => asg::BinOp::And,
+            BinOp::Subtract => asg::BinOp::Subtract,
         }
     }
 

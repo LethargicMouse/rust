@@ -3,7 +3,7 @@ use crate::{
     link::{
         ast::{
             Array, Assign, BinOp, Binary, Block, Call, Cast, Expr, FieldExpr, Get, If, Let,
-            Literal, Loop, New, Postfix, Ref, Return,
+            Literal, Loop, New, NewField, Postfix, Ref, Return,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -71,12 +71,18 @@ impl<'a> Parse<'a> {
     }
 
     fn new_expr_(&mut self) -> Result<New<'a>, Fail> {
-        let location = self.here();
-        self.expect_(Name("new"))?;
         let lame = self.lame(true)?;
         self.expect(CurL)?;
+        let fields = self.sep(Self::new_field).collect();
         self.expect(CurR)?;
-        Ok(New { lame, location })
+        Ok(New { lame, fields })
+    }
+
+    fn new_field(&mut self) -> Result<NewField<'a>, Fail> {
+        let lame = self.lame(true)?;
+        self.expect(Colon)?;
+        let expr = self.expr(0)?;
+        Ok(NewField { lame, expr })
     }
 
     fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
@@ -252,6 +258,7 @@ impl<'a> Parse<'a> {
             |p| p.expect_(Mod).map(|_| BinOp::Mod),
             |p| p.expect_(Slash).map(|_| BinOp::Div),
             |p| p.expect_(Ampersand).map(|_| BinOp::And),
+            |p| p.expect_(Minus).map(|_| BinOp::Subtract),
         ])?;
         if res.priority() >= min_priority {
             Ok(res)

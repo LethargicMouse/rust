@@ -174,13 +174,14 @@ impl Display for Stmt {
 
 pub struct Call {
     pub tmp: Tmp,
+    pub ret_type: AbiType,
     pub name: String,
     pub args: Vec<(AbiType, Tmp)>,
 }
 
 impl Display for Call {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "%t{} =l call ${}(", self.tmp, self.name)?;
+        write!(f, "%t{} ={} call ${}(", self.tmp, self.ret_type, self.name)?;
         for (typ, arg) in &self.args {
             write!(f, "{typ} %t{arg},")?;
         }
@@ -189,6 +190,7 @@ impl Display for Call {
 }
 
 pub enum BinOp {
+    Sub,
     And,
     Add,
     Multiply,
@@ -210,6 +212,7 @@ impl Display for BinOp {
             BinOp::Urem => write!(f, "urem"),
             BinOp::Udiv => write!(f, "udiv"),
             BinOp::And => write!(f, "and"),
+            BinOp::Sub => write!(f, "sub"),
         }
     }
 }

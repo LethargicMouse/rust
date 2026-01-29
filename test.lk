@@ -1,6 +1,14 @@
 fn main() {
-  let a = [123];
-  putiln(a[0]);
+  let x = "hey";
+  let a = x.substr(1, 2);
+  putstr(a);
+}
+
+fn substr(str, left: u64, right: u64) str {
+  str {
+    buf: str.buf + left,
+    len: right - left
+  }
 }
 
 fn putiln(i64) {

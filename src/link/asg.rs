@@ -158,6 +158,7 @@ pub struct Binary<'a> {
 
 #[derive(Debug)]
 pub enum BinOp {
+    Subtract,
     And,
     Add,
     Multiply,
@@ -173,12 +174,14 @@ pub struct Call<'a> {
     pub name: &'a str,
     pub args: Vec<(Type<'a>, Expr<'a>)>,
     pub generics: HashMap<&'a str, Type<'a>>,
+    pub ret_type: Type<'a>,
 }
 
 #[derive(Debug)]
 pub enum Literal<'a> {
     Int(i64),
     Str(&'a str),
+    SizeOf(Type<'a>),
 }
 
 #[derive(Debug)]

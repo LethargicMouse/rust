@@ -29,6 +29,7 @@ pub enum Lexeme<'a> {
     BangEqual,
     Mod,
     Slash,
+    Minus,
 }
 
 impl<'a> Lexeme<'a> {
@@ -59,6 +60,7 @@ impl<'a> Lexeme<'a> {
             More => "`>`",
             Mod => "`%`",
             Slash => "`/`",
+            Minus => "`-`",
         }
     }
 }

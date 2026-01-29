@@ -208,7 +208,7 @@ impl<'a> Expr<'a> {
             Expr::Get(get) => get.location,
             Expr::Block(block) => block.ret.location(),
             Expr::Assign(assign) => assign.location,
-            Expr::New(new) => new.location,
+            Expr::New(new) => new.lame.location,
             Expr::Loop(loop_expr) => loop_expr.body.ret.location(),
             Expr::Ref(ref_expr) => ref_expr.location,
             Expr::Return(ret) => ret.location,
@@ -275,7 +275,9 @@ pub struct Binary<'a> {
     pub right: Expr<'a>,
 }
 
+#[derive(Clone, Copy)]
 pub enum BinOp {
+    Subtract,
     Plus,
     Equal,
     Less,
@@ -290,7 +292,7 @@ impl BinOp {
         match self {
             BinOp::And => 0,
             BinOp::Equal | BinOp::Less | BinOp::NotEqual => 1,
-            BinOp::Plus => 2,
+            BinOp::Plus | BinOp::Subtract => 2,
             BinOp::Mod | BinOp::Div => 3,
         }
     }
@@ -426,7 +428,7 @@ pub struct Assign<'a> {
 
 pub struct New<'a> {
     pub lame: Lame<'a>,
-    pub location: Location<'a>,
+    pub fields: Vec<NewField<'a>>,
 }
 
 pub struct Loop<'a> {
@@ -452,4 +454,9 @@ pub struct Cast<'a> {
 pub struct Array<'a> {
     pub elems: Vec<Expr<'a>>,
     pub location: Location<'a>,
+}
+
+pub struct NewField<'a> {
+    pub lame: Lame<'a>,
+    pub expr: Expr<'a>,
 }
