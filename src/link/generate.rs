@@ -443,8 +443,8 @@ impl<'a, 'b> GenFun<'a, 'b> {
             BinOp::Equal => ir::BinOp::Equal,
             BinOp::Less => ir::BinOp::Less,
             BinOp::NotEqual => ir::BinOp::Inequal,
-            BinOp::Mod => ir::BinOp::Urem,
-            BinOp::Div => ir::BinOp::Udiv,
+            BinOp::Modulo => ir::BinOp::Urem,
+            BinOp::Divide => ir::BinOp::Udiv,
             BinOp::And => ir::BinOp::And,
             BinOp::Subtract => ir::BinOp::Sub,
         }

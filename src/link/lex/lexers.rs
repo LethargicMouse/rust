@@ -101,4 +101,5 @@ pub const LIST: LexList = &[
     (b"%", Mod),
     (b"/", Slash),
     (b"-", Minus),
+    (b"@", At),
 ];

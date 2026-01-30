@@ -80,6 +80,7 @@ pub enum Literal<'a> {
     Int(i64),
     Str(&'a str),
     Bool(bool),
+    Size(Type<'a>),
 }
 
 pub struct If<'a> {
@@ -286,6 +287,7 @@ pub struct Binary<'a> {
 
 #[derive(Clone, Copy)]
 pub enum BinOp {
+    Multiply,
     Subtract,
     Plus,
     Equal,
@@ -302,7 +304,7 @@ impl BinOp {
             BinOp::And => 0,
             BinOp::Equal | BinOp::Less | BinOp::NotEqual => 1,
             BinOp::Plus | BinOp::Subtract => 2,
-            BinOp::Mod | BinOp::Div => 3,
+            BinOp::Mod | BinOp::Div | BinOp::Multiply => 3,
         }
     }
 }

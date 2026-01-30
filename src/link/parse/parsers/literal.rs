@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{Lame, Literal},
+    ast::{Lame, Literal, Type},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -11,7 +11,14 @@ impl<'a> Parse<'a> {
             Self::bool_,
             |p| Ok(Literal::Int(p.int_()?)),
             |p| Ok(Literal::Str(p.str_()?)),
+            |p| Ok(Literal::Size(p.size_()?)),
         ])
+    }
+
+    fn size_(&mut self) -> Result<Type<'a>, Fail> {
+        self.expect_(At)?;
+        self.expect(Name("size"))?;
+        self.typ()
     }
 
     pub fn unit_(&mut self) -> Result<Literal<'a>, Fail> {

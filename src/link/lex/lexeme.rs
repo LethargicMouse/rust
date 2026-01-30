@@ -7,6 +7,7 @@ pub enum Lexeme<'a> {
     Eof,
     Name(&'a str),
     ParL,
+    At,
     ParR,
     CurL,
     CurR,
@@ -61,6 +62,7 @@ impl<'a> Lexeme<'a> {
             Mod => "`%`",
             Slash => "`/`",
             Minus => "`-`",
+            At => "`@`",
         }
     }
 }

@@ -3,10 +3,41 @@ extern write: fn(i32, cstr, u64) u64;
 
 
 fn main(len: i32, buf: *cstr) {
-  "hey".substr(1, 2).putstr();
+  "your mom".words()[0].putstr();
 }
 
-type args = slice;
+fn words(str) arr<str> {
+  let left = 0;
+  let right = 1;
+  let result = empty_vec();
+  loop {
+    if (right == str.len) return result;
+    if (str.buf[right] == space) {
+      result.push(str.substr(left, right));
+      left = right + 1;
+    }
+    right = right + 1;
+  }
+}
+
+fn push<t>(vec<t>, t) {
+  if (vec.len == vec.cap) vec.grow();
+  vec.buf[vec.len] = t;
+  vec.len = vec.len + 1;
+}
+
+fn grow<t>(vec<t>) {
+  if (vec.cap == 0) {
+    vec.cap = 8;
+    vec.buf = malloc(8 * @size t);
+  } else {
+    let new_cap = vec.cap * 2;
+    vec.buf = realloc(vec.buf, vec.cap, new_cap);
+    vec.cap = new_cap;
+  }
+}
+
+type args = arr<cstr>;
 
 fn substr(str, left: index, right: index) str {
   str {
@@ -35,14 +66,17 @@ fn puti(i64) {
 fn puti_not_0(i64) {
   if (i64 == 0) return;
   puti_not_0(i64 / 10);
-  let c = (48 + i64 % 10) as u8;
-  write(1, &c, 1);
+  putc((47 + i64 % 10) as u8)
+}
+
+fn putc(u8) {
+  write(1, &u8, 1);
 }
 
 type str = slice<u8>;
 type cstr = *u8;
 
-struct slice<t> {
+struct arr<t> {
   buf: *t,
   len: u64
 }

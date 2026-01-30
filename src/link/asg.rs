@@ -166,8 +166,8 @@ pub enum BinOp {
     Equal,
     Less,
     NotEqual,
-    Mod,
-    Div,
+    Modulo,
+    Divide,
 }
 
 #[derive(Debug)]

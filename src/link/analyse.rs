@@ -20,6 +20,8 @@ use crate::{
     },
 };
 
+pub const DEBUG: bool = false;
+
 #[derive(Clone, PartialEq, Debug)]
 struct FunType<'a> {
     generics: Vec<&'a str>,
@@ -69,7 +71,7 @@ impl Display for Type<'_> {
                 }
                 write!(f, ">")
             }
-            Type::Error => write!(f, "<error>"),
+            Type::Error => write!(f, "_"),
             Type::Fun(fun_type) => write!(f, "{fun_type}"),
             Type::Prime(prime) => write!(f, "{prime}"),
             Type::Number => write!(f, "<number>"),
@@ -242,7 +244,7 @@ impl<'a> Analyse<'a> {
             }
             Type::Var(id) => {
                 *typ = self.types[*id].clone();
-                self.reveal(typ)
+                self.reveal(typ);
             }
             _ => {}
         }
@@ -301,6 +303,9 @@ impl<'a> Analyse<'a> {
     fn cast_typ(&mut self, location: Location<'a>, from: Type<'a>, to: Type<'a>) -> Type<'a> {
         match (from, to) {
             (Type::Var(id), to) if self.types[id] == Type::Number && to.is_number() => {
+                if DEBUG {
+                    eprintln!("{id} = {to}");
+                }
                 self.types[id] = to;
                 Type::Var(id)
             }
@@ -325,8 +330,8 @@ impl<'a> Analyse<'a> {
     }
 
     fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
-        let (body, typ) = self.block(loop_expr.body).into();
-        typed(asg::Loop { body }, typ)
+        let body = self.block(loop_expr.body).sup;
+        typed(asg::Loop { body }, Type::Unreachable)
     }
 
     fn new_expr(&mut self, new: New<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -349,6 +354,9 @@ impl<'a> Analyse<'a> {
             let id = self.types.len();
             self.types
                 .push(generics.get(index).cloned().unwrap_or(Type::Unknown));
+            if DEBUG {
+                eprintln!("{id} = {}", self.types[id]);
+            }
             self.type_context.insert(generic, Type::Var(id));
         }
         let exprs = new
@@ -411,6 +419,9 @@ impl<'a> Analyse<'a> {
             let id = self.types.len();
             self.types
                 .push(generics.get(index).cloned().unwrap_or(Type::Unknown));
+            if DEBUG {
+                eprintln!("{id} = {}", self.types[id]);
+            }
             self.type_context.insert(generic, Type::Var(id));
         }
         let Field { mut typ, id } = match self.structs[name].fields.get(field_expr.name) {
@@ -463,6 +474,9 @@ impl<'a> Analyse<'a> {
             typ_ = self.unify(location, typ, typ_);
         }
         let typ = self.asg_type(&typ_, location);
+        if DEBUG {
+            eprintln!("{name} = {typ_}");
+        }
         self.context.insert(name, typ_);
         let name = let_expr.name;
         typed(asg::Let { name, expr, typ }, Prime::Unit.into())
@@ -533,11 +547,17 @@ impl<'a> Analyse<'a> {
             (Type::Var(id), b) => {
                 let a = std::mem::take(&mut self.types[id]);
                 self.types[id] = self.try_unify(location, a, b)?;
+                if DEBUG {
+                    eprintln!("{id} = {}", self.types[id]);
+                }
                 Ok(Type::Var(id))
             }
             (a, Type::Var(id)) => {
                 let b = std::mem::take(&mut self.types[id]);
                 self.types[id] = self.try_unify(location, a, b)?;
+                if DEBUG {
+                    eprintln!("{id} = {}", self.types[id]);
+                }
                 Ok(Type::Var(id))
             }
             (_, Type::Error) => Ok(Type::Error),
@@ -643,22 +663,24 @@ impl<'a> Analyse<'a> {
     }
 
     fn specify_fun_type(&mut self, fun_type: &mut FunType<'a>) {
-        self.type_context.new_layer();
-        for generic in &fun_type.generics {
-            self.type_context.insert(generic, Type::Generic(generic));
-        }
         for param in &mut fun_type.params {
             self.specify(param);
         }
         self.specify(&mut fun_type.ret_type);
-        self.type_context.pop_layer();
     }
 
     fn specify(&mut self, typ: &mut Type<'a>) {
         match typ {
             Type::Ptr(typ) => self.specify(typ),
             Type::Name(_, _) => {}
-            Type::Fun(fun_type) => self.specify_fun_type(fun_type),
+            Type::Fun(fun_type) => {
+                self.type_context.new_layer();
+                for generic in &fun_type.generics {
+                    self.type_context.insert(generic, Type::Generic(generic));
+                }
+                self.specify_fun_type(fun_type);
+                self.type_context.pop_layer();
+            }
             Type::Prime(_) => {}
             Type::Error => {}
             Type::Number => {}
@@ -666,6 +688,9 @@ impl<'a> Analyse<'a> {
                 let mut typ = std::mem::take(&mut self.types[*id]);
                 self.specify(&mut typ);
                 self.types[*id] = typ;
+                if DEBUG {
+                    eprintln!("{id} = {}", self.types[*id]);
+                }
             }
             Type::Unreachable => {}
             Type::Generic(g) => {
@@ -721,7 +746,12 @@ impl<'a> Analyse<'a> {
             _ => asg::Binary { left, op, right },
         };
         let typ = match binary.op {
-            BinOp::Plus | BinOp::Mod | BinOp::Div | BinOp::And | BinOp::Subtract => left_typ,
+            BinOp::Plus
+            | BinOp::Mod
+            | BinOp::Div
+            | BinOp::And
+            | BinOp::Subtract
+            | BinOp::Multiply => left_typ,
             BinOp::Equal | BinOp::NotEqual | BinOp::Less => Prime::Bool.into(),
         };
         typed(expr, typ)
@@ -733,10 +763,11 @@ impl<'a> Analyse<'a> {
             BinOp::Equal => asg::BinOp::Equal,
             BinOp::Less => asg::BinOp::Less,
             BinOp::NotEqual => asg::BinOp::NotEqual,
-            BinOp::Mod => asg::BinOp::Mod,
-            BinOp::Div => asg::BinOp::Div,
+            BinOp::Mod => asg::BinOp::Modulo,
+            BinOp::Div => asg::BinOp::Divide,
             BinOp::And => asg::BinOp::And,
             BinOp::Subtract => asg::BinOp::Subtract,
+            BinOp::Multiply => asg::BinOp::Multiply,
         }
     }
 
@@ -749,12 +780,20 @@ impl<'a> Analyse<'a> {
                 Type::Name("slice", vec![Prime::U8.into()]),
             ),
             Literal::Bool(b) => typed(asg::Literal::Int(b as i64), Prime::Bool.into()),
+            Literal::Size(typ) => {
+                let location = typ.location();
+                let typ = self.typ(typ);
+                typed(asg::Literal::SizeOf(self.asg_type(&typ, location)), typ)
+            }
         }
     }
 
     fn new_type_var(&mut self, typ: Type<'a>) -> Type<'a> {
         let id = self.types.len();
         self.types.push(typ);
+        if DEBUG {
+            eprintln!("{id} = {}", self.types[id]);
+        }
         Type::Var(id)
     }
 

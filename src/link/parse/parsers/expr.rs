@@ -19,12 +19,12 @@ impl<'a> Parse<'a> {
             },
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
-            |p| Ok(p.new_expr_()?.into()),
             |p| Ok(p.loop_expr_()?.into()),
             |p| Ok(p.ref_expr_()?.into()),
             |p| Ok(p.ret_()?.into()),
             |p| Ok(p.block_()?.into()),
             Self::par_expr,
+            |p| Ok(p.new_expr_()?.into()),
             |p| Ok(p.call(false)?.into()),
             |p| Ok(p.lame(false)?.into()),
             |p| Ok(p.array_()?.into()),
@@ -71,7 +71,7 @@ impl<'a> Parse<'a> {
     }
 
     fn new_expr_(&mut self) -> Result<New<'a>, Fail> {
-        let lame = self.lame(true)?;
+        let lame = self.lame(false)?;
         self.expect(CurL)?;
         let fields = self.sep(Self::new_field).collect();
         self.expect(CurR)?;
@@ -230,10 +230,14 @@ impl<'a> Parse<'a> {
     fn block_(&mut self) -> Result<Block<'a>, Fail> {
         let location = self.here();
         self.expect_(CurL)?;
-        let stmts = self.many(Self::stmt);
-        let ret = self
-            .maybe(|p| p.expr(0))
-            .unwrap_or_else(|| self.implicit_unit(location));
+        let mut stmts = self.many(Self::stmt);
+        let ret = self.maybe(|p| p.expr(0)).unwrap_or_else(|| {
+            if stmts.last().is_some_and(|e| !e.needs_semicolon()) {
+                stmts.pop().unwrap()
+            } else {
+                self.implicit_unit(location)
+            }
+        });
         self.expect_(CurR)?;
         Ok(Block { stmts, ret })
     }
@@ -268,6 +272,7 @@ impl<'a> Parse<'a> {
             |p| p.expect_(Slash).map(|_| BinOp::Div),
             |p| p.expect_(Ampersand).map(|_| BinOp::And),
             |p| p.expect_(Minus).map(|_| BinOp::Subtract),
+            |p| p.expect_(Star).map(|_| BinOp::Multiply),
         ])?;
         if res.priority() >= min_priority {
             Ok(res)

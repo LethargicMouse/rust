@@ -126,6 +126,16 @@ impl<'a> Parse<'a> {
             },
             |p| {
                 let lame = p.lame(true)?;
+                p.expect(Less)?;
+                let generics = p.sep(Self::typ).collect();
+                p.expect(More)?;
+                Ok(Field {
+                    name: lame.name,
+                    typ: Type::Name(lame, generics),
+                })
+            },
+            |p| {
+                let lame = p.lame(true)?;
                 Ok(Field {
                     name: lame.name,
                     typ: Type::from(lame),
