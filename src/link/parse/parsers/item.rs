@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{self, Extern, FunType, Header, Item, Lame, Prime, Struct, Type},
+    ast::{self, Extern, FunType, Header, Item, Lame, Prime, Struct, Type, TypeAlias},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -8,22 +8,33 @@ impl<'a> Parse<'a> {
     pub fn item(&mut self) -> Result<Item<'a>, Fail> {
         self.either(&[
             |p| Ok(p.fun_()?.into()),
-            |p| Ok(p.extrn_()?.into()),
+            |p| Ok(p.extern_()?.into()),
             |p| Ok(p.struct_()?.into()),
+            |p| Ok(p.type_alias_()?.into()),
         ])
         .or_else(|_| self.fail("item"))
+    }
+
+    fn type_alias_(&mut self) -> Result<TypeAlias<'a>, Fail> {
+        self.expect_(Name("type"))?;
+        let name = self.name(true)?;
+        self.expect(Equal)?;
+        let typ = self.typ()?;
+        self.expect(Semicolon)?;
+        Ok(TypeAlias { name, typ })
     }
 
     fn struct_(&mut self) -> Result<(&'a str, Struct<'a>), Fail> {
         self.expect_(Name("struct"))?;
         let name = self.name(true)?;
+        let generics = self.generics()?;
         self.expect(CurL)?;
         let fields = self.sep(Self::field).collect();
         self.expect(CurR)?;
-        Ok((name, Struct { fields }))
+        Ok((name, Struct { generics, fields }))
     }
 
-    fn extrn_(&mut self) -> Result<Extern<'a>, Fail> {
+    fn extern_(&mut self) -> Result<Extern<'a>, Fail> {
         self.expect_(Name("extern"))?;
         let name = self.name(true)?;
         self.expect(Colon)?;

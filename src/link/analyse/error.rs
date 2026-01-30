@@ -38,7 +38,23 @@ impl Display for NoField<'_> {
     }
 }
 
+pub struct NotStruct<'a> {
+    pub location: Location<'a>,
+    pub name: &'a str,
+}
+
+impl Display for NotStruct<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! {Reset}`{}`{Red} is not struct or enum variant{Reset}",
+            self.location, self.name
+        )
+    }
+}
+
 pub enum CheckError<'a> {
+    NS(NotStruct<'a>),
     NCas(NoCast<'a>),
     Snt(ShouldKnowType<'a>),
     ND(NotDeclared<'a>),
@@ -46,6 +62,12 @@ pub enum CheckError<'a> {
     NI(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<NotStruct<'a>> for CheckError<'a> {
+    fn from(v: NotStruct<'a>) -> Self {
+        Self::NS(v)
+    }
 }
 
 impl<'a> From<NoCast<'a>> for CheckError<'a> {
@@ -101,6 +123,7 @@ impl Display for CheckError<'_> {
             CheckError::WT(wrong_type) => write!(f, "{wrong_type}"),
             CheckError::Snt(should_know_type) => write!(f, "{should_know_type}"),
             CheckError::NCas(no_cast) => write!(f, "{no_cast}"),
+            CheckError::NS(not_struct) => write!(f, "{not_struct}"),
         }
     }
 }

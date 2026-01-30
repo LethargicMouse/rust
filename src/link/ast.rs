@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 use crate::Location;
 
 pub struct Ast<'a> {
+    pub type_aliases: HashMap<&'a str, Type<'a>>,
     pub begin: Location<'a>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub funs: Vec<Fun<'a>>,
@@ -15,6 +16,7 @@ pub struct Extern<'a> {
 }
 
 pub struct Struct<'a> {
+    pub generics: Vec<&'a str>,
     pub fields: Vec<Field<'a>>,
 }
 
@@ -24,9 +26,16 @@ pub struct Field<'a> {
 }
 
 pub enum Item<'a> {
+    TypeAlias(TypeAlias<'a>),
     Fun(Fun<'a>),
     Extern(Extern<'a>),
     Struct(&'a str, Struct<'a>),
+}
+
+impl<'a> From<TypeAlias<'a>> for Item<'a> {
+    fn from(v: TypeAlias<'a>) -> Self {
+        Self::TypeAlias(v)
+    }
 }
 
 impl<'a> From<(&'a str, Struct<'a>)> for Item<'a> {
@@ -98,7 +107,7 @@ pub struct FieldExpr<'a> {
     pub name_location: Location<'a>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Lame<'a> {
     pub name: &'a str,
     pub location: Location<'a>,
@@ -459,4 +468,9 @@ pub struct Array<'a> {
 pub struct NewField<'a> {
     pub lame: Lame<'a>,
     pub expr: Expr<'a>,
+}
+
+pub struct TypeAlias<'a> {
+    pub name: &'a str,
+    pub typ: Type<'a>,
 }

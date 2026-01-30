@@ -21,12 +21,16 @@ impl<'a> Parse<'a> {
         let mut funs = Vec::new();
         let mut externs = Vec::new();
         let mut structs = HashMap::new();
+        let mut type_aliases = HashMap::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(fun),
                 Item::Extern(extrn) => externs.push(extrn),
                 Item::Struct(name, r#struct) => {
                     structs.insert(name, r#struct);
+                }
+                Item::TypeAlias(type_alias) => {
+                    type_aliases.insert(type_alias.name, type_alias.typ);
                 }
             }
         }
@@ -36,6 +40,7 @@ impl<'a> Parse<'a> {
             funs,
             externs,
             structs,
+            type_aliases,
         })
     }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 pub struct Context<'a, T> {
-    sup: Vec<HashMap<&'a str, T>>,
+    pub sup: Vec<HashMap<&'a str, T>>,
 }
 
 impl<'a, T> Context<'a, T> {

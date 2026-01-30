@@ -1,15 +1,22 @@
-fn main() {
-  let x = "hey";
-  let a = x.substr(1, 2);
-  putstr(a);
+extern read: fn(i32, *u8, u64) u64;
+extern write: fn(i32, cstr, u64) u64;
+
+
+fn main(len: i32, buf: *cstr) {
+  
 }
 
-fn substr(str, left: u64, right: u64) str {
+type args = slice;
+
+fn substr(str, left: index, right: index) str {
   str {
     buf: str.buf + left,
     len: right - left
   }
 }
+
+type index = size;
+type size = u64;
 
 fn putiln(i64) {
   puti(i64);
@@ -32,10 +39,11 @@ fn puti_not_0(i64) {
   write(1, &c, 1);
 }
 
-struct str {
-  buf: *u8,
+type str = slice<u8>;
+type cstr = *u8;
+
+struct slice<t> {
+  buf: *t,
   len: u64
 }
 
-extern read: fn(i32, *u8, u64) u64;
-extern write: fn(i32, *u8, u64) u64;

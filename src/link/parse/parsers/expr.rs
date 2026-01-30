@@ -79,10 +79,19 @@ impl<'a> Parse<'a> {
     }
 
     fn new_field(&mut self) -> Result<NewField<'a>, Fail> {
-        let lame = self.lame(true)?;
-        self.expect(Colon)?;
-        let expr = self.expr(0)?;
-        Ok(NewField { lame, expr })
+        self.either(&[
+            |p| {
+                let lame = p.lame(true)?;
+                p.expect(Colon)?;
+                let expr = p.expr(0)?;
+                Ok(NewField { lame, expr })
+            },
+            |p| {
+                let lame = p.lame(true)?;
+                let expr = Expr::Var(lame);
+                Ok(NewField { lame, expr })
+            },
+        ])
     }
 
     fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
