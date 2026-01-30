@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     Location,
-    display::colors::{Red, Reset},
+    display::colors::{Blue, Red, Reset},
     link::analyse::Type,
 };
 
@@ -194,6 +194,7 @@ impl Display for WrongType<'_> {
 
 pub struct ShouldKnowType<'a> {
     pub location: Location<'a>,
+    pub typ: Type<'a>,
 }
 
 impl Display for ShouldKnowType<'_> {
@@ -202,7 +203,11 @@ impl Display for ShouldKnowType<'_> {
             f,
             "{}\n{Red}--! type should be known here{Reset}",
             self.location
-        )
+        )?;
+        if matches!(self.typ, Type::Unknown) {
+            return Ok(());
+        }
+        write!(f, "\n{Blue}--@ inferred type is {Reset}{}", self.typ)
     }
 }
 

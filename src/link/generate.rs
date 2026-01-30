@@ -19,7 +19,7 @@ struct Generate<'a> {
     types: Vec<ir::TypeDecl>,
     consts: Vec<Const>,
     funs: Vec<ir::Fun>,
-    type_infos: HashMap<&'a str, TypeDeclInfo>,
+    type_infos: HashMap<String, TypeDeclInfo>,
     asg: &'a Asg<'a>,
     booked: HashSet<String>,
 }
@@ -92,13 +92,42 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn abi_type(&self, typ: &Type<'a>) -> ir::AbiType {
         match typ {
-            Type::Name(name) => ir::AbiType::Name(name.to_string()),
+            Type::Name(name, generics) => {
+                let full_name = self.make_name(name, generics);
+                ir::AbiType::Name(full_name)
+            }
             Type::U64 => ir::Type::Long.into(),
             Type::I32 => ir::Type::Word.into(),
             Type::U8 => Signed::UnsignedByte.into(),
             Type::Cold(id) => self.abi_type(&self.sup.asg.info.types[*id]),
             Type::Generic(g) => self.abi_type(&self.generics[g]),
             Type::I64 => ir::Type::Long.into(),
+        }
+    }
+
+    fn make_name(&self, name: &str, generics: &[Type<'a>]) -> String {
+        let mut full_name = name.to_string();
+        for typ in generics {
+            self.add_to_name(&mut full_name, typ);
+        }
+        full_name
+    }
+
+    fn add_to_name(&self, full_name: &mut String, typ: &Type<'a>) {
+        match typ {
+            Type::Name(name, generics) => {
+                *full_name += "$";
+                *full_name += name;
+                for typ in generics {
+                    self.add_to_name(full_name, typ);
+                }
+            }
+            Type::Cold(id) => self.add_to_name(full_name, &self.sup.asg.info.types[*id]),
+            Type::Generic(g) => self.add_to_name(full_name, &self.generics[g]),
+            Type::U64 => *full_name += "$$ul",
+            Type::I32 => *full_name += "$$iw",
+            Type::U8 => *full_name += "$$ub",
+            Type::I64 => *full_name += "$$il",
         }
     }
 
@@ -180,9 +209,10 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn size(&mut self, typ: &Type<'a>) -> u32 {
         match typ {
-            Type::Name(name) => {
-                self.typ(name);
-                self.sup.type_infos[name].size
+            Type::Name(name, generics) => {
+                let full_name = self.make_name(name, generics);
+                self.typ(&full_name, name);
+                self.sup.type_infos[&full_name].size
             }
             Type::Cold(id) => self.size(&self.sup.asg.info.types[*id]),
             Type::Generic(g) => self.size(&self.generics[g]),
@@ -195,17 +225,18 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn align(&mut self, typ: &Type<'a>) -> u32 {
         match typ {
-            Type::Name(name) => {
-                self.typ(name);
-                self.sup.type_infos[name].align
+            Type::Name(name, generics) => {
+                let full_name = self.make_name(name, generics);
+                self.typ(&full_name, name);
+                self.sup.type_infos[&full_name].align
             }
             Type::Cold(id) => self.align(&self.sup.asg.info.types[*id]),
             _ => self.size(typ),
         }
     }
 
-    fn typ(&mut self, name: &'a str) {
-        if self.sup.type_infos.contains_key(name) {
+    fn typ(&mut self, full_name: &String, name: &str) {
+        if self.sup.type_infos.contains_key(full_name) {
             return;
         }
         let mut offset = 0;
@@ -222,11 +253,11 @@ impl<'a, 'b> GenFun<'a, 'b> {
             fields.push(self.abi_type(field));
         }
         self.sup.types.push(ir::TypeDecl {
-            name: name.into(),
+            name: full_name.clone(),
             fields,
         });
         self.sup.type_infos.insert(
-            name,
+            full_name.clone(),
             TypeDeclInfo {
                 offsets,
                 size: offset,
@@ -258,20 +289,21 @@ impl<'a, 'b> GenFun<'a, 'b> {
     fn field_ref(&mut self, field: &Field<'a>) -> Tmp {
         let from = self.expr_ref(&field.from);
         let off = self.new_tmp();
-        self.typ(field.struct_name);
-        let offset = self.int(self.sup.type_infos[field.struct_name].offsets[field.id] as i64);
+        let full_name = self.make_name(field.struct_name, &field.struct_generics);
+        self.typ(&full_name, field.struct_name);
+        let offset = self.int(self.sup.type_infos[&full_name].offsets[field.id] as i64);
         self.stmts
             .push(Stmt::Bin(off, ir::BinOp::Add, from, offset));
         off
     }
 
     fn field(&mut self, field: &Field<'a>) -> Tmp {
-        let typ = self.signed(&field.typ);
         let field_tmp = self.field_ref(field);
         if self.is_name(&field.typ) {
             return field_tmp;
         }
         let tmp = self.new_tmp();
+        let typ = self.signed(&field.typ);
         self.stmts.push(Stmt::Load(tmp, typ, field_tmp));
         tmp
     }
@@ -309,7 +341,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
 
     fn is_name(&self, typ: &Type<'a>) -> bool {
         match typ {
-            Type::Name(_) => true,
+            Type::Name(_, _) => true,
             Type::Cold(id) => self.is_name(&self.sup.asg.info.types[*id]),
             Type::Generic(g) => self.is_name(&self.generics[g]),
             _ => false,

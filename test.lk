@@ -3,7 +3,7 @@ extern write: fn(i32, cstr, u64) u64;
 
 
 fn main(len: i32, buf: *cstr) {
-  
+  "hey".substr(1, 2).putstr();
 }
 
 type args = slice;

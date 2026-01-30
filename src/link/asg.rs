@@ -45,6 +45,7 @@ pub struct Field<'a> {
     pub id: usize,
     pub typ: Type<'a>,
     pub struct_name: &'a str,
+    pub struct_generics: Vec<Type<'a>>,
 }
 
 #[derive(Debug)]
@@ -219,7 +220,7 @@ pub struct Deref<'a> {
 
 #[derive(Debug, Clone)]
 pub enum Type<'a> {
-    Name(&'a str),
+    Name(&'a str, Vec<Type<'a>>),
     Cold(usize),
     Generic(&'a str),
     U64,

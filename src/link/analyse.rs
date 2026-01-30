@@ -36,7 +36,7 @@ impl Display for FunType<'_> {
 #[derive(Clone, PartialEq, Default, Debug)]
 enum Type<'a> {
     Ptr(Box<Type<'a>>),
-    Name(&'a str),
+    Name(&'a str, Vec<Type<'a>>),
     Fun(Box<FunType<'a>>),
     Prime(Prime),
     #[default]
@@ -58,7 +58,17 @@ impl Display for Type<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Ptr(typ) => write!(f, "*{typ}"),
-            Type::Name(n) => write!(f, "{n}"),
+            Type::Name(n, gs) => {
+                write!(f, "{n}")?;
+                if gs.is_empty() {
+                    return Ok(());
+                }
+                write!(f, "<{}", gs[0])?;
+                for g in &gs[1..] {
+                    write!(f, ", {g}")?;
+                }
+                write!(f, ">")
+            }
             Type::Error => write!(f, "<error>"),
             Type::Fun(fun_type) => write!(f, "{fun_type}"),
             Type::Prime(prime) => write!(f, "{prime}"),
@@ -81,7 +91,7 @@ impl<'a> Type<'a> {
     fn is_number(&self) -> bool {
         match self {
             Type::Ptr(_) => false,
-            Type::Name(_) => false,
+            Type::Name(_, _) => false,
             Type::Fun(_) => false,
             Type::Prime(prime) => prime.is_number(),
             Type::Error => true,
@@ -169,7 +179,7 @@ impl<'a> Analyse<'a> {
     pub fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
         self.ast_structs = ast.structs;
         self.type_aliases = ast.type_aliases;
-        self.typ(ast::Type::Name(Lame {
+        self.typ(ast::Type::name(Lame {
             name: "str",
             location: ast.begin,
         }));
@@ -209,9 +219,33 @@ impl<'a> Analyse<'a> {
 
     fn hot_type(&mut self, typ: &Type<'a>, location: Location<'a>) -> asg::Type<'a> {
         self.try_hot_type(typ).unwrap_or_else(|| {
-            self.fail(ShouldKnowType { location });
+            let mut typ = typ.clone();
+            self.reveal(&mut typ);
+            self.fail(ShouldKnowType { location, typ });
             asg::Type::I32
         })
+    }
+
+    fn reveal(&self, typ: &mut Type<'a>) {
+        match typ {
+            Type::Ptr(typ) => self.reveal(typ),
+            Type::Name(_, generics) => {
+                for typ in generics {
+                    self.reveal(typ);
+                }
+            }
+            Type::Fun(fun_type) => {
+                for typ in &mut fun_type.params {
+                    self.reveal(typ);
+                }
+                self.reveal(&mut fun_type.ret_type)
+            }
+            Type::Var(id) => {
+                *typ = self.types[*id].clone();
+                self.reveal(typ)
+            }
+            _ => {}
+        }
     }
 
     fn expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
@@ -296,23 +330,25 @@ impl<'a> Analyse<'a> {
     }
 
     fn new_expr(&mut self, new: New<'a>) -> Typed<'a, asg::Expr<'a>> {
-        let typ = self.typ(ast::Type::Name(new.lame));
-        let name = match self.type_name(&typ) {
+        let typ = self.typ(ast::Type::name(new.lame));
+        if matches!(typ, Type::Error) {
+            return self.fake_expr();
+        }
+        let (name, generics) = match self.type_name(typ) {
             Some(name) => name,
             None => {
-                if !matches!(typ, Type::Error) {
-                    self.fail(NotStruct {
-                        location: new.lame.location,
-                        name: new.lame.name,
-                    });
-                }
+                self.fail(NotStruct {
+                    location: new.lame.location,
+                    name: new.lame.name,
+                });
                 return self.fake_expr();
             }
         };
         self.type_context.new_layer();
-        for &generic in &self.structs[name].generics {
+        for (index, &generic) in self.structs[name].generics.iter().enumerate() {
             let id = self.types.len();
-            self.types.push(Type::Unknown);
+            self.types
+                .push(generics.get(index).cloned().unwrap_or(Type::Unknown));
             self.type_context.insert(generic, Type::Var(id));
         }
         let exprs = new
@@ -332,7 +368,10 @@ impl<'a> Analyse<'a> {
             })
             .collect();
         self.type_context.pop_layer();
-        typed(asg::Expr::Tuple(Tuple { exprs }), typ)
+        typed(
+            asg::Expr::Tuple(Tuple { exprs }),
+            Type::Name(name, generics),
+        )
     }
 
     fn assign(&mut self, assign: Assign<'a>) -> Typed<'a, asg::Assign<'a>> {
@@ -355,21 +394,23 @@ impl<'a> Analyse<'a> {
     }
 
     fn field(&mut self, field_expr: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
-        let (from, typ) = self.expr(field_expr.from).into();
+        let expr_location = field_expr.expr.location();
+        let (expr, typ) = self.expr(field_expr.expr).into();
         if matches!(typ, Type::Error) {
             return Err(Fail);
         }
-        let name = self.type_name(&typ).ok_or_else(|| {
+        let (name, generics) = self.type_name(typ.clone()).ok_or_else(|| {
             self.fail(NoField {
                 location: field_expr.name_location,
                 name: field_expr.name,
-                typ: typ.clone(),
+                typ,
             })
         })?;
         self.type_context.new_layer();
-        for generic in &self.structs[name].generics {
+        for (index, generic) in self.structs[name].generics.iter().enumerate() {
             let id = self.types.len();
-            self.types.push(Type::Unknown);
+            self.types
+                .push(generics.get(index).cloned().unwrap_or(Type::Unknown));
             self.type_context.insert(generic, Type::Var(id));
         }
         let Field { mut typ, id } = match self.structs[name].fields.get(field_expr.name) {
@@ -377,27 +418,33 @@ impl<'a> Analyse<'a> {
             None => Err(self.fail(NoField {
                 location: field_expr.name_location,
                 name: field_expr.name,
-                typ,
+                typ: Type::Name(name, generics),
             })),
         }?
         .clone();
         self.specify(&mut typ);
-        self.type_context.pop_layer();
+        let struct_generics = self
+            .type_context
+            .pop_layer()
+            .into_values()
+            .map(|typ| self.asg_type(&typ, expr_location))
+            .collect();
         Ok(typed(
             asg::Field {
-                from,
+                from: expr,
                 id,
                 typ: self.asg_type(&typ, field_expr.name_location),
                 struct_name: name,
+                struct_generics,
             },
             typ,
         ))
     }
 
-    fn type_name(&self, typ: &Type<'a>) -> Option<&'a str> {
+    fn type_name(&self, typ: Type<'a>) -> Option<(&'a str, Vec<Type<'a>>)> {
         match typ {
-            Type::Name(name) => Some(name),
-            Type::Var(id) => self.type_name(&self.types[*id]),
+            Type::Name(name, generics) => Some((name, generics)),
+            Type::Var(id) => self.type_name(self.types[id].clone()),
             _ => None,
         }
     }
@@ -596,16 +643,21 @@ impl<'a> Analyse<'a> {
     }
 
     fn specify_fun_type(&mut self, fun_type: &mut FunType<'a>) {
+        self.type_context.new_layer();
+        for generic in &fun_type.generics {
+            self.type_context.insert(generic, Type::Generic(generic));
+        }
         for param in &mut fun_type.params {
             self.specify(param);
         }
-        self.specify(&mut fun_type.ret_type)
+        self.specify(&mut fun_type.ret_type);
+        self.type_context.pop_layer();
     }
 
     fn specify(&mut self, typ: &mut Type<'a>) {
         match typ {
             Type::Ptr(typ) => self.specify(typ),
-            Type::Name(_) => {}
+            Type::Name(_, _) => {}
             Type::Fun(fun_type) => self.specify_fun_type(fun_type),
             Type::Prime(_) => {}
             Type::Error => {}
@@ -692,7 +744,10 @@ impl<'a> Analyse<'a> {
         match literal {
             Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
             Literal::Int(i) => typed(asg::Literal::Int(i), self.new_type_var(Type::Number)),
-            Literal::Str(s) => typed(asg::Literal::Str(s), Type::Name("slice")),
+            Literal::Str(s) => typed(
+                asg::Literal::Str(s),
+                Type::Name("slice", vec![Prime::U8.into()]),
+            ),
             Literal::Bool(b) => typed(asg::Literal::Int(b as i64), Prime::Bool.into()),
         }
     }
@@ -703,27 +758,28 @@ impl<'a> Analyse<'a> {
         Type::Var(id)
     }
 
-    fn lame_type(&mut self, Lame { name, location }: Lame<'a>) -> Type<'a> {
-        if let Some(typ) = self.type_context.get(name) {
+    fn lame_type(&mut self, lame: Lame<'a>, generics: Vec<ast::Type<'a>>) -> Type<'a> {
+        let generics = generics.into_iter().map(|t| self.typ(t)).collect();
+        if let Some(typ) = self.type_context.get(lame.name) {
             typ.clone()
-        } else if let Some(typ) = self.type_aliases.remove(name) {
+        } else if let Some(typ) = self.type_aliases.remove(lame.name) {
             let typ = self.typ(typ);
-            self.type_context.sup[0].insert(name, typ.clone());
+            self.type_context.sup[0].insert(lame.name, typ.clone());
             typ
-        } else if self.structs.contains_key(name) {
-            Type::Name(name)
-        } else if self.corrupt.contains(name) {
+        } else if self.structs.contains_key(lame.name) {
+            Type::Name(lame.name, generics)
+        } else if self.corrupt.contains(lame.name) {
             Type::Error
-        } else if let Some(r#struct) = self.ast_structs.remove(name) {
-            self.r#struct(name, r#struct);
-            Type::Name(name)
+        } else if let Some(r#struct) = self.ast_structs.remove(lame.name) {
+            self.r#struct(lame.name, r#struct);
+            Type::Name(lame.name, generics)
         } else {
-            self.corrupt.insert(name);
+            self.corrupt.insert(lame.name);
             self.errors.push(
                 NotDeclared {
-                    location,
+                    location: lame.location,
                     kind: "type item",
-                    name,
+                    name: lame.name,
                 }
                 .into(),
             );
@@ -755,7 +811,7 @@ impl<'a> Analyse<'a> {
     fn typ(&mut self, typ: ast::Type<'a>) -> Type<'a> {
         match typ {
             ast::Type::Ptr(t, _) => Type::Ptr(Box::new(self.typ(*t))),
-            ast::Type::Name(lame) => self.lame_type(lame),
+            ast::Type::Name(lame, generics) => self.lame_type(lame, generics),
             ast::Type::Fun(fun_type) => self.fun_type(*fun_type).into(),
             ast::Type::Prime(prime, _) => Type::Prime(prime),
         }
@@ -819,7 +875,13 @@ impl<'a> Analyse<'a> {
     fn try_hot_type(&self, typ: &Type<'a>) -> Option<asg::Type<'a>> {
         match typ {
             Type::Ptr(_) => Some(asg::Type::U64),
-            Type::Name(name) => Some(asg::Type::Name(name)),
+            Type::Name(name, generics) => Some(asg::Type::Name(
+                name,
+                generics
+                    .iter()
+                    .map(|t| self.try_hot_type(t))
+                    .collect::<Option<_>>()?,
+            )),
             Type::Fun(_) => Some(asg::Type::U64),
             Type::Prime(prime) => Some(self.asg_prime(prime)),
             Type::Error => Some(asg::Type::I32),

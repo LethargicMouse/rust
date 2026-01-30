@@ -130,7 +130,7 @@ impl<'a> Parse<'a> {
                 }
                 Postfix::Field(name, name_location) => {
                     res = FieldExpr {
-                        from: res,
+                        expr: res,
                         name,
                         name_location,
                     }

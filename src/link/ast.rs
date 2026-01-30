@@ -102,7 +102,7 @@ pub struct Let<'a> {
 }
 
 pub struct FieldExpr<'a> {
-    pub from: Expr<'a>,
+    pub expr: Expr<'a>,
     pub name: &'a str,
     pub name_location: Location<'a>,
 }
@@ -330,7 +330,7 @@ pub struct Get<'a> {
 #[derive(Clone)]
 pub enum Type<'a> {
     Ptr(Box<Type<'a>>, Location<'a>),
-    Name(Lame<'a>),
+    Name(Lame<'a>, Vec<Type<'a>>),
     Fun(Box<FunType<'a>>),
     Prime(Prime, Location<'a>),
 }
@@ -339,9 +339,20 @@ impl<'a> Type<'a> {
     pub fn location(&self) -> Location<'a> {
         match self {
             Type::Ptr(_, location) => *location,
-            Type::Name(lame) => lame.location,
+            Type::Name(lame, _) => lame.location,
             Type::Fun(fun_type) => fun_type.location,
             Type::Prime(_, location) => *location,
+        }
+    }
+
+    pub fn name(lame: Lame<'a>) -> Self {
+        Self::Name(lame, Vec::new())
+    }
+
+    pub fn get_name(&self) -> Option<&'a str> {
+        match self {
+            Type::Name(n, _) => Some(n.name),
+            _ => None,
         }
     }
 }
@@ -409,7 +420,7 @@ impl<'a> From<Lame<'a>> for Type<'a> {
         if let Some(prime) = Prime::from_name(v.name) {
             Self::Prime(prime, v.location)
         } else {
-            Self::Name(v)
+            Self::name(v)
         }
     }
 }
@@ -417,15 +428,6 @@ impl<'a> From<Lame<'a>> for Type<'a> {
 impl<'a> From<FunType<'a>> for Type<'a> {
     fn from(v: FunType<'a>) -> Self {
         Self::Fun(Box::new(v))
-    }
-}
-
-impl<'a> Type<'a> {
-    pub fn name(&self) -> Option<&'a str> {
-        match self {
-            Type::Name(n) => Some(n.name),
-            _ => None,
-        }
     }
 }
 

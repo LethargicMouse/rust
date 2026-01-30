@@ -79,6 +79,13 @@ impl<'a> Parse<'a> {
                 let typ = p.typ()?;
                 Ok(Type::Ptr(Box::new(typ), location))
             },
+            |p| {
+                let lame = p.lame(false)?;
+                p.expect(Less)?;
+                let generics = p.sep(Self::typ).collect();
+                p.expect(More)?;
+                Ok(Type::Name(lame, generics))
+            },
             |p| Ok(p.lame(false)?.into()),
         ])
         .or_else(|_| self.fail("type"))
