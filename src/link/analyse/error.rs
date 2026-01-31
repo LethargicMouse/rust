@@ -54,6 +54,7 @@ impl Display for NotStruct<'_> {
 }
 
 pub enum CheckError<'a> {
+    Naf(NotAllFields<'a>),
     NS(NotStruct<'a>),
     NCas(NoCast<'a>),
     Snt(ShouldKnowType<'a>),
@@ -62,6 +63,12 @@ pub enum CheckError<'a> {
     NI(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<NotAllFields<'a>> for CheckError<'a> {
+    fn from(v: NotAllFields<'a>) -> Self {
+        Self::Naf(v)
+    }
 }
 
 impl<'a> From<NotStruct<'a>> for CheckError<'a> {
@@ -124,6 +131,7 @@ impl Display for CheckError<'_> {
             CheckError::Snt(should_know_type) => write!(f, "{should_know_type}"),
             CheckError::NCas(no_cast) => write!(f, "{no_cast}"),
             CheckError::NS(not_struct) => write!(f, "{not_struct}"),
+            CheckError::Naf(not_all_fields) => write!(f, "{not_all_fields}"),
         }
     }
 }
@@ -224,5 +232,24 @@ impl Display for NoCast<'_> {
             "{}\n{Red}--! cannot cast {Reset}{}{Red} into {Reset}{}",
             self.location, self.from, self.to
         )
+    }
+}
+
+pub struct NotAllFields<'a> {
+    pub location: Location<'a>,
+    pub rest: Vec<&'a str>,
+}
+
+impl Display for NotAllFields<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! some fields are not declared:{Blue}",
+            self.location
+        )?;
+        for field in &self.rest {
+            write!(f, "\n    - {Reset}{field}{Blue}")?;
+        }
+        write!(f, "{Reset}")
     }
 }

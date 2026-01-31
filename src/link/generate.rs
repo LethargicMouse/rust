@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    link::{Context, asg::*},
+    link::{Context, analyse::DEBUG, asg::*},
     qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Unsigned, Value},
 };
 
@@ -38,8 +38,7 @@ impl<'a> Generate<'a> {
 
     fn run(mut self) -> IR {
         let fun = &self.asg.funs["main"];
-        let generics = &self.asg.main_generics;
-        let main = GenFun::new(&mut self, generics).run("main", fun);
+        let main = GenFun::new(&mut self, &HashMap::new()).run("main", fun);
         self.funs.push(main);
         IR {
             types: self.types,
@@ -49,17 +48,17 @@ impl<'a> Generate<'a> {
     }
 }
 
-struct GenFun<'a, 'b> {
+struct GenFun<'a, 'b, 'c> {
     sup: &'b mut Generate<'a>,
     stmts: Vec<Stmt>,
     tmp: Tmp,
     label: u16,
     context: Context<'a, (Tmp, Type<'a>)>,
-    generics: &'a HashMap<&'a str, Type<'a>>,
+    generics: &'c HashMap<&'a str, Type<'a>>,
 }
 
-impl<'a, 'b> GenFun<'a, 'b> {
-    fn new(sup: &'b mut Generate<'a>, generics: &'a HashMap<&'a str, Type<'a>>) -> Self {
+impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
+    fn new(sup: &'b mut Generate<'a>, generics: &'c HashMap<&'a str, Type<'a>>) -> Self {
         Self {
             stmts: Vec::new(),
             context: Context::new(),
@@ -71,10 +70,18 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn run(mut self, name: &str, fun: &'a Fun<'a>) -> ir::Fun {
+        if DEBUG {
+            eprintln!("> generating fn {name}");
+        }
         let params = fun
             .params
             .iter()
-            .map(|(_, typ)| (self.abi_type(typ), self.new_tmp()))
+            .map(|(name, typ)| {
+                if DEBUG {
+                    eprintln!("> param {name}");
+                }
+                (self.abi_type(&self.heat_up(typ)), self.new_tmp())
+            })
             .collect();
         for ((param, typ), &(_, tmp)) in fun.params.iter().zip(&params) {
             let tmp = self.store(tmp, typ);
@@ -82,8 +89,15 @@ impl<'a, 'b> GenFun<'a, 'b> {
         }
         let tmp = self.expr(&fun.body);
         self.stmts.push(Stmt::Ret(tmp));
+        if DEBUG {
+            eprintln!("> ret type");
+        }
+        let ret_type = self.abi_type(&self.heat_up(&fun.ret_type));
+        if DEBUG {
+            eprintln!("> out fn {name}");
+        }
         ir::Fun {
-            ret_type: self.abi_type(&fun.ret_type),
+            ret_type,
             name: name.into(),
             params,
             stmts: self.stmts,
@@ -91,6 +105,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn abi_type(&self, typ: &Type<'a>) -> ir::AbiType {
+        if DEBUG {
+            eprintln!("> abi_type {typ:?}");
+        }
         match typ {
             Type::Name(name, generics) => {
                 let full_name = self.make_name(name, generics);
@@ -99,8 +116,8 @@ impl<'a, 'b> GenFun<'a, 'b> {
             Type::U64 => ir::Type::Long.into(),
             Type::I32 => ir::Type::Word.into(),
             Type::U8 => Signed::UnsignedByte.into(),
-            Type::Cold(id) => self.abi_type(&self.sup.asg.info.types[*id]),
-            Type::Generic(g) => self.abi_type(&self.generics[g]),
+            Type::Cold(_) => unreachable!(),
+            Type::Generic(_) => unreachable!(),
             Type::I64 => ir::Type::Long.into(),
         }
     }
@@ -122,8 +139,8 @@ impl<'a, 'b> GenFun<'a, 'b> {
                     self.add_to_name(full_name, typ);
                 }
             }
-            Type::Cold(id) => self.add_to_name(full_name, &self.sup.asg.info.types[*id]),
-            Type::Generic(g) => self.add_to_name(full_name, &self.generics[g]),
+            Type::Cold(_) => unreachable!(),
+            Type::Generic(_) => unreachable!(),
             Type::U64 => *full_name += "$$ul",
             Type::I32 => *full_name += "$$iw",
             Type::U8 => *full_name += "$$ub",
@@ -158,8 +175,8 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.int(0)
     }
 
-    fn ref_expr(&mut self, ref_expr: &Ref<'a>) -> Tmp {
-        self.expr_ref(&ref_expr.expr)
+    fn ref_expr(&mut self, ref_expr: &'a Ref<'a>) -> Tmp {
+        self.expr_ref(&ref_expr.expr, &ref_expr.expr_typ)
     }
 
     fn loop_expr(&mut self, loop_expr: &'a Loop<'a>) -> Tmp {
@@ -193,21 +210,24 @@ impl<'a, 'b> GenFun<'a, 'b> {
             self.stmts
                 .push(Stmt::Bin(with_offset, ir::BinOp::Add, tmp, offset_tmp));
             let size = self.size(typ);
-            self.copy(with_offset, expr, size);
+            self.put(with_offset, expr, size);
             offset += size;
         }
         tmp
     }
 
     fn assign(&mut self, assign: &'a Assign<'a>) -> Tmp {
-        let to = self.expr_ref(&assign.to);
+        let to = self.expr_ref(&assign.to, &assign.expr_type);
         let expr = self.expr(&assign.expr);
         let size = self.size(&assign.expr_type);
-        self.copy(to, expr, size);
+        self.put(to, expr, size);
         expr
     }
 
     fn size(&mut self, typ: &Type<'a>) -> u32 {
+        if DEBUG {
+            eprintln!("> size {typ:?}");
+        }
         match typ {
             Type::Name(name, generics) => {
                 let full_name = self.make_name(name, generics);
@@ -224,6 +244,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn align(&mut self, typ: &Type<'a>) -> u32 {
+        if DEBUG {
+            eprintln!("> align {typ:?}");
+        }
         match typ {
             Type::Name(name, generics) => {
                 let full_name = self.make_name(name, generics);
@@ -236,6 +259,9 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn typ(&mut self, full_name: &String, name: &str) {
+        if DEBUG {
+            eprintln!("> making typ {full_name}");
+        }
         if self.sup.type_infos.contains_key(full_name) {
             return;
         }
@@ -266,7 +292,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         );
     }
 
-    fn copy(&mut self, to: Tmp, from: Tmp, size: u32) {
+    fn put(&mut self, to: Tmp, from: Tmp, size: u32) {
         let stmt = match size {
             1 => Stmt::Store(Unsigned::Byte, from, to),
             2 => Stmt::Store(Unsigned::Half, from, to),
@@ -277,27 +303,36 @@ impl<'a, 'b> GenFun<'a, 'b> {
         self.stmts.push(stmt);
     }
 
-    fn expr_ref(&mut self, expr: &Expr<'a>) -> Tmp {
+    fn expr_ref(&mut self, expr: &'a Expr<'a>, typ: &Type<'a>) -> Tmp {
         match expr {
             Expr::Var(s) => self.var_ref(s).0,
             Expr::Field(field) => self.field_ref(field),
-            Expr::Literal(Literal::Str(s)) => self.str(s),
-            e => unreachable!("{e:?}"),
+            e => {
+                let tmp = self.expr(e);
+                self.store(tmp, typ)
+            }
         }
     }
 
-    fn field_ref(&mut self, field: &Field<'a>) -> Tmp {
-        let from = self.expr_ref(&field.from);
+    fn field_ref(&mut self, field: &'a Field<'a>) -> Tmp {
+        if DEBUG {
+            eprintln!("> {field:?}");
+        }
+        let from = self.expr_ref(&field.from, &field.from_type);
+        let (name, generics) = match self.heat_up(&field.from_type) {
+            Type::Name(name, generics) => (name, generics),
+            _ => unreachable!(),
+        };
         let off = self.new_tmp();
-        let full_name = self.make_name(field.struct_name, &field.struct_generics);
-        self.typ(&full_name, field.struct_name);
+        let full_name = self.make_name(name, &generics);
+        self.typ(&full_name, name);
         let offset = self.int(self.sup.type_infos[&full_name].offsets[field.id] as i64);
         self.stmts
             .push(Stmt::Bin(off, ir::BinOp::Add, from, offset));
         off
     }
 
-    fn field(&mut self, field: &Field<'a>) -> Tmp {
+    fn field(&mut self, field: &'a Field<'a>) -> Tmp {
         let field_tmp = self.field_ref(field);
         if self.is_name(&field.typ) {
             return field_tmp;
@@ -335,7 +370,7 @@ impl<'a, 'b> GenFun<'a, 'b> {
         let res = self.new_tmp();
         let size = self.size(typ);
         self.stmts.push(Stmt::Alloc(res, size, size));
-        self.copy(res, tmp, size);
+        self.put(res, tmp, size);
         res
     }
 
@@ -395,19 +430,33 @@ impl<'a, 'b> GenFun<'a, 'b> {
     }
 
     fn call(&mut self, call: &'a Call<'a>) -> Tmp {
+        if DEBUG {
+            eprintln!("> {call:?}");
+        }
         let name: String = call.name.into();
         if let Some(fun) = self.sup.asg.funs.get(name.as_str())
             && !self.sup.booked.contains(name.as_str())
         {
             self.sup.booked.insert(name.clone());
-            let fun = GenFun::new(self.sup, &call.generics).run(&name, fun);
+            let generics = &call
+                .generics
+                .iter()
+                .map(|(&n, t)| (n, self.heat_up(t)))
+                .collect();
+            let fun = GenFun::new(self.sup, generics).run(&name, fun);
             self.sup.funs.push(fun);
         }
-        let ret_type = self.abi_type(&call.ret_type);
+        if DEBUG {
+            eprintln!("> ret type");
+        }
+        let ret_type = self.abi_type(&self.heat_up(&call.ret_type));
+        if DEBUG {
+            eprintln!("> args");
+        }
         let args = call
             .args
             .iter()
-            .map(|(typ, expr)| (self.abi_type(typ), self.expr(expr)))
+            .map(|(typ, expr)| (self.abi_type(&self.heat_up(typ)), self.expr(expr)))
             .collect();
         let tmp = self.new_tmp();
         self.stmts.push(
@@ -420,6 +469,18 @@ impl<'a, 'b> GenFun<'a, 'b> {
             .into(),
         );
         tmp
+    }
+
+    fn heat_up(&self, typ: &Type<'a>) -> Type<'a> {
+        match typ {
+            Type::Cold(id) => self.heat_up(&self.sup.asg.info.types[*id]),
+            Type::Generic(g) => self.heat_up(&self.generics[g]),
+            Type::Name(name, generics) => {
+                let generics = generics.iter().map(|typ| self.heat_up(typ)).collect();
+                Type::Name(name, generics)
+            }
+            typ => typ.clone(),
+        }
     }
 
     fn new_tmp(&mut self) -> Tmp {

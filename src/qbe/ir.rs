@@ -165,7 +165,7 @@ impl Display for Stmt {
             Stmt::Label(l) => write!(f, "@l{l}"),
             Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} =l load{typ} %t{l}"),
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
-            Stmt::Blit(a, b, c) => write!(f, "blit %t{a}, %t{b}, {c}"),
+            Stmt::Blit(a, b, c) => write!(f, "blit %t{b}, %t{a}, {c}"),
             Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),
             Stmt::Store(t, a, b) => write!(f, "store{t} %t{a}, %t{b}"),
         }

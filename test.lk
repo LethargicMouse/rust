@@ -1,18 +1,28 @@
-extern read: fn(i32, *u8, u64) u64;
-extern write: fn(i32, cstr, u64) u64;
+extern read: fn(fd, cstr, size) size;
+extern write: fn(fd, cstr, size) size;
+extern realloc: fn<t>(*t, size, size) *t;
+extern malloc: fn<t>(size) *t;
 
+type fd = i32;
 
-fn main(len: i32, buf: *cstr) {
-  "your mom".words()[0].putstr();
+fn main() {
+  "your mom".words().nth(2).putstr();
 }
 
-fn words(str) arr<str> {
+struct words {
+
+}
+
+fn words(str) words {
   let left = 0;
   let right = 1;
   let result = empty_vec();
   loop {
-    if (right == str.len) return result;
-    if (str.buf[right] == space) {
+    if (right == str.len) { 
+      result.push(str.substr(left, right));
+      return result; 
+    }
+    if (str.buf[right] == 32) {
       result.push(str.substr(left, right));
       left = right + 1;
     }
@@ -20,19 +30,33 @@ fn words(str) arr<str> {
   }
 }
 
-fn push<t>(vec<t>, t) {
+fn empty_vec<t>() vec<t> {
+  vec {
+    buf: 0,
+    len: 0,
+    cap: 0
+  }
+}
+
+struct vec<t> {
+  buf: *t,
+  cap: size,
+  len: size
+}
+
+fn push<t>(&vec<t>, t) {
   if (vec.len == vec.cap) vec.grow();
   vec.buf[vec.len] = t;
   vec.len = vec.len + 1;
 }
 
-fn grow<t>(vec<t>) {
+fn grow<t>(&vec<t>) {
   if (vec.cap == 0) {
     vec.cap = 8;
     vec.buf = malloc(8 * @size t);
   } else {
     let new_cap = vec.cap * 2;
-    vec.buf = realloc(vec.buf, vec.cap, new_cap);
+    vec.buf = realloc(vec.buf, vec.cap * @size t, new_cap * @size t);
     vec.cap = new_cap;
   }
 }
@@ -73,7 +97,7 @@ fn putc(u8) {
   write(1, &u8, 1);
 }
 
-type str = slice<u8>;
+type str = arr<u8>;
 type cstr = *u8;
 
 struct arr<t> {

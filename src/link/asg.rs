@@ -16,7 +16,6 @@ pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub info: Info<'a>,
-    pub main_generics: HashMap<&'a str, Type<'a>>, // i fucking HATE this FUCKING language
 }
 
 pub struct Fun<'a> {
@@ -44,8 +43,7 @@ pub struct Field<'a> {
     pub from: Expr<'a>,
     pub id: usize,
     pub typ: Type<'a>,
-    pub struct_name: &'a str,
-    pub struct_generics: Vec<Type<'a>>,
+    pub from_type: Type<'a>,
 }
 
 #[derive(Debug)]
@@ -64,6 +62,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> Default for Expr<'a> {
+    fn default() -> Self {
+        Self::Literal(Literal::Int(0))
+    }
 }
 
 impl<'a> From<Deref<'a>> for Expr<'a> {
@@ -205,6 +209,7 @@ pub struct Loop<'a> {
 #[derive(Debug)]
 pub struct Ref<'a> {
     pub expr: Expr<'a>,
+    pub expr_typ: Type<'a>,
 }
 
 #[derive(Debug)]
@@ -218,12 +223,13 @@ pub struct Deref<'a> {
     pub typ: Type<'a>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Type<'a> {
     Name(&'a str, Vec<Type<'a>>),
     Cold(usize),
     Generic(&'a str),
     U64,
+    #[default]
     I32,
     U8,
     I64,

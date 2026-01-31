@@ -77,7 +77,15 @@ impl<'a> Parse<'a> {
                 let location = p.here();
                 p.expect_(Star)?;
                 let typ = p.typ()?;
-                Ok(Type::Ptr(Box::new(typ), location))
+                let other = typ.location();
+                Ok(Type::Ptr(Box::new(typ), location.combine(other)))
+            },
+            |p| {
+                let location = p.here();
+                p.expect_(Ampersand)?;
+                let typ = p.typ()?;
+                let other = typ.location();
+                Ok(Type::Ref(Box::new(typ), location.combine(other)))
             },
             |p| {
                 let lame = p.lame(false)?;
@@ -125,21 +133,9 @@ impl<'a> Parse<'a> {
                 Ok(Field { name, typ })
             },
             |p| {
-                let lame = p.lame(true)?;
-                p.expect(Less)?;
-                let generics = p.sep(Self::typ).collect();
-                p.expect(More)?;
-                Ok(Field {
-                    name: lame.name,
-                    typ: Type::Name(lame, generics),
-                })
-            },
-            |p| {
-                let lame = p.lame(true)?;
-                Ok(Field {
-                    name: lame.name,
-                    typ: Type::from(lame),
-                })
+                let typ = p.typ()?;
+                let name = typ.get_name();
+                Ok(Field { name, typ })
             },
         ])
     }

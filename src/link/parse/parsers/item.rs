@@ -27,7 +27,7 @@ impl<'a> Parse<'a> {
     fn struct_(&mut self) -> Result<(&'a str, Struct<'a>), Fail> {
         self.expect_(Name("struct"))?;
         let name = self.name(true)?;
-        let generics = self.generics()?;
+        let generics = self.maybe(Self::generics).unwrap_or_default();
         self.expect(CurL)?;
         let fields = self.sep(Self::field).collect();
         self.expect(CurR)?;

@@ -331,6 +331,7 @@ pub struct Get<'a> {
 
 #[derive(Clone)]
 pub enum Type<'a> {
+    Ref(Box<Type<'a>>, Location<'a>),
     Ptr(Box<Type<'a>>, Location<'a>),
     Name(Lame<'a>, Vec<Type<'a>>),
     Fun(Box<FunType<'a>>),
@@ -344,6 +345,7 @@ impl<'a> Type<'a> {
             Type::Name(lame, _) => lame.location,
             Type::Fun(fun_type) => fun_type.location,
             Type::Prime(_, location) => *location,
+            Type::Ref(_, location) => *location,
         }
     }
 
@@ -351,10 +353,13 @@ impl<'a> Type<'a> {
         Self::Name(lame, Vec::new())
     }
 
-    pub fn get_name(&self) -> Option<&'a str> {
+    pub fn get_name(&self) -> &'a str {
         match self {
-            Type::Name(n, _) => Some(n.name),
-            _ => None,
+            Type::Ptr(typ, _) => typ.get_name(),
+            Type::Name(lame, _) => lame.name,
+            Type::Fun(_) => "fun",
+            Type::Prime(prime, _) => prime.get_name(),
+            Type::Ref(typ, _) => typ.get_name(),
         }
     }
 }
@@ -370,6 +375,17 @@ pub enum Prime {
 }
 
 impl Prime {
+    fn get_name(&self) -> &'static str {
+        match self {
+            Prime::Unit => "unit",
+            Prime::Bool => "bool",
+            Prime::I32 => "i32",
+            Prime::I64 => "i64",
+            Prime::U8 => "u8",
+            Prime::U64 => "u64",
+        }
+    }
+
     fn from_name(name: &str) -> Option<Self> {
         match name {
             "i32" => Some(Prime::I32),
