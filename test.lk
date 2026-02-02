@@ -5,30 +5,57 @@ extern malloc: fn<t>(size) *t;
 
 type fd = i32;
 
-fn main() {
-  "your mom".words().nth(2).putstr();
+fn main() 
+  do "your mom".words().nth(1).putstrln()
+
+fn nth(words, index) word
+  do words.skip(index).next()
+
+fn skip(words, size) words
+  do loop if (size == 0)
+    return words
+  else {
+    words.next();
+    size = size - 1;
+  }
+
+fn putstrln(str) {
+  putstr(str);
+  putc(10);
 }
 
 struct words {
-
+  str
 }
 
-fn words(str) words {
-  let left = 0;
-  let right = 1;
-  let result = empty_vec();
-  loop {
-    if (right == str.len) { 
-      result.push(str.substr(left, right));
-      return result; 
-    }
-    if (str.buf[right] == 32) {
-      result.push(str.substr(left, right));
-      left = right + 1;
-    }
-    right = right + 1;
+fn words(str) words 
+  do words { str }
+
+fn next(&words) word {
+  let right = 0;
+  loop if (right == words.str.len)
+    return words.str.drop(right)
+  else if (words.str.buf[right] == 32) { 
+    let res = words.str.drop(right);
+    words.str.drop(1); -- space
+    return res
+  } else
+    right = right + 1
+}
+
+fn drop(&str, size) str {
+  let res = str.clone().substr(0, size);
+  str = str.clone().substr(size, str.len);
+  res
+}
+
+fn clone(&str) str 
+  do str {
+    buf: str.buf, 
+    len: str.len
   }
-}
+
+type word = str;
 
 fn empty_vec<t>() vec<t> {
   vec {

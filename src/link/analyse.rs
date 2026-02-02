@@ -13,7 +13,7 @@ use crate::{
         Asg, Context,
         analyse::error::{
             CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NotAllFields, NotDeclared,
-            NotStruct, WrongType,
+            NotStruct, SemicolonEndBlock, WrongType,
         },
         asg::{self, Tuple},
         ast::{self, *},
@@ -246,6 +246,7 @@ impl<'a> Analyse<'a> {
             Expr::Return(ret) => self.ret(*ret).map_into(),
             Expr::Cast(cast) => self.cast(*cast),
             Expr::Array(array) => self.array(array).map_into(),
+            Expr::ImplicitUnit(_) => self.literal(Literal::Unit).map_into(),
         }
     }
 
@@ -305,7 +306,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
-        let body = self.block(loop_expr.body).sup;
+        let body = self.block(loop_expr.body.into()).sup;
         typed(asg::Loop { body }, Type::Unreachable)
     }
 
@@ -365,16 +366,33 @@ impl<'a> Analyse<'a> {
 
     fn assign(&mut self, assign: Assign<'a>) -> Typed<'a, asg::Assign<'a>> {
         let location = assign.expr.location();
-        let (expr, typ) = self.expr(assign.expr).into();
+        let (expr, expr_typ) = self.expr(assign.expr).into();
         let (to, to_typ) = self.expr(assign.to).into();
-        let typ = self.unify(location, to_typ, typ);
+        let needs_deref = self.is_ref(&to_typ) && !self.is_ref(&expr_typ);
+        let typ_ = self.unify(location, to_typ, expr_typ);
+        let typ = if needs_deref {
+            match &typ_ {
+                Type::Ref(typ_) => self.asg_type(typ_),
+                _ => unreachable!(),
+            }
+        } else {
+            self.asg_type(&typ_)
+        };
         typed(
             asg::Assign {
                 expr,
-                to,
-                expr_type: self.asg_type(&typ),
+                to: if needs_deref {
+                    asg::Deref {
+                        expr: to,
+                        typ: typ.clone(),
+                    }
+                    .into()
+                } else {
+                    to
+                },
+                expr_type: typ,
             },
-            typ,
+            typ_,
         )
     }
 
@@ -514,7 +532,7 @@ impl<'a> Analyse<'a> {
     fn unify(&mut self, location: Location<'a>, expected: Type<'a>, found: Type<'a>) -> Type<'a> {
         self.try_unify(location, expected, found)
             .unwrap_or_else(|e| {
-                self.fail(e);
+                self.fail(*e);
                 Type::Error
             })
     }
@@ -524,13 +542,13 @@ impl<'a> Analyse<'a> {
         location: Location<'a>,
         mut expected: Box<Type<'a>>,
         found: Type<'a>,
-    ) -> Result<Type<'a>, WrongType<'a>> {
+    ) -> Result<Type<'a>, Box<WrongType<'a>>> {
         *expected = self
             .try_unify(location, *expected, found)
-            .map_err(|e| WrongType {
-                location: e.location,
-                expected: Type::Ptr(Box::new(e.expected)),
-                found: Type::Ptr(Box::new(e.found)),
+            .map_err(|mut e| {
+                e.expected = Type::Ptr(Box::new(e.expected));
+                e.found = Type::Ptr(Box::new(e.found));
+                e
             })?;
         Ok(Type::Ptr(expected))
     }
@@ -540,13 +558,13 @@ impl<'a> Analyse<'a> {
         location: Location<'a>,
         mut expected: Box<Type<'a>>,
         found: Type<'a>,
-    ) -> Result<Type<'a>, WrongType<'a>> {
+    ) -> Result<Type<'a>, Box<WrongType<'a>>> {
         *expected = self
             .try_unify(location, *expected, found)
-            .map_err(|e| WrongType {
-                location: e.location,
-                expected: Type::Ref(Box::new(e.expected)),
-                found: Type::Ref(Box::new(e.found)),
+            .map_err(|mut e| {
+                e.expected = Type::Ref(Box::new(e.expected));
+                e.found = Type::Ref(Box::new(e.found));
+                e
             })?;
         Ok(Type::Ref(expected))
     }
@@ -556,7 +574,7 @@ impl<'a> Analyse<'a> {
         location: Location<'a>,
         expected: Type<'a>,
         found: Type<'a>,
-    ) -> Result<Type<'a>, WrongType<'a>> {
+    ) -> Result<Type<'a>, Box<WrongType<'a>>> {
         match (expected, found) {
             (a, b) if a == b => Ok(a),
             (Type::Var(id), b) => {
@@ -580,6 +598,7 @@ impl<'a> Analyse<'a> {
             (Type::Unknown, b) => Ok(b),
             (a, Type::Unknown) => Ok(a),
             (a, Type::Unreachable) => Ok(a),
+            (Type::Unreachable, b) => Ok(b),
             (Type::Ptr(expected), Type::Ptr(found)) => self.unify_ptrs(location, expected, *found),
             (Type::Ref(expected), Type::Ref(found)) => self.unify_refs(location, expected, *found),
             (Type::Ref(mut expected), found) => {
@@ -591,7 +610,7 @@ impl<'a> Analyse<'a> {
                 for i in 0..len {
                     ga[i] = match self.try_unify(location, ga[i].clone(), gb[i].clone()) {
                         Ok(typ) => typ,
-                        Err(err) => {
+                        Err(mut err) => {
                             for j in 0..len {
                                 if j != i {
                                     ga[j] = Type::Error;
@@ -600,11 +619,9 @@ impl<'a> Analyse<'a> {
                             }
                             ga[i] = err.expected;
                             gb[i] = err.found;
-                            return Err(WrongType {
-                                location: err.location,
-                                expected: Type::Name(a, ga),
-                                found: Type::Name(b, gb),
-                            });
+                            err.expected = Type::Name(a, ga);
+                            err.found = Type::Name(b, gb);
+                            return Err(err);
                         }
                     };
                 }
@@ -614,11 +631,11 @@ impl<'a> Analyse<'a> {
             (mut expected, mut found) => {
                 self.reveal(&mut expected);
                 self.reveal(&mut found);
-                Err(WrongType {
+                Err(Box::new(WrongType {
                     location,
                     expected,
                     found,
-                })
+                }))
             }
         }
     }
@@ -969,9 +986,21 @@ impl<'a> Analyse<'a> {
         let ret_typ = self.typ(fun.header.typ.ret);
         let ret_type = self.asg_type(&ret_typ);
         self.ret_type = ret_typ;
-        let location = fun.body.location();
-        let (body, typ) = self.expr(fun.body).into();
-        self.unify(location, self.ret_type.clone(), typ);
+        let location = fun.body.ret.location();
+        let last_semi_location = if matches!(fun.body.ret, Expr::ImplicitUnit(_)) {
+            fun.body.last_semi_location
+        } else {
+            None
+        };
+        let (body, typ) = self.block(fun.body).into();
+        let is_unit = matches!(typ, Type::Prime(Prime::Unit));
+        let typ = self.unify(location, self.ret_type.clone(), typ);
+        if let Some(location) = last_semi_location
+            && matches!(typ, Type::Error)
+            && is_unit
+        {
+            self.errors.last_mut().unwrap().help = Some(SemicolonEndBlock { location }.into());
+        }
         self.context.pop_layer();
         self.type_context.pop_layer();
         asg::Fun {

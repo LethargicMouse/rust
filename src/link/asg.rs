@@ -21,7 +21,7 @@ pub struct Asg<'a> {
 pub struct Fun<'a> {
     pub params: Vec<(&'a str, Type<'a>)>,
     pub ret_type: Type<'a>,
-    pub body: Expr<'a>,
+    pub body: Block<'a>,
 }
 
 #[derive(Debug)]

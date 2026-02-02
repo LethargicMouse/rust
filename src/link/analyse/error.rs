@@ -53,7 +53,31 @@ impl Display for NotStruct<'_> {
     }
 }
 
-pub enum CheckError<'a> {
+pub struct CheckError<'a> {
+    kind: CheckErrorKind<'a>,
+    pub help: Option<Help<'a>>,
+}
+
+impl Display for CheckError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)?;
+        match &self.help {
+            Some(help) => write!(f, "\n{help}"),
+            None => Ok(()),
+        }
+    }
+}
+
+impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
+    fn from(val: T) -> Self {
+        Self {
+            kind: val.into(),
+            help: None,
+        }
+    }
+}
+
+pub enum CheckErrorKind<'a> {
     Naf(NotAllFields<'a>),
     NS(NotStruct<'a>),
     NCas(NoCast<'a>),
@@ -65,73 +89,73 @@ pub enum CheckError<'a> {
     WT(WrongType<'a>),
 }
 
-impl<'a> From<NotAllFields<'a>> for CheckError<'a> {
+impl<'a> From<NotAllFields<'a>> for CheckErrorKind<'a> {
     fn from(v: NotAllFields<'a>) -> Self {
         Self::Naf(v)
     }
 }
 
-impl<'a> From<NotStruct<'a>> for CheckError<'a> {
+impl<'a> From<NotStruct<'a>> for CheckErrorKind<'a> {
     fn from(v: NotStruct<'a>) -> Self {
         Self::NS(v)
     }
 }
 
-impl<'a> From<NoCast<'a>> for CheckError<'a> {
+impl<'a> From<NoCast<'a>> for CheckErrorKind<'a> {
     fn from(v: NoCast<'a>) -> Self {
         Self::NCas(v)
     }
 }
 
-impl<'a> From<ShouldKnowType<'a>> for CheckError<'a> {
+impl<'a> From<ShouldKnowType<'a>> for CheckErrorKind<'a> {
     fn from(v: ShouldKnowType<'a>) -> Self {
         Self::Snt(v)
     }
 }
 
-impl<'a> From<WrongType<'a>> for CheckError<'a> {
+impl<'a> From<WrongType<'a>> for CheckErrorKind<'a> {
     fn from(v: WrongType<'a>) -> Self {
         Self::WT(v)
     }
 }
 
-impl<'a> From<NoCall<'a>> for CheckError<'a> {
+impl<'a> From<NoCall<'a>> for CheckErrorKind<'a> {
     fn from(v: NoCall<'a>) -> Self {
         Self::NCal(v)
     }
 }
 
-impl<'a> From<NoIndex<'a>> for CheckError<'a> {
+impl<'a> From<NoIndex<'a>> for CheckErrorKind<'a> {
     fn from(v: NoIndex<'a>) -> Self {
         Self::NI(v)
     }
 }
 
-impl<'a> From<NotDeclared<'a>> for CheckError<'a> {
+impl<'a> From<NotDeclared<'a>> for CheckErrorKind<'a> {
     fn from(v: NotDeclared<'a>) -> Self {
         Self::ND(v)
     }
 }
 
-impl<'a> From<NoField<'a>> for CheckError<'a> {
+impl<'a> From<NoField<'a>> for CheckErrorKind<'a> {
     fn from(v: NoField<'a>) -> Self {
         Self::NF(v)
     }
 }
 
-impl Display for CheckError<'_> {
+impl Display for CheckErrorKind<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{Red}! error checking ")?;
         match self {
-            CheckError::ND(not_declared) => write!(f, "{not_declared}"),
-            CheckError::NF(no_field) => write!(f, "{no_field}"),
-            CheckError::NI(no_deref) => write!(f, "{no_deref}"),
-            CheckError::NCal(no_call) => write!(f, "{no_call}"),
-            CheckError::WT(wrong_type) => write!(f, "{wrong_type}"),
-            CheckError::Snt(should_know_type) => write!(f, "{should_know_type}"),
-            CheckError::NCas(no_cast) => write!(f, "{no_cast}"),
-            CheckError::NS(not_struct) => write!(f, "{not_struct}"),
-            CheckError::Naf(not_all_fields) => write!(f, "{not_all_fields}"),
+            CheckErrorKind::ND(not_declared) => write!(f, "{not_declared}"),
+            CheckErrorKind::NF(no_field) => write!(f, "{no_field}"),
+            CheckErrorKind::NI(no_deref) => write!(f, "{no_deref}"),
+            CheckErrorKind::NCal(no_call) => write!(f, "{no_call}"),
+            CheckErrorKind::WT(wrong_type) => write!(f, "{wrong_type}"),
+            CheckErrorKind::Snt(should_know_type) => write!(f, "{should_know_type}"),
+            CheckErrorKind::NCas(no_cast) => write!(f, "{no_cast}"),
+            CheckErrorKind::NS(not_struct) => write!(f, "{not_struct}"),
+            CheckErrorKind::Naf(not_all_fields) => write!(f, "{not_all_fields}"),
         }
     }
 }
@@ -251,5 +275,37 @@ impl Display for NotAllFields<'_> {
             write!(f, "\n    - {Reset}{field}{Blue}")?;
         }
         write!(f, "{Reset}")
+    }
+}
+
+pub enum Help<'a> {
+    Seb(SemicolonEndBlock<'a>),
+}
+
+impl Display for Help<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Help::Seb(semicolon_end_block) => write!(f, "{semicolon_end_block}"),
+        }
+    }
+}
+
+impl<'a> From<SemicolonEndBlock<'a>> for Help<'a> {
+    fn from(v: SemicolonEndBlock<'a>) -> Self {
+        Self::Seb(v)
+    }
+}
+
+pub struct SemicolonEndBlock<'a> {
+    pub location: Location<'a>,
+}
+
+impl Display for SemicolonEndBlock<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{Blue}--@ try removing {Reset}`;`{Blue} in {}",
+            self.location
+        )
     }
 }

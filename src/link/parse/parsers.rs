@@ -24,7 +24,7 @@ impl<'a> Parse<'a> {
         let mut type_aliases = HashMap::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
-                Item::Fun(fun) => funs.push(fun),
+                Item::Fun(fun) => funs.push(*fun),
                 Item::Extern(extrn) => externs.push(extrn),
                 Item::Struct(name, r#struct) => {
                     structs.insert(name, r#struct);

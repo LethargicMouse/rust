@@ -16,6 +16,12 @@ impl<'a> Lex<'a> {
             .iter()
             .take_while(|c| c.is_ascii_whitespace())
             .count();
+        if self.source.code[self.cursor..].starts_with(b"--") {
+            self.cursor += self.source.code[self.cursor..]
+                .iter()
+                .take_while(|c| **c != b'\n')
+                .count();
+        }
     }
 
     pub fn token(&mut self, lexeme: Lexeme<'a>, len: usize) -> Token<'a> {

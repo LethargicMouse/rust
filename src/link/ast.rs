@@ -27,7 +27,7 @@ pub struct Field<'a> {
 
 pub enum Item<'a> {
     TypeAlias(TypeAlias<'a>),
-    Fun(Fun<'a>),
+    Fun(Box<Fun<'a>>),
     Extern(Extern<'a>),
     Struct(&'a str, Struct<'a>),
 }
@@ -52,13 +52,13 @@ impl<'a> From<Extern<'a>> for Item<'a> {
 
 impl<'a> From<Fun<'a>> for Item<'a> {
     fn from(v: Fun<'a>) -> Self {
-        Self::Fun(v)
+        Self::Fun(Box::new(v))
     }
 }
 
 pub struct Fun<'a> {
     pub header: Header<'a>,
-    pub body: Expr<'a>,
+    pub body: Block<'a>,
 }
 
 pub struct Header<'a> {
@@ -92,7 +92,18 @@ pub struct If<'a> {
 
 pub struct Block<'a> {
     pub stmts: Vec<Expr<'a>>,
+    pub last_semi_location: Option<Location<'a>>,
     pub ret: Expr<'a>,
+}
+
+impl<'a> From<Expr<'a>> for Block<'a> {
+    fn from(ret: Expr<'a>) -> Self {
+        Block {
+            stmts: Vec::new(),
+            last_semi_location: None,
+            ret,
+        }
+    }
 }
 
 pub struct Let<'a> {
@@ -115,6 +126,7 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    ImplicitUnit(Location<'a>),
     Array(Array<'a>),
     Cast(Box<Cast<'a>>),
     Return(Box<Return<'a>>),
@@ -219,11 +231,12 @@ impl<'a> Expr<'a> {
             Expr::Block(block) => block.ret.location(),
             Expr::Assign(assign) => assign.location,
             Expr::New(new) => new.lame.location,
-            Expr::Loop(loop_expr) => loop_expr.body.ret.location(),
+            Expr::Loop(loop_expr) => loop_expr.body.location(),
             Expr::Ref(ref_expr) => ref_expr.location,
             Expr::Return(ret) => ret.location,
             Expr::Cast(cast) => cast.location,
             Expr::Array(array) => array.location,
+            Expr::ImplicitUnit(location) => *location,
         }
     }
 
@@ -246,11 +259,12 @@ impl<'a> Expr<'a> {
             Expr::Field(_) => true,
             Expr::Assign(_) => true,
             Expr::New(_) => true,
-            Expr::Loop(_) => false,
+            Expr::Loop(loop_expr) => loop_expr.body.needs_semicolon(),
             Expr::Ref(_) => true,
             Expr::Return(_) => true,
             Expr::Cast(_) => true,
             Expr::Array(_) => true,
+            Expr::ImplicitUnit(_) => true,
         }
     }
 }
@@ -461,7 +475,7 @@ pub struct New<'a> {
 }
 
 pub struct Loop<'a> {
-    pub body: Block<'a>,
+    pub body: Expr<'a>,
 }
 
 pub struct Ref<'a> {

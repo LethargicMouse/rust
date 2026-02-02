@@ -87,7 +87,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             let tmp = self.store(tmp, typ);
             self.context.insert(param, (tmp, typ.clone()));
         }
-        let tmp = self.expr(&fun.body);
+        let tmp = self.block(&fun.body);
         self.stmts.push(Stmt::Ret(tmp));
         if DEBUG {
             eprintln!("> ret type");

@@ -2,8 +2,8 @@ use crate::{
     Location,
     link::{
         ast::{
-            Array, Assign, BinOp, Binary, Block, Call, Cast, Expr, FieldExpr, Get, If, Let,
-            Literal, Loop, New, NewField, Postfix, Ref, Return,
+            Array, Assign, BinOp, Binary, Block, Call, Cast, Expr, FieldExpr, Get, If, Let, Loop,
+            New, NewField, Postfix, Ref, Return,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -66,7 +66,7 @@ impl<'a> Parse<'a> {
 
     fn loop_expr_(&mut self) -> Result<Loop<'a>, Fail> {
         self.expect_(Name("loop"))?;
-        let body = self.block()?;
+        let body = self.expr(0)?;
         Ok(Loop { body })
     }
 
@@ -88,7 +88,7 @@ impl<'a> Parse<'a> {
             },
             |p| {
                 let lame = p.lame(true)?;
-                let expr = Expr::Var(lame);
+                let expr = lame.into();
                 Ok(NewField { lame, expr })
             },
         ])
@@ -208,17 +208,14 @@ impl<'a> Parse<'a> {
     }
 
     fn implicit_unit(&self, location: Location<'a>) -> Expr<'a> {
-        Expr::Literal(Literal::Unit, location)
+        Expr::ImplicitUnit(location)
     }
 
-    pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
-        self.either(&[
-            |p| {
-                p.expect(Name("do"))?;
-                p.expr(0)
-            },
-            |p| Ok(p.block()?.into()),
-        ])
+    pub fn block_or_do(&mut self) -> Result<Block<'a>, Fail> {
+        self.either(&[Self::block, |p| {
+            p.expect(Name("do"))?;
+            Ok(p.expr(0)?.into())
+        }])
     }
 
     fn block(&mut self) -> Result<Block<'a>, Fail> {
@@ -231,6 +228,14 @@ impl<'a> Parse<'a> {
         let location = self.here();
         self.expect_(CurL)?;
         let mut stmts = self.many(Self::stmt);
+        let mut last_semi_location = None;
+        if let Some(expr) = stmts.last()
+            && expr.needs_semicolon()
+        {
+            self.cursor -= 1;
+            last_semi_location = Some(self.here());
+            self.cursor += 1;
+        }
         let ret = self.maybe(|p| p.expr(0)).unwrap_or_else(|| {
             if stmts.last().is_some_and(|e| !e.needs_semicolon()) {
                 stmts.pop().unwrap()
@@ -239,7 +244,11 @@ impl<'a> Parse<'a> {
             }
         });
         self.expect_(CurR)?;
-        Ok(Block { stmts, ret })
+        Ok(Block {
+            stmts,
+            last_semi_location,
+            ret,
+        })
     }
 
     pub fn expr(&mut self, min_priority: u8) -> Result<Expr<'a>, Fail> {
