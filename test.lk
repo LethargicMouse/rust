@@ -5,8 +5,14 @@ extern malloc: fn<t>(size) *t;
 
 type fd = i32;
 
-fn main() 
-  do "your mom".words().nth(1).putstrln()
+fn main() {
+  println(123);
+  println("hello");
+}
+
+trait printable {
+  fn println(self);
+}
 
 fn nth(words, index) word
   do words.skip(index).next()

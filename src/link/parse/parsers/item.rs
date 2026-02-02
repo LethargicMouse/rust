@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{self, Extern, FunType, Header, Item, Lame, Prime, Struct, Type, TypeAlias},
+    ast::{self, Extern, FunType, Header, Item, Lame, Prime, Struct, Trait, Type, TypeAlias},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -11,8 +11,22 @@ impl<'a> Parse<'a> {
             |p| Ok(p.extern_()?.into()),
             |p| Ok(p.struct_()?.into()),
             |p| Ok(p.type_alias_()?.into()),
+            |p| Ok(p.trait_()?.into()),
         ])
         .or_else(|_| self.fail("item"))
+    }
+
+    fn trait_(&mut self) -> Result<Trait<'a>, Fail> {
+        self.expect_(Name("trait"))?;
+        let name = self.name(true)?;
+        self.expect(CurL)?;
+        let headers = self.many(|p| {
+            let res = p.header_()?;
+            p.expect(Semicolon)?;
+            Ok(res)
+        });
+        self.expect(CurR)?;
+        Ok(Trait { name, headers })
     }
 
     fn type_alias_(&mut self) -> Result<TypeAlias<'a>, Fail> {

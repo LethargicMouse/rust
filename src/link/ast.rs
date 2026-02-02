@@ -8,6 +8,7 @@ pub struct Ast<'a> {
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub funs: Vec<Fun<'a>>,
     pub externs: Vec<Extern<'a>>,
+    pub traits: Vec<Trait<'a>>,
 }
 
 pub struct Extern<'a> {
@@ -26,10 +27,17 @@ pub struct Field<'a> {
 }
 
 pub enum Item<'a> {
+    Trait(Trait<'a>),
     TypeAlias(TypeAlias<'a>),
     Fun(Box<Fun<'a>>),
     Extern(Extern<'a>),
     Struct(&'a str, Struct<'a>),
+}
+
+impl<'a> From<Trait<'a>> for Item<'a> {
+    fn from(v: Trait<'a>) -> Self {
+        Self::Trait(v)
+    }
 }
 
 impl<'a> From<TypeAlias<'a>> for Item<'a> {
@@ -507,4 +515,9 @@ pub struct NewField<'a> {
 pub struct TypeAlias<'a> {
     pub name: &'a str,
     pub typ: Type<'a>,
+}
+
+pub struct Trait<'a> {
+    pub name: &'a str,
+    pub headers: Vec<Header<'a>>,
 }

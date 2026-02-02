@@ -185,12 +185,22 @@ impl<'a> Analyse<'a> {
             name: "arr",
             location: ast.begin,
         }));
+        self.type_context.new_layer();
+        for trait_ in ast.traits {
+            self.type_context.insert("self", Type::Generic("self"));
+            for header in trait_.headers {
+                let mut typ = self.fun_type(header.typ);
+                typ.generics.insert(0, "self");
+                self.context.insert(header.name, typ.into());
+            }
+        }
+        self.type_context.pop_layer();
         for extrn in ast.externs {
             let typ = self.typ(extrn.typ);
             self.context.insert(extrn.name, typ);
         }
         for fun in &ast.funs {
-            let typ = self.typ(fun.header.typ.clone().into());
+            let typ = self.fun_type(fun.header.typ.clone()).into();
             self.context.insert(fun.header.name, typ);
         }
         let funs = ast

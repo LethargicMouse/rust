@@ -22,6 +22,7 @@ impl<'a> Parse<'a> {
         let mut externs = Vec::new();
         let mut structs = HashMap::new();
         let mut type_aliases = HashMap::new();
+        let mut traits = Vec::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(*fun),
@@ -32,6 +33,7 @@ impl<'a> Parse<'a> {
                 Item::TypeAlias(type_alias) => {
                     type_aliases.insert(type_alias.name, type_alias.typ);
                 }
+                Item::Trait(trait_) => traits.push(trait_),
             }
         }
         self.expect(Eof)?;
@@ -41,6 +43,7 @@ impl<'a> Parse<'a> {
             externs,
             structs,
             type_aliases,
+            traits,
         })
     }
 
