@@ -69,8 +69,12 @@ impl App {
             State::Prove(mut sea) => match key_code {
                 KeyCode::Char('q') => State::Redact(sea.into()),
                 _ => {
-                    if let KeyCode::Char('=') = key_code {
-                        sea.rfl()
+                    if let KeyCode::Enter = key_code {
+                        for id in 0..sea.nodes.len() {
+                            if sea.something(id) {
+                                break;
+                            }
+                        }
                     }
                     State::Prove(sea)
                 }
@@ -152,15 +156,19 @@ impl Sea {
         self.draw_only(self.main)
     }
 
-    fn rfl(&mut self) {
-        for i in 0..self.nodes.len() {
-            if let Node::Equality(left, right) = self.nodes[i]
-                && self.equal(left, right)
-            {
-                self.nodes[i] = Literal::Top.into();
-                break;
-            }
+    fn rfl(&mut self, id: usize) -> bool {
+        if let Node::Equality(left, right) = self.nodes[id]
+            && self.equal(left, right)
+        {
+            self.nodes[id] = Literal::Top.into();
+            true
+        } else {
+            false
         }
+    }
+
+    fn something(&mut self, id: usize) -> bool {
+        self.rfl(id)
     }
 
     fn equal(&self, left: usize, right: usize) -> bool {
