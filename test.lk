@@ -10,6 +10,16 @@ fn main() {
   println("hello");
 }
 
+impl printable for i64 {
+  fn println(self) 
+    do putiln(self)
+}
+
+impl printable for str {
+  fn println(self) 
+    do putstrln(self)
+}
+
 trait printable {
   fn println(self);
 }
@@ -123,7 +133,7 @@ fn puti(i64) {
 fn puti_not_0(i64) {
   if (i64 == 0) return;
   puti_not_0(i64 / 10);
-  putc((47 + i64 % 10) as u8)
+  putc((48 + i64 % 10) as u8)
 }
 
 fn putc(u8) {

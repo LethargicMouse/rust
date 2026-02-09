@@ -2,6 +2,7 @@ mod error;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    mem::take,
 };
 
 use error::Error;
@@ -12,8 +13,8 @@ use crate::{
     link::{
         Asg, Context,
         analyse::error::{
-            CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NotAllFields, NotDeclared,
-            NotStruct, SemicolonEndBlock, WrongType,
+            CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll, NotDeclared,
+            NotImpl, NotStruct, SemicolonEndBlock, WrongType,
         },
         asg::{self, Tuple},
         ast::{self, *},
@@ -24,14 +25,19 @@ pub const DEBUG: bool = false;
 
 #[derive(Clone, PartialEq, Debug)]
 struct FunType<'a> {
-    generics: Vec<&'a str>,
+    generics: Vec<Generic<'a>>,
     params: Vec<Type<'a>>,
     ret_type: Type<'a>,
 }
 
 impl Display for FunType<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fn({}) {}", Sep(", ", &self.params), self.ret_type)
+        write!(f, "fn({})", Sep(", ", &self.params))?;
+        if matches!(self.ret_type, Type::Prime(Prime::Unit)) {
+            Ok(())
+        } else {
+            write!(f, " {}", self.ret_type)
+        }
     }
 }
 
@@ -48,7 +54,7 @@ enum Type<'a> {
     Var(usize),
     Unreachable,
     Generic(&'a str),
-    Unknown,
+    Unknown(Option<&'a str>),
 }
 
 impl<'a> From<Prime> for Type<'a> {
@@ -79,7 +85,8 @@ impl Display for Type<'_> {
             Type::Var(id) => write!(f, "<#{id}>"),
             Type::Unreachable => write!(f, "<unreachable>"),
             Type::Generic(n) => write!(f, "{n}"),
-            Type::Unknown => write!(f, "_"),
+            Type::Unknown(None) => write!(f, "_"),
+            Type::Unknown(Some(c)) => write!(f, "impl {c}"),
             Type::Ref(typ) => write!(f, "&{typ}"),
         }
     }
@@ -139,7 +146,7 @@ struct Field<'a> {
 }
 
 struct Struct<'a> {
-    generics: Vec<&'a str>,
+    generics: Vec<Generic<'a>>,
     fields: HashMap<&'a str, Field<'a>>,
 }
 
@@ -159,6 +166,7 @@ struct Analyse<'a> {
     corrupt: HashSet<&'a str>,
     cold_types: Vec<Type<'a>>,
     types: Vec<Type<'a>>,
+    impls: HashMap<&'a str, Vec<Type<'a>>>,
 }
 
 impl<'a> Analyse<'a> {
@@ -174,7 +182,8 @@ impl<'a> Analyse<'a> {
             type_context: Context::new(),
             asg_structs: HashMap::new(),
             type_aliases: HashMap::new(),
-            ret_type: Type::Unknown,
+            ret_type: Type::Unknown(None),
+            impls: HashMap::new(),
         }
     }
 
@@ -185,29 +194,113 @@ impl<'a> Analyse<'a> {
             name: "arr",
             location: ast.begin,
         }));
+        let mut trait_header_names = HashMap::new();
         self.type_context.new_layer();
-        for trait_ in ast.traits {
-            self.type_context.insert("self", Type::Generic("self"));
+        self.type_context.insert("self", Type::Generic("self"));
+        for (name, trait_) in ast.traits {
+            trait_header_names.insert(name, HashSet::new());
             for header in trait_.headers {
+                let header_names = trait_header_names.get_mut(name).unwrap();
+                header_names.insert(header.lame.name);
                 let mut typ = self.fun_type(header.typ);
-                typ.generics.insert(0, "self");
-                self.context.insert(header.name, typ.into());
+                typ.generics.insert(
+                    0,
+                    Generic {
+                        name: "self",
+                        constraint: Some(name),
+                    },
+                );
+                self.context.insert(header.lame.name, typ.into());
             }
         }
         self.type_context.pop_layer();
+        for impl_ in &ast.impls {
+            let typ = self.typ(impl_.typ.clone());
+            if !self.impls.contains_key(impl_.lame.name) {
+                self.impls.insert(impl_.lame.name, Vec::new());
+            }
+            self.impls.get_mut(impl_.lame.name).unwrap().push(typ);
+        }
         for extrn in ast.externs {
             let typ = self.typ(extrn.typ);
             self.context.insert(extrn.name, typ);
         }
         for fun in &ast.funs {
             let typ = self.fun_type(fun.header.typ.clone()).into();
-            self.context.insert(fun.header.name, typ);
+            self.context.insert(fun.header.lame.name, typ);
         }
         let funs = ast
             .funs
             .into_iter()
-            .map(|fun| (fun.header.name, self.fun(fun)))
+            .map(|fun| (fun.header.lame.name, self.fun(fun)))
             .collect();
+        self.type_context.new_layer();
+        let mut trait_funs = HashMap::new();
+        for (i, impl_) in ast.impls.into_iter().enumerate() {
+            let typ = if self
+                .impls
+                .get(impl_.lame.name)
+                .and_then(|is| is.get(i))
+                .is_some_and(|i| !matches!(i, Type::Error))
+            {
+                self.typ(impl_.typ)
+            } else {
+                Type::Error
+            };
+            let asg_type = self.asg_type(&typ);
+            self.type_context.insert("self", typ);
+            match trait_header_names.get(impl_.lame.name) {
+                Some(header_names) => {
+                    let mut header_names = header_names.clone();
+                    for fun in impl_.funs {
+                        if !header_names.remove(fun.header.lame.name) {
+                            self.fail(NoMethod {
+                                location: fun.header.lame.location,
+                                name: fun.header.lame.name,
+                                trait_name: impl_.lame.name,
+                            });
+                            self.fun(fun);
+                        } else {
+                            let true_header =
+                                self.context.get(fun.header.lame.name).unwrap().clone();
+                            let mut true_header = self
+                                .get_fun_type(true_header, fun.header.lame.location)
+                                .unwrap();
+                            self.specify_fun_type(&mut true_header);
+                            let found = self.fun_type(fun.header.typ.clone()).into();
+                            self.unify(fun.header.lame.location, true_header.into(), found);
+                            let name = fun.header.lame.name;
+                            let fun = self.fun(fun);
+                            if !trait_funs.contains_key(name) {
+                                trait_funs.insert(name, Vec::new());
+                            }
+                            trait_funs
+                                .get_mut(name)
+                                .unwrap()
+                                .push((asg_type.clone(), fun));
+                        }
+                    }
+                    if !header_names.is_empty() {
+                        self.fail(NotAll {
+                            location: impl_.lame.location,
+                            kind: "method",
+                            rest: header_names.into_iter().collect(),
+                        });
+                    }
+                }
+                None => {
+                    self.fail(NotDeclared {
+                        location: impl_.lame.location,
+                        kind: "trait",
+                        name: impl_.lame.name,
+                    });
+                    for fun in impl_.funs {
+                        self.fun(fun);
+                    }
+                }
+            }
+        }
+        self.type_context.pop_layer();
         let info = self.info();
         if !self.errors.is_empty() {
             die(Error(self.errors))
@@ -216,6 +309,7 @@ impl<'a> Analyse<'a> {
             funs,
             info,
             structs: self.asg_structs,
+            trait_funs,
         }
     }
 
@@ -261,7 +355,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn array(&mut self, array: Array<'a>) -> Typed<'a, asg::Tuple<'a>> {
-        let mut typ = Type::Unknown;
+        let mut typ = Type::Unknown(None);
         let exprs = array
             .elems
             .into_iter()
@@ -336,15 +430,7 @@ impl<'a> Analyse<'a> {
             }
         };
         self.type_context.new_layer();
-        for (index, &generic) in self.structs[name].generics.iter().enumerate() {
-            let id = self.types.len();
-            self.types
-                .push(generics.get(index).cloned().unwrap_or(Type::Unknown));
-            if DEBUG {
-                eprintln!("{id} = {}", self.types[id]);
-            }
-            self.type_context.insert(generic, Type::Var(id));
-        }
+        self.specify_struct_generics(name, &generics);
         let mut exprs: Vec<(asg::Type, asg::Expr)> = Vec::new();
         let mut fields = self.structs[name].fields.clone();
         exprs.resize_with(new.fields.len(), Default::default);
@@ -364,8 +450,9 @@ impl<'a> Analyse<'a> {
             exprs[id] = (asg_type, expr);
         }
         if !fields.is_empty() {
-            self.fail(NotAllFields {
+            self.fail(NotAll {
                 location: new.lame.location,
+                kind: "field",
                 rest: fields.into_keys().collect(),
             });
             return self.fake_expr();
@@ -424,15 +511,7 @@ impl<'a> Analyse<'a> {
             })
         })?;
         self.type_context.new_layer();
-        for (index, generic) in self.structs[name].generics.iter().enumerate() {
-            let id = self.types.len();
-            self.types
-                .push(generics.get(index).cloned().unwrap_or(Type::Unknown));
-            if DEBUG {
-                eprintln!("{id} = {}", self.types[id]);
-            }
-            self.type_context.insert(generic, Type::Var(id));
-        }
+        self.specify_struct_generics(name, &generics);
         let Field { mut typ, id } = match self.structs[name].fields.get(field_expr.name) {
             Some(field) => Ok(field),
             None => Err(self.fail(NoField {
@@ -467,6 +546,22 @@ impl<'a> Analyse<'a> {
             },
             typ,
         ))
+    }
+
+    fn specify_struct_generics(&mut self, name: &str, generics: &Vec<Type<'a>>) {
+        for (index, generic) in self.structs[name].generics.iter().enumerate() {
+            let id = self.types.len();
+            self.types.push(
+                generics
+                    .get(index)
+                    .cloned()
+                    .unwrap_or(Type::Unknown(generic.constraint)),
+            );
+            if DEBUG {
+                eprintln!("{id} = {}", self.types[id]);
+            }
+            self.type_context.insert(generic.name, Type::Var(id));
+        }
     }
 
     fn is_ref(&self, typ: &Type<'a>) -> bool {
@@ -605,8 +700,9 @@ impl<'a> Analyse<'a> {
             }
             (_, Type::Error) => Ok(Type::Error),
             (Type::Error, _) => Ok(Type::Error),
-            (Type::Unknown, b) => Ok(b),
-            (a, Type::Unknown) => Ok(a),
+            (Type::Unknown(None), b) => Ok(b),
+            (a, Type::Unknown(None)) => Ok(a),
+            (Type::Unknown(Some(name)), typ) => Ok(self.constrain(location, name, typ)),
             (a, Type::Unreachable) => Ok(a),
             (Type::Unreachable, b) => Ok(b),
             (Type::Ptr(expected), Type::Ptr(found)) => self.unify_ptrs(location, expected, *found),
@@ -614,6 +710,43 @@ impl<'a> Analyse<'a> {
             (Type::Ref(mut expected), found) => {
                 *expected = self.try_unify(location, *expected, found)?;
                 Ok(Type::Ref(expected))
+            }
+            (Type::Fun(mut a), Type::Fun(mut b)) if a.params.len() == b.params.len() => {
+                let len = a.params.len();
+                for i in 0..len {
+                    a.params[i] = match self.try_unify(
+                        location,
+                        take(&mut a.params[i]),
+                        take(&mut b.params[i]),
+                    ) {
+                        Ok(typ) => typ,
+                        Err(mut err) => {
+                            for j in 0..len {
+                                if j != i {
+                                    a.params[j] = Type::Error;
+                                    b.params[j] = Type::Error;
+                                }
+                            }
+                            a.params[i] = err.expected;
+                            b.params[i] = err.found;
+                            err.expected = Type::Fun(a);
+                            err.found = Type::Fun(b);
+                            return Err(err);
+                        }
+                    };
+                }
+                a.ret_type =
+                    match self.try_unify(location, take(&mut a.ret_type), take(&mut b.ret_type)) {
+                        Ok(typ) => typ,
+                        Err(mut e) => {
+                            a.ret_type = e.expected;
+                            b.ret_type = e.found;
+                            e.expected = Type::Fun(a);
+                            e.found = Type::Fun(b);
+                            return Err(e);
+                        }
+                    };
+                Ok(Type::Fun(a))
             }
             (Type::Name(a, mut ga), Type::Name(b, mut gb)) if a == b && ga.len() == gb.len() => {
                 let len = ga.len();
@@ -650,6 +783,22 @@ impl<'a> Analyse<'a> {
         }
     }
 
+    fn constrain(&mut self, location: Location<'a>, name: &'a str, mut typ: Type<'a>) -> Type<'a> {
+        self.reveal(&mut typ);
+        for impl_typ in self.impls.get(name).cloned().into_iter().flatten() {
+            if let Ok(typ) = self.try_unify(location, impl_typ, typ.clone()) {
+                return typ;
+            }
+        }
+        self.fail(NotImpl {
+            location,
+            typ,
+            name,
+            types: self.impls.get(name).cloned().unwrap_or_default(),
+        });
+        Type::Error
+    }
+
     fn reveal(&mut self, typ: &mut Type<'a>) {
         match typ {
             Type::Ptr(typ) => self.reveal(typ),
@@ -670,7 +819,7 @@ impl<'a> Analyse<'a> {
             Type::Var(id) => *typ = self.types[*id].clone(),
             Type::Unreachable => {}
             Type::Generic(_) => {}
-            Type::Unknown => {}
+            Type::Unknown(_) => {}
             Type::Ref(typ) => self.reveal(typ),
         }
     }
@@ -730,8 +879,8 @@ impl<'a> Analyse<'a> {
         };
         self.type_context.new_layer();
         for generic in &typ.generics {
-            let typ = self.new_type_var(Type::Unknown);
-            self.type_context.insert(generic, typ);
+            let typ = self.new_type_var(Type::Unknown(generic.constraint));
+            self.type_context.insert(generic.name, typ);
         }
         self.specify_fun_type(&mut typ);
         let generics = self
@@ -779,7 +928,8 @@ impl<'a> Analyse<'a> {
             Type::Fun(fun_type) => {
                 self.type_context.new_layer();
                 for generic in &fun_type.generics {
-                    self.type_context.insert(generic, Type::Generic(generic));
+                    self.type_context
+                        .insert(generic.name, Type::Generic(generic.name));
                 }
                 self.specify_fun_type(fun_type);
                 self.type_context.pop_layer();
@@ -801,7 +951,7 @@ impl<'a> Analyse<'a> {
                     *typ = t.clone()
                 }
             }
-            Type::Unknown => {}
+            Type::Unknown(_) => {}
             Type::Ref(typ) => self.specify(typ),
         }
     }
@@ -909,7 +1059,11 @@ impl<'a> Analyse<'a> {
             typ
         } else if let Some(struct_) = self.structs.get(lame.name) {
             if generics.is_empty() {
-                generics = struct_.generics.iter().map(|g| Type::Generic(g)).collect();
+                generics = struct_
+                    .generics
+                    .iter()
+                    .map(|g| Type::Generic(g.name))
+                    .collect();
             }
             Type::Name(lame.name, generics)
         } else if self.corrupt.contains(lame.name) {
@@ -936,7 +1090,8 @@ impl<'a> Analyse<'a> {
         let mut asg_fields = Vec::new();
         self.type_context.new_layer();
         for generic in &r#struct.generics {
-            self.type_context.insert(generic, Type::Generic(generic));
+            self.type_context
+                .insert(generic.name, Type::Generic(generic.name));
         }
         for (id, field) in r#struct.fields.into_iter().enumerate() {
             let typ = self.typ(field.typ);
@@ -964,7 +1119,8 @@ impl<'a> Analyse<'a> {
     fn fun_type(&mut self, fun_type: ast::FunType<'a>) -> FunType<'a> {
         self.type_context.new_layer();
         for generic in &fun_type.generics {
-            self.type_context.insert(generic, Type::Generic(generic));
+            self.type_context
+                .insert(generic.name, Type::Generic(generic.name));
         }
         let res = FunType {
             generics: fun_type.generics,
@@ -979,7 +1135,8 @@ impl<'a> Analyse<'a> {
         self.context.new_layer();
         self.type_context.new_layer();
         for generic in fun.header.typ.generics {
-            self.type_context.insert(generic, Type::Generic(generic));
+            self.type_context
+                .insert(generic.name, Type::Generic(generic.name));
         }
         let params = fun
             .header
@@ -1044,7 +1201,7 @@ impl<'a> Analyse<'a> {
             Type::Var(id) => self.try_hot_type(&self.types[*id]),
             Type::Unreachable => Some(asg::Type::I32),
             Type::Generic(g) => Some(asg::Type::Generic(g)),
-            Type::Unknown => None,
+            Type::Unknown(_) => None,
             Type::Ref(_) => Some(asg::Type::U64),
         }
     }

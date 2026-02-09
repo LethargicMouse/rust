@@ -78,20 +78,34 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
-    Naf(NotAllFields<'a>),
+    NIm(NotImpl<'a>),
+    NM(NoMethod<'a>),
+    NA(NotAll<'a>),
     NS(NotStruct<'a>),
     NCas(NoCast<'a>),
     Snt(ShouldKnowType<'a>),
     ND(NotDeclared<'a>),
     NF(NoField<'a>),
-    NI(NoIndex<'a>),
+    NIn(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
 }
 
-impl<'a> From<NotAllFields<'a>> for CheckErrorKind<'a> {
-    fn from(v: NotAllFields<'a>) -> Self {
-        Self::Naf(v)
+impl<'a> From<NotImpl<'a>> for CheckErrorKind<'a> {
+    fn from(v: NotImpl<'a>) -> Self {
+        Self::NIm(v)
+    }
+}
+
+impl<'a> From<NoMethod<'a>> for CheckErrorKind<'a> {
+    fn from(v: NoMethod<'a>) -> Self {
+        Self::NM(v)
+    }
+}
+
+impl<'a> From<NotAll<'a>> for CheckErrorKind<'a> {
+    fn from(v: NotAll<'a>) -> Self {
+        Self::NA(v)
     }
 }
 
@@ -127,7 +141,7 @@ impl<'a> From<NoCall<'a>> for CheckErrorKind<'a> {
 
 impl<'a> From<NoIndex<'a>> for CheckErrorKind<'a> {
     fn from(v: NoIndex<'a>) -> Self {
-        Self::NI(v)
+        Self::NIn(v)
     }
 }
 
@@ -149,17 +163,20 @@ impl Display for CheckErrorKind<'_> {
         match self {
             CheckErrorKind::ND(not_declared) => write!(f, "{not_declared}"),
             CheckErrorKind::NF(no_field) => write!(f, "{no_field}"),
-            CheckErrorKind::NI(no_deref) => write!(f, "{no_deref}"),
+            CheckErrorKind::NIn(no_deref) => write!(f, "{no_deref}"),
             CheckErrorKind::NCal(no_call) => write!(f, "{no_call}"),
             CheckErrorKind::WT(wrong_type) => write!(f, "{wrong_type}"),
             CheckErrorKind::Snt(should_know_type) => write!(f, "{should_know_type}"),
             CheckErrorKind::NCas(no_cast) => write!(f, "{no_cast}"),
             CheckErrorKind::NS(not_struct) => write!(f, "{not_struct}"),
-            CheckErrorKind::Naf(not_all_fields) => write!(f, "{not_all_fields}"),
+            CheckErrorKind::NA(not_all_fields) => write!(f, "{not_all_fields}"),
+            CheckErrorKind::NM(no_method) => write!(f, "{no_method}"),
+            CheckErrorKind::NIm(not_impl) => write!(f, "{not_impl}"),
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Fail;
 
 pub struct Error<'a>(pub Vec<CheckError<'a>>);
@@ -236,7 +253,7 @@ impl Display for ShouldKnowType<'_> {
             "{}\n{Red}--! type should be known here{Reset}",
             self.location
         )?;
-        if matches!(self.typ, Type::Unknown) {
+        if matches!(self.typ, Type::Unknown(None)) {
             return Ok(());
         }
         write!(f, "\n{Blue}--@ inferred type is {Reset}{}", self.typ)
@@ -259,17 +276,18 @@ impl Display for NoCast<'_> {
     }
 }
 
-pub struct NotAllFields<'a> {
+pub struct NotAll<'a> {
     pub location: Location<'a>,
+    pub kind: &'a str,
     pub rest: Vec<&'a str>,
 }
 
-impl Display for NotAllFields<'_> {
+impl Display for NotAll<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{Red}--! some fields are not declared:{Blue}",
-            self.location
+            "{}\n{Red}--! some {}s are not declared:{Blue}",
+            self.location, self.kind
         )?;
         for field in &self.rest {
             write!(f, "\n    - {Reset}{field}{Blue}")?;
@@ -307,5 +325,46 @@ impl Display for SemicolonEndBlock<'_> {
             "{Blue}--@ try removing {Reset}`;`{Blue} in {}",
             self.location
         )
+    }
+}
+
+pub struct NoMethod<'a> {
+    pub location: Location<'a>,
+    pub name: &'a str,
+    pub trait_name: &'a str,
+}
+
+impl Display for NoMethod<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! method {Reset}`{}` {Red}not found for trait {Reset}`{}`",
+            self.location, self.name, self.trait_name
+        )
+    }
+}
+
+pub struct NotImpl<'a> {
+    pub location: Location<'a>,
+    pub typ: Type<'a>,
+    pub name: &'a str,
+    pub types: Vec<Type<'a>>,
+}
+
+impl Display for NotImpl<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! type {Reset}{} {Red}does not implement trait {Reset}`{}`\n{Blue}--@ ",
+            self.location, self.typ, self.name
+        )?;
+        if self.types.is_empty() {
+            return write!(f, "no type implements this trait{Reset}",);
+        }
+        write!(f, "the trait is implemented by:")?;
+        for typ in &self.types {
+            write!(f, "\n    {Blue}- {Reset}{typ}")?;
+        }
+        Ok(())
     }
 }

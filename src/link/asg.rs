@@ -14,6 +14,7 @@ pub struct Struct<'a> {
 
 pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
+    pub trait_funs: HashMap<&'a str, Vec<(Type<'a>, Fun<'a>)>>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub info: Info<'a>,
 }

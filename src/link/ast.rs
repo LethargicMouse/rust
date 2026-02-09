@@ -8,7 +8,14 @@ pub struct Ast<'a> {
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub funs: Vec<Fun<'a>>,
     pub externs: Vec<Extern<'a>>,
-    pub traits: Vec<Trait<'a>>,
+    pub traits: HashMap<&'a str, Trait<'a>>,
+    pub impls: Vec<Impl<'a>>,
+}
+
+pub struct Impl<'a> {
+    pub lame: Lame<'a>,
+    pub typ: Type<'a>,
+    pub funs: Vec<Fun<'a>>,
 }
 
 pub struct Extern<'a> {
@@ -17,7 +24,7 @@ pub struct Extern<'a> {
 }
 
 pub struct Struct<'a> {
-    pub generics: Vec<&'a str>,
+    pub generics: Vec<Generic<'a>>,
     pub fields: Vec<Field<'a>>,
 }
 
@@ -27,16 +34,23 @@ pub struct Field<'a> {
 }
 
 pub enum Item<'a> {
-    Trait(Trait<'a>),
+    Impl(Impl<'a>),
+    Trait(&'a str, Trait<'a>),
     TypeAlias(TypeAlias<'a>),
     Fun(Box<Fun<'a>>),
     Extern(Extern<'a>),
     Struct(&'a str, Struct<'a>),
 }
 
-impl<'a> From<Trait<'a>> for Item<'a> {
-    fn from(v: Trait<'a>) -> Self {
-        Self::Trait(v)
+impl<'a> From<Impl<'a>> for Item<'a> {
+    fn from(v: Impl<'a>) -> Self {
+        Self::Impl(v)
+    }
+}
+
+impl<'a> From<(&'a str, Trait<'a>)> for Item<'a> {
+    fn from((name, trait_): (&'a str, Trait<'a>)) -> Self {
+        Self::Trait(name, trait_)
     }
 }
 
@@ -70,14 +84,14 @@ pub struct Fun<'a> {
 }
 
 pub struct Header<'a> {
-    pub name: &'a str,
+    pub lame: Lame<'a>,
     pub params: Vec<&'a str>,
     pub typ: FunType<'a>,
 }
 
 #[derive(Clone)]
 pub struct FunType<'a> {
-    pub generics: Vec<&'a str>,
+    pub generics: Vec<Generic<'a>>,
     pub params: Vec<Type<'a>>,
     pub ret: Type<'a>,
     pub location: Location<'a>,
@@ -518,6 +532,11 @@ pub struct TypeAlias<'a> {
 }
 
 pub struct Trait<'a> {
-    pub name: &'a str,
     pub headers: Vec<Header<'a>>,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Generic<'a> {
+    pub name: &'a str,
+    pub constraint: Option<&'a str>,
 }

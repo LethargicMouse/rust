@@ -1,4 +1,3 @@
-linc:
-  cargo run --bin linc run test.lk
-prove:
-  cargo run --bin prove
+run bin="linc":
+  cargo run --bin {{bin}} {{if bin == "linc" {"run test.lk"} else {""}}}
+

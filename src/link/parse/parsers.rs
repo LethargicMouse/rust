@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::{
     Location,
     link::{
-        ast::{Ast, Field, FunType, Item, Prime, Type},
+        ast::{Ast, Field, FunType, Generic, Item, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse},
     },
@@ -22,7 +22,8 @@ impl<'a> Parse<'a> {
         let mut externs = Vec::new();
         let mut structs = HashMap::new();
         let mut type_aliases = HashMap::new();
-        let mut traits = Vec::new();
+        let mut traits = HashMap::new();
+        let mut impls = Vec::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(*fun),
@@ -33,7 +34,10 @@ impl<'a> Parse<'a> {
                 Item::TypeAlias(type_alias) => {
                     type_aliases.insert(type_alias.name, type_alias.typ);
                 }
-                Item::Trait(trait_) => traits.push(trait_),
+                Item::Trait(name, trait_) => {
+                    traits.insert(name, trait_);
+                }
+                Item::Impl(impl_) => impls.push(impl_),
             }
         }
         self.expect(Eof)?;
@@ -44,6 +48,7 @@ impl<'a> Parse<'a> {
             structs,
             type_aliases,
             traits,
+            impls,
         })
     }
 
@@ -120,11 +125,20 @@ impl<'a> Parse<'a> {
         })
     }
 
-    fn generics(&mut self) -> Result<Vec<&'a str>, Fail> {
+    fn generics(&mut self) -> Result<Vec<Generic<'a>>, Fail> {
         self.expect(Less)?;
-        let res: Vec<_> = self.sep(|p| p.name(true)).collect();
+        let res: Vec<_> = self.sep(Self::generic).collect();
         self.expect(More)?;
         Ok(res)
+    }
+
+    fn generic(&mut self) -> Result<Generic<'a>, Fail> {
+        let name = self.name(true)?;
+        let constraint = self.maybe(|p| {
+            p.expect_(Colon)?;
+            p.name(true)
+        });
+        Ok(Generic { name, constraint })
     }
 
     fn field(&mut self) -> Result<Field<'a>, Fail> {

@@ -1,5 +1,5 @@
 use crate::link::{
-    ast::{self, Extern, FunType, Header, Item, Lame, Prime, Struct, Trait, Type, TypeAlias},
+    ast::{self, Extern, FunType, Header, Impl, Item, Prime, Struct, Trait, Type, TypeAlias},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -12,11 +12,23 @@ impl<'a> Parse<'a> {
             |p| Ok(p.struct_()?.into()),
             |p| Ok(p.type_alias_()?.into()),
             |p| Ok(p.trait_()?.into()),
+            |p| Ok(p.impl_()?.into()),
         ])
         .or_else(|_| self.fail("item"))
     }
 
-    fn trait_(&mut self) -> Result<Trait<'a>, Fail> {
+    fn impl_(&mut self) -> Result<Impl<'a>, Fail> {
+        self.expect_(Name("impl"))?;
+        let lame = self.lame(true)?;
+        self.expect(Name("for"))?;
+        let typ = self.typ()?;
+        self.expect(CurL)?;
+        let funs = self.many(Self::fun_);
+        self.expect(CurR)?;
+        Ok(Impl { lame, typ, funs })
+    }
+
+    fn trait_(&mut self) -> Result<(&'a str, Trait<'a>), Fail> {
         self.expect_(Name("trait"))?;
         let name = self.name(true)?;
         self.expect(CurL)?;
@@ -26,7 +38,7 @@ impl<'a> Parse<'a> {
             Ok(res)
         });
         self.expect(CurR)?;
-        Ok(Trait { name, headers })
+        Ok((name, Trait { headers }))
     }
 
     fn type_alias_(&mut self) -> Result<TypeAlias<'a>, Fail> {
@@ -65,7 +77,8 @@ impl<'a> Parse<'a> {
 
     fn header_(&mut self) -> Result<Header<'a>, Fail> {
         self.expect_(Name("fn"))?;
-        let Lame { name, location } = self.lame(true)?;
+        let lame = self.lame(true)?;
+        let location = lame.location;
         let generics = self.maybe(Self::generics).unwrap_or_default();
         self.expect(ParL)?;
         let mut params = Vec::new();
@@ -76,7 +89,7 @@ impl<'a> Parse<'a> {
         }
         self.expect(ParR)?;
         Ok(Header {
-            name,
+            lame,
             params,
             typ: FunType {
                 generics,

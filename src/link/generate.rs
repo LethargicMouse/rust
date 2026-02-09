@@ -433,16 +433,37 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         if DEBUG {
             eprintln!("> {call:?}");
         }
-        let name: String = call.name.into();
-        if let Some(fun) = self.sup.asg.funs.get(name.as_str())
-            && !self.sup.booked.contains(name.as_str())
+        let generics = call
+            .generics
+            .values()
+            .map(|typ| self.heat_up(typ))
+            .collect::<Vec<_>>();
+        let mut first_g_name = String::new();
+        self.add_to_name(
+            &mut first_g_name,
+            &generics.first().cloned().unwrap_or_default().clone(),
+        );
+        let name: String = self.make_name(call.name, &generics);
+        if let Some(fun) = self.sup.asg.funs.get(call.name).or_else(|| {
+            for (typ, fun) in self
+                .sup
+                .asg
+                .trait_funs
+                .get(call.name)
+                .into_iter()
+                .flat_map(|v| v.iter())
+            {
+                let mut buf = String::new();
+                self.add_to_name(&mut buf, typ);
+                if first_g_name == buf {
+                    return Some(fun);
+                }
+            }
+            None
+        }) && !self.sup.booked.contains(&name)
         {
             self.sup.booked.insert(name.clone());
-            let generics = &call
-                .generics
-                .iter()
-                .map(|(&n, t)| (n, self.heat_up(t)))
-                .collect();
+            let generics = &call.generics.keys().copied().zip(generics).collect();
             let fun = GenFun::new(self.sup, generics).run(&name, fun);
             self.sup.funs.push(fun);
         }
