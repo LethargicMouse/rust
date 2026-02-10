@@ -24,8 +24,12 @@ impl<'a> Location<'a> {
         }
     }
 
-    pub fn hash(&self) -> u128 {
-        self.start.hash() as u128 * self.end.hash() as u128
+    pub fn after(self) -> Self {
+        Self {
+            start: self.end,
+            end: self.end.after(b' '),
+            ..self
+        }
     }
 }
 
@@ -78,10 +82,6 @@ impl Pos {
             self.symbol += 1;
         }
         self
-    }
-
-    fn hash(&self) -> u64 {
-        self.line as u64 * self.symbol as u64
     }
 }
 

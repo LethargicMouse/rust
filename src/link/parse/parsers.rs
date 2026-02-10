@@ -17,13 +17,13 @@ pub type Parser<'a, T> = fn(&mut Parse<'a>) -> Result<T, Fail>;
 
 impl<'a> Parse<'a> {
     pub fn ast(&mut self) -> Result<Ast<'a>, Fail> {
-        let begin = self.here();
         let mut funs = Vec::new();
         let mut externs = Vec::new();
         let mut structs = HashMap::new();
         let mut type_aliases = HashMap::new();
         let mut traits = HashMap::new();
         let mut impls = Vec::new();
+        let mut consts = Vec::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(*fun),
@@ -38,17 +38,20 @@ impl<'a> Parse<'a> {
                     traits.insert(name, trait_);
                 }
                 Item::Impl(impl_) => impls.push(impl_),
+                Item::Const(let_) => consts.push(let_),
             }
         }
+        let end = self.here();
         self.expect(Eof)?;
         Ok(Ast {
-            begin,
             funs,
             externs,
             structs,
             type_aliases,
             traits,
             impls,
+            end,
+            consts,
         })
     }
 

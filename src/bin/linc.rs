@@ -16,7 +16,7 @@ use russ::{
 fn main() {
     let args = get_args();
     match args.command {
-        Command::Run(path) => run(path, args.rest),
+        Command::Run(path) => run(path, args.cc_args, args.rest),
         Command::Clean => clean(),
     }
 }
@@ -25,24 +25,43 @@ fn clean() {
     call("rm", &[OUT, OUT_ASM, OUT_IR]).unwrap_or(());
 }
 
-fn run(path: String, args: env::Args) {
-    compile(path);
+fn run(path: String, cc_args: Vec<String>, args: env::Args) {
+    compile(path, cc_args);
     run_out(args);
 }
 
-fn compile(path: String) {
+fn compile(path: String, cc_args: Vec<String>) {
     let source = read_source(path);
     let ir = process(source);
     dump(ir);
-    postcompile();
+    postcompile(cc_args);
 }
 
 fn get_args() -> Args {
     let mut args = args();
     args.next();
     let command = get_command(&mut args);
+    let mut cc_args = Vec::new();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--" => break,
+            "-cc" => {
+                for arg in args.by_ref() {
+                    if &arg == "cc-" {
+                        break;
+                    }
+                    cc_args.push(arg);
+                }
+            }
+            _ => die(Unexpected("argument", arg)),
+        }
+    }
     let rest = args;
-    Args { command, rest }
+    Args {
+        command,
+        cc_args,
+        rest,
+    }
 }
 
 fn get_command(args: &mut env::Args) -> Command {
@@ -90,6 +109,7 @@ impl Display for ArgsError {
 
 struct Args {
     command: Command,
+    cc_args: Vec<String>,
     rest: env::Args,
 }
 
@@ -98,9 +118,11 @@ enum Command {
     Clean,
 }
 
-fn postcompile() {
+fn postcompile(cc_args: Vec<String>) {
     call("qbe", &["-o", OUT_ASM, OUT_IR]).or_die();
-    call("cc", &["-g", "-o", OUT, OUT_ASM]).or_die();
+    let mut args = vec!["-g".into(), "-o".into(), OUT.into(), OUT_ASM.into()];
+    args.extend(cc_args);
+    call("cc", &args).or_die();
 }
 
 fn run_out(args: env::Args) {

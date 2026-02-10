@@ -1,8 +1,8 @@
-use std::{fmt::Display, process::Command};
+use std::{ffi::OsStr, fmt::Display, process::Command};
 
 use crate::{die::Mortal, display::Block, process::Error};
 
-pub fn call<'a>(path: &'a str, args: &'a [&'a str]) -> Result<(), Fail<'a>> {
+pub fn call<'a>(path: &'a str, args: &'a [impl AsRef<OsStr>]) -> Result<(), Fail<'a>> {
     let output = Command::new(path)
         .args(args)
         .output()

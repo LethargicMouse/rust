@@ -28,9 +28,10 @@ impl Display for IR {
     }
 }
 
+#[derive(Clone)]
 pub enum Const {
     String(String),
-    Struct(Vec<Value>),
+    Struct(Vec<(DataType, Value)>),
 }
 
 impl Display for Const {
@@ -38,8 +39,8 @@ impl Display for Const {
         match self {
             Const::String(s) => write!(f, "b \"{s}\" 0"),
             Const::Struct(values) => {
-                for value in values {
-                    write!(f, "l {value}, ")?;
+                for (typ, value) in values {
+                    write!(f, "{typ} {value}, ")?;
                 }
                 Ok(())
             }
@@ -112,6 +113,34 @@ impl Display for Signed {
     }
 }
 
+#[derive(Clone)]
+pub enum DataType {
+    Unsigned(Unsigned),
+    Name(String),
+}
+
+impl From<Unsigned> for DataType {
+    fn from(v: Unsigned) -> Self {
+        Self::Unsigned(v)
+    }
+}
+
+impl From<Type> for DataType {
+    fn from(typ: Type) -> Self {
+        Self::Unsigned(typ.into())
+    }
+}
+
+impl Display for DataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataType::Unsigned(unsigned) => write!(f, "{unsigned}"),
+            DataType::Name(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum Unsigned {
     Base(Type),
     Half,
@@ -217,9 +246,11 @@ impl Display for BinOp {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
     Const(u16),
+    Tmp(Tmp),
 }
 
 impl From<i64> for Value {
@@ -233,6 +264,7 @@ impl Display for Value {
         match self {
             Value::Int(n) => write!(f, "{n}"),
             Value::Const(n) => write!(f, "$s{n}"),
+            Value::Tmp(t) => write!(f, "%t{t}"),
         }
     }
 }
@@ -265,5 +297,5 @@ impl Display for AbiType {
 
 pub struct TypeDecl {
     pub name: String,
-    pub fields: Vec<AbiType>,
+    pub fields: Vec<DataType>,
 }

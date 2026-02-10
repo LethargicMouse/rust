@@ -13,8 +13,8 @@ use crate::{
     link::{
         Asg, Context,
         analyse::error::{
-            CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll, NotDeclared,
-            NotImpl, NotStruct, SemicolonEndBlock, WrongType,
+            CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll, NotCompTime,
+            NotDeclared, NotImpl, NotStruct, SemicolonEndBlock, WrongType,
         },
         asg::{self, Tuple},
         ast::{self, *},
@@ -192,8 +192,14 @@ impl<'a> Analyse<'a> {
         self.type_aliases = ast.type_aliases;
         self.typ(ast::Type::name(Lame {
             name: "arr",
-            location: ast.begin,
+            location: ast.end,
         }));
+        let mut consts = Vec::with_capacity(ast.consts.len());
+        for const_ in &ast.consts {
+            let typ = self.typ(const_.typ.clone());
+            let name = const_.name;
+            self.context.insert(name, typ);
+        }
         let mut trait_header_names = HashMap::new();
         self.type_context.new_layer();
         self.type_context.insert("self", Type::Generic("self"));
@@ -222,12 +228,20 @@ impl<'a> Analyse<'a> {
             self.impls.get_mut(impl_.lame.name).unwrap().push(typ);
         }
         for extrn in ast.externs {
-            let typ = self.typ(extrn.typ);
-            self.context.insert(extrn.name, typ);
+            let typ = self.fun_type(extrn.typ);
+            self.context.insert(extrn.name, typ.into());
         }
         for fun in &ast.funs {
             let typ = self.fun_type(fun.header.typ.clone()).into();
             self.context.insert(fun.header.lame.name, typ);
+        }
+        for const_ in ast.consts {
+            let location = const_.expr.location();
+            let expr = self.const_expr(const_.expr);
+            let typ = self.context.get(const_.name).unwrap().clone();
+            let typ = self.unify(location, typ, expr.typ);
+            let asg_type = self.asg_type(&typ);
+            consts.push((const_.name, asg_type, expr.sup));
         }
         let funs = ast
             .funs
@@ -310,6 +324,20 @@ impl<'a> Analyse<'a> {
             info,
             structs: self.asg_structs,
             trait_funs,
+            consts,
+        }
+    }
+
+    fn const_expr(&mut self, expr: Expr<'a>) -> Typed<'a, asg::Expr<'a>> {
+        match expr {
+            Expr::Literal(literal, _) => self.literal(literal).map_into(),
+            Expr::New(new) => self.new_expr(new, true),
+            expr => {
+                self.fail(NotCompTime {
+                    location: expr.location(),
+                });
+                self.fake_expr()
+            }
         }
     }
 
@@ -344,7 +372,7 @@ impl<'a> Analyse<'a> {
                 Err(_) => self.fake_expr(),
             },
             Expr::Assign(assign) => self.assign(*assign).map_into(),
-            Expr::New(new) => self.new_expr(new),
+            Expr::New(new) => self.new_expr(new, false),
             Expr::Loop(loop_expr) => self.loop_expr(*loop_expr).map_into(),
             Expr::Ref(ref_expr) => self.ref_expr(*ref_expr).map_into(),
             Expr::Return(ret) => self.ret(*ret).map_into(),
@@ -414,7 +442,7 @@ impl<'a> Analyse<'a> {
         typed(asg::Loop { body }, Type::Unreachable)
     }
 
-    fn new_expr(&mut self, new: New<'a>) -> Typed<'a, asg::Expr<'a>> {
+    fn new_expr(&mut self, new: New<'a>, is_const: bool) -> Typed<'a, asg::Expr<'a>> {
         let typ = self.typ(ast::Type::name(new.lame));
         if matches!(typ, Type::Error) {
             return self.fake_expr();
@@ -436,7 +464,12 @@ impl<'a> Analyse<'a> {
         exprs.resize_with(new.fields.len(), Default::default);
         for field in new.fields {
             let location = field.expr.location();
-            let (expr, typ) = self.expr(field.expr).into();
+            let (expr, typ) = if is_const {
+                self.const_expr(field.expr)
+            } else {
+                self.expr(field.expr)
+            }
+            .into();
             let Field {
                 typ: mut field_typ,
                 id,
@@ -1153,13 +1186,15 @@ impl<'a> Analyse<'a> {
         let ret_typ = self.typ(fun.header.typ.ret);
         let ret_type = self.asg_type(&ret_typ);
         self.ret_type = ret_typ;
-        let location = fun.body.ret.location();
-        let last_semi_location = if matches!(fun.body.ret, Expr::ImplicitUnit(_)) {
-            fun.body.last_semi_location
+        let location = fun.body.location();
+        let last_semi_location = if let Expr::Block(block) = &fun.body
+            && matches!(block.ret, Expr::ImplicitUnit(_))
+        {
+            block.last_semi_location
         } else {
             None
         };
-        let (body, typ) = self.block(fun.body).into();
+        let (body, typ) = self.expr(fun.body).into();
         let is_unit = matches!(typ, Type::Prime(Prime::Unit));
         let typ = self.unify(location, self.ret_type.clone(), typ);
         if let Some(location) = last_semi_location

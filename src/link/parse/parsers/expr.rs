@@ -189,10 +189,8 @@ impl<'a> Parse<'a> {
     fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
         let location = self.here();
         self.expect_(Name("if"))?;
-        self.expect(ParL)?;
         let condition = self.expr(0)?;
-        self.expect(ParR)?;
-        let then_expr = self.expr(0)?;
+        let then_expr = self.block_or_do()?;
         let else_expr = self
             .maybe(|p| {
                 p.expect(Name("else"))?;
@@ -211,11 +209,14 @@ impl<'a> Parse<'a> {
         Expr::ImplicitUnit(location)
     }
 
-    pub fn block_or_do(&mut self) -> Result<Block<'a>, Fail> {
-        self.either(&[Self::block, |p| {
-            p.expect(Name("do"))?;
-            Ok(p.expr(0)?.into())
-        }])
+    pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
+        self.either(&[
+            |p| Ok(p.block()?.into()),
+            |p| {
+                p.expect(Name("do"))?;
+                p.expr(0)
+            },
+        ])
     }
 
     fn block(&mut self) -> Result<Block<'a>, Fail> {

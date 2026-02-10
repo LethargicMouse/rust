@@ -17,12 +17,13 @@ pub struct Asg<'a> {
     pub trait_funs: HashMap<&'a str, Vec<(Type<'a>, Fun<'a>)>>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub info: Info<'a>,
+    pub consts: Vec<(&'a str, Type<'a>, Expr<'a>)>,
 }
 
 pub struct Fun<'a> {
     pub params: Vec<(&'a str, Type<'a>)>,
     pub ret_type: Type<'a>,
-    pub body: Block<'a>,
+    pub body: Expr<'a>,
 }
 
 #[derive(Debug)]

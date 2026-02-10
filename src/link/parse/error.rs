@@ -7,16 +7,13 @@ use crate::{
 };
 
 impl<'a> Parse<'a> {
-    pub fn error(self) -> Error<'a> {
-        let help = self.help();
-        let location = self.tokens[self.err_cursor].location;
-        let mut msgs = self.msgs;
-        msgs.sort();
-        msgs.dedup();
+    pub fn error(mut self) -> Error<'a> {
+        self.msgs.sort();
+        self.msgs.dedup();
         Error {
-            location,
-            help,
-            msgs,
+            help: self.help(),
+            location: self.tokens[self.err_cursor].location,
+            msgs: self.msgs,
         }
     }
 
@@ -25,11 +22,15 @@ impl<'a> Parse<'a> {
             && self.err_cursor != 0
             && self.tokens[self.err_cursor - 1].lexeme == Lexeme::Semicolon
         {
-            return Some(Help::SemicolonBeforeElse(
+            Some(Help::RemoveSemicolon(
                 self.tokens[self.err_cursor - 1].location,
-            ));
+            ))
+        } else if self.msgs.contains(&Lexeme::Semicolon.show()) {
+            let token = &self.tokens[self.err_cursor - 1];
+            Some(Help::AddSemicolon(token.lexeme, token.location.after()))
+        } else {
+            None
         }
-        None
     }
 
     pub fn fail<T>(&mut self, s: &'a str) -> Result<T, Fail> {
@@ -72,18 +73,22 @@ impl Display for Error<'_> {
 }
 
 enum Help<'a> {
-    SemicolonBeforeElse(Location<'a>),
+    RemoveSemicolon(Location<'a>),
+    AddSemicolon(Lexeme<'a>, Location<'a>),
 }
 
 impl Display for Help<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Help::SemicolonBeforeElse(location) => {
-                write!(
-                    f,
-                    "try removing {Reset}`;`{Blue} before {Reset}`else`{Blue} in {location}"
-                )
+            Help::RemoveSemicolon(location) => {
+                write!(f, "try removing {Reset}`;`{Blue} in {location}")
             }
+            Help::AddSemicolon(lexeme, location) => write!(
+                f,
+                "try adding {Reset}`;` {Blue}after {Reset}{} {Blue}in {}",
+                lexeme.show(),
+                location
+            ),
         }
     }
 }

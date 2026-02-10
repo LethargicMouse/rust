@@ -4,12 +4,19 @@ use crate::Location;
 
 pub struct Ast<'a> {
     pub type_aliases: HashMap<&'a str, Type<'a>>,
-    pub begin: Location<'a>,
+    pub end: Location<'a>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub funs: Vec<Fun<'a>>,
     pub externs: Vec<Extern<'a>>,
     pub traits: HashMap<&'a str, Trait<'a>>,
     pub impls: Vec<Impl<'a>>,
+    pub consts: Vec<Const<'a>>,
+}
+
+pub struct Const<'a> {
+    pub name: &'a str,
+    pub typ: Type<'a>,
+    pub expr: Expr<'a>,
 }
 
 pub struct Impl<'a> {
@@ -20,7 +27,7 @@ pub struct Impl<'a> {
 
 pub struct Extern<'a> {
     pub name: &'a str,
-    pub typ: Type<'a>,
+    pub typ: FunType<'a>,
 }
 
 pub struct Struct<'a> {
@@ -34,12 +41,19 @@ pub struct Field<'a> {
 }
 
 pub enum Item<'a> {
+    Const(Const<'a>),
     Impl(Impl<'a>),
     Trait(&'a str, Trait<'a>),
     TypeAlias(TypeAlias<'a>),
     Fun(Box<Fun<'a>>),
     Extern(Extern<'a>),
     Struct(&'a str, Struct<'a>),
+}
+
+impl<'a> From<Const<'a>> for Item<'a> {
+    fn from(v: Const<'a>) -> Self {
+        Self::Const(v)
+    }
 }
 
 impl<'a> From<Impl<'a>> for Item<'a> {
@@ -80,7 +94,7 @@ impl<'a> From<Fun<'a>> for Item<'a> {
 
 pub struct Fun<'a> {
     pub header: Header<'a>,
-    pub body: Block<'a>,
+    pub body: Expr<'a>,
 }
 
 pub struct Header<'a> {
@@ -268,7 +282,7 @@ impl<'a> Expr<'a> {
             Expr::Binary(_) => true,
             Expr::Literal(_, _) => true,
             Expr::If(if_expr) => {
-                if matches!(if_expr.else_expr, Expr::Literal(Literal::Unit, _)) {
+                if matches!(if_expr.else_expr, Expr::ImplicitUnit(_)) {
                     if_expr.then_expr.needs_semicolon()
                 } else {
                     if_expr.else_expr.needs_semicolon()

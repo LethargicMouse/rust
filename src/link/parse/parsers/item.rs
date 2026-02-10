@@ -1,5 +1,7 @@
 use crate::link::{
-    ast::{self, Extern, FunType, Header, Impl, Item, Prime, Struct, Trait, Type, TypeAlias},
+    ast::{
+        self, Const, Extern, FunType, Header, Impl, Item, Prime, Struct, Trait, Type, TypeAlias,
+    },
     lex::Lexeme::*,
     parse::{Parse, error::Fail},
 };
@@ -13,8 +15,20 @@ impl<'a> Parse<'a> {
             |p| Ok(p.type_alias_()?.into()),
             |p| Ok(p.trait_()?.into()),
             |p| Ok(p.impl_()?.into()),
+            |p| Ok(p.const_()?.into()),
         ])
         .or_else(|_| self.fail("item"))
+    }
+
+    fn const_(&mut self) -> Result<Const<'a>, Fail> {
+        self.expect_(Name("let"))?;
+        let name = self.name(false)?;
+        self.expect(Colon)?;
+        let typ = self.typ()?;
+        self.expect(Equal)?;
+        let expr = self.expr(0)?;
+        self.expect(Semicolon)?;
+        Ok(Const { name, typ, expr })
     }
 
     fn impl_(&mut self) -> Result<Impl<'a>, Fail> {
@@ -62,10 +76,10 @@ impl<'a> Parse<'a> {
 
     fn extern_(&mut self) -> Result<Extern<'a>, Fail> {
         self.expect_(Name("extern"))?;
-        let name = self.name(true)?;
-        self.expect(Colon)?;
-        let typ = self.typ()?;
+        let header = self.header()?;
         self.expect(Semicolon)?;
+        let name = header.lame.name;
+        let typ = header.typ;
         Ok(Extern { name, typ })
     }
 
@@ -73,6 +87,12 @@ impl<'a> Parse<'a> {
         let header = self.header_()?;
         let body = self.block_or_do()?;
         Ok(ast::Fun { header, body })
+    }
+
+    fn header(&mut self) -> Result<Header<'a>, Fail> {
+        self.maybe(Self::header_)
+            .ok_or(Fail)
+            .or_else(|_| self.fail("fn"))
     }
 
     fn header_(&mut self) -> Result<Header<'a>, Fail> {

@@ -1,150 +1,44 @@
-extern read: fn(fd, cstr, size) size;
-extern write: fn(fd, cstr, size) size;
-extern realloc: fn<t>(*t, size, size) *t;
-extern malloc: fn<t>(size) *t;
+extern fn InitWindow(i32, i32, cstr);
+extern fn SetTargetFPS(i32);
+extern fn WindowShouldClose() bool;
+extern fn CloseWindow();
+extern fn BeginDrawing();
+extern fn ClearBackground(color);
+extern fn DrawText(cstr, i32, i32, i32, color);
+extern fn EndDrawing();
+extern fn MeasureText(cstr, i32) i32;
 
-type fd = i32;
-
-fn main() {
-  println(123);
-  println("hello");
-}
-
-impl printable for i64 {
-  fn println(self) 
-    do putiln(self)
-}
-
-impl printable for str {
-  fn println(self) 
-    do putstrln(self)
-}
-
-trait printable {
-  fn println(self);
-}
-
-fn nth(words, index) word
-  do words.skip(index).next()
-
-fn skip(words, size) words
-  do loop if (size == 0)
-    return words
-  else {
-    words.next();
-    size = size - 1;
-  }
-
-fn putstrln(str) {
-  putstr(str);
-  putc(10);
-}
-
-struct words {
-  str
-}
-
-fn words(str) words 
-  do words { str }
-
-fn next(&words) word {
-  let right = 0;
-  loop if (right == words.str.len)
-    return words.str.drop(right)
-  else if (words.str.buf[right] == 32) { 
-    let res = words.str.drop(right);
-    words.str.drop(1); -- space
-    return res
-  } else
-    right = right + 1
-}
-
-fn drop(&str, size) str {
-  let res = str.clone().substr(0, size);
-  str = str.clone().substr(size, str.len);
-  res
-}
-
-fn clone(&str) str 
-  do str {
-    buf: str.buf, 
-    len: str.len
-  }
-
-type word = str;
-
-fn empty_vec<t>() vec<t> {
-  vec {
-    buf: 0,
-    len: 0,
-    cap: 0
-  }
-}
-
-struct vec<t> {
-  buf: *t,
-  cap: size,
+struct arr<t> {
+  ptr: *t,
   len: size
 }
 
-fn push<t>(&vec<t>, t) {
-  if (vec.len == vec.cap) vec.grow();
-  vec.buf[vec.len] = t;
-  vec.len = vec.len + 1;
-}
-
-fn grow<t>(&vec<t>) {
-  if (vec.cap == 0) {
-    vec.cap = 8;
-    vec.buf = malloc(8 * @size t);
-  } else {
-    let new_cap = vec.cap * 2;
-    vec.buf = realloc(vec.buf, vec.cap * @size t, new_cap * @size t);
-    vec.cap = new_cap;
-  }
-}
-
-type args = arr<cstr>;
-
-fn substr(str, left: index, right: index) str {
-  str {
-    buf: str.buf + left,
-    len: right - left
-  }
-}
-
-type index = size;
 type size = u64;
 
-fn putiln(i64) {
-  puti(i64);
-  putstr("\n")
-}
-
-fn putstr(str) {
-  write(1, str.buf, str.len);
-}
-
-fn puti(i64) {
-  if (i64 == 0) putstr("0")
-  else puti_not_0(i64)
-}
-
-fn puti_not_0(i64) {
-  if (i64 == 0) return;
-  puti_not_0(i64 / 10);
-  putc((48 + i64 % 10) as u8)
-}
-
-fn putc(u8) {
-  write(1, &u8, 1);
-}
-
-type str = arr<u8>;
 type cstr = *u8;
 
-struct arr<t> {
-  buf: *t,
-  len: u64
+struct color { r: u8, g: u8, b: u8, a: u8 }
+
+let black: color = color {r: 0, g: 0, b: 0, a: 255};
+let lightgray: color = color {r: 200, g: 200, b: 200, a: 255};
+
+fn main() {
+  let width = 800;
+  let height = 600;
+  InitWindow(width, height, "test window".ptr);
+  SetTargetFPS(60);
+  loop {
+    if WindowShouldClose() {
+      CloseWindow();
+      return;
+    }
+    BeginDrawing();
+    ClearBackground(black);
+    let text = "Graphics test".ptr;
+    let font_size = 80;
+    let text_len = MeasureText(text, font_size);
+    DrawText(text, (width - text_len) / 2, (height - font_size) / 2, font_size, lightgray);
+    EndDrawing();
+  }
 }
 

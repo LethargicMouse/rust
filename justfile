@@ -1,3 +1,3 @@
-run bin="linc":
-  cargo run --quiet --bin {{bin}} {{if bin == "linc" {"run test.lk"} else {""}}}
+run bin="linc" *args:
+  cargo run --quiet --bin {{bin}} {{if bin == "linc" {"run test.lk"} else {""}}} {{args}}
 

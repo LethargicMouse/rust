@@ -78,6 +78,7 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
+    Nct(NotCompTime<'a>),
     NIm(NotImpl<'a>),
     NM(NoMethod<'a>),
     NA(NotAll<'a>),
@@ -89,6 +90,12 @@ pub enum CheckErrorKind<'a> {
     NIn(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<NotCompTime<'a>> for CheckErrorKind<'a> {
+    fn from(v: NotCompTime<'a>) -> Self {
+        Self::Nct(v)
+    }
 }
 
 impl<'a> From<NotImpl<'a>> for CheckErrorKind<'a> {
@@ -172,6 +179,7 @@ impl Display for CheckErrorKind<'_> {
             CheckErrorKind::NA(not_all_fields) => write!(f, "{not_all_fields}"),
             CheckErrorKind::NM(no_method) => write!(f, "{no_method}"),
             CheckErrorKind::NIm(not_impl) => write!(f, "{not_impl}"),
+            CheckErrorKind::Nct(not_comp_time) => write!(f, "{not_comp_time}"),
         }
     }
 }
@@ -219,7 +227,7 @@ impl Display for NoCall<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{Red}--! cannot call a value of type {Reset}{}",
+            "{}\n{Red}--! cannot invoke a value of type {Reset}{}",
             self.location, self.typ
         )
     }
@@ -366,5 +374,19 @@ impl Display for NotImpl<'_> {
             write!(f, "\n    {Blue}- {Reset}{typ}")?;
         }
         Ok(())
+    }
+}
+
+pub struct NotCompTime<'a> {
+    pub location: Location<'a>,
+}
+
+impl Display for NotCompTime<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! cannot evaluate this at compile time",
+            self.location
+        )
     }
 }
