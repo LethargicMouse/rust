@@ -162,6 +162,7 @@ pub struct Lame<'a> {
 }
 
 pub enum Expr<'a> {
+    Break(Box<Break<'a>>),
     ImplicitUnit(Location<'a>),
     Array(Array<'a>),
     Cast(Box<Cast<'a>>),
@@ -179,6 +180,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Break<'a>> for Expr<'a> {
+    fn from(v: Break<'a>) -> Self {
+        Self::Break(Box::new(v))
+    }
 }
 
 impl<'a> From<Array<'a>> for Expr<'a> {
@@ -273,6 +280,7 @@ impl<'a> Expr<'a> {
             Expr::Cast(cast) => cast.location,
             Expr::Array(array) => array.location,
             Expr::ImplicitUnit(location) => *location,
+            Expr::Break(break_expr) => break_expr.location,
         }
     }
 
@@ -301,6 +309,7 @@ impl<'a> Expr<'a> {
             Expr::Cast(_) => true,
             Expr::Array(_) => true,
             Expr::ImplicitUnit(_) => true,
+            Expr::Break(_) => true,
         }
     }
 }
@@ -422,6 +431,8 @@ pub enum Prime {
     I64,
     U8,
     U64,
+    F32,
+    F64,
 }
 
 impl Prime {
@@ -433,6 +444,8 @@ impl Prime {
             Prime::I64 => "i64",
             Prime::U8 => "u8",
             Prime::U64 => "u64",
+            Prime::F32 => "f32",
+            Prime::F64 => "f64",
         }
     }
 
@@ -443,6 +456,8 @@ impl Prime {
             "u8" => Some(Prime::U8),
             "u64" => Some(Prime::U64),
             "bool" => Some(Prime::Bool),
+            "f32" => Some(Prime::F32),
+            "f64" => Some(Prime::F64),
             _ => None,
         }
     }
@@ -455,6 +470,8 @@ impl Prime {
             Prime::U8 => 1,
             Prime::U64 => 8,
             Prime::I64 => 8,
+            Prime::F32 => 4,
+            Prime::F64 => 8,
         }
     }
 
@@ -466,20 +483,15 @@ impl Prime {
             Prime::U8 => true,
             Prime::U64 => true,
             Prime::I64 => true,
+            Prime::F32 => true,
+            Prime::F64 => true,
         }
     }
 }
 
 impl Display for Prime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Prime::Unit => write!(f, "()"),
-            Prime::Bool => write!(f, "bool"),
-            Prime::I32 => write!(f, "i32"),
-            Prime::U8 => write!(f, "u8"),
-            Prime::U64 => write!(f, "u64"),
-            Prime::I64 => write!(f, "i64"),
-        }
+        write!(f, "{}", self.get_name())
     }
 }
 
@@ -520,6 +532,11 @@ pub struct Ref<'a> {
 }
 
 pub struct Return<'a> {
+    pub expr: Expr<'a>,
+    pub location: Location<'a>,
+}
+
+pub struct Break<'a> {
     pub expr: Expr<'a>,
     pub location: Location<'a>,
 }

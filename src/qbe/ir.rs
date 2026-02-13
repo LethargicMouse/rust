@@ -75,6 +75,8 @@ pub type Tmp = u32;
 pub enum Type {
     Word,
     Long,
+    Float,
+    Double,
 }
 
 impl Display for Type {
@@ -82,6 +84,8 @@ impl Display for Type {
         match self {
             Type::Word => write!(f, "w"),
             Type::Long => write!(f, "l"),
+            Type::Float => write!(f, "s"),
+            Type::Double => write!(f, "d"),
         }
     }
 }
@@ -164,13 +168,17 @@ impl Display for Unsigned {
 }
 
 pub enum Stmt {
+    Stosi(Type, Tmp, Tmp),
+    Dtosi(Type, Tmp, Tmp),
+    Exts(Tmp, Tmp),
+    Extub(Tmp, Tmp),
     Alloc(Tmp, u32, u32),
     Blit(Tmp, Tmp, u32),
-    Load(Tmp, Signed, Tmp),
+    Load(Tmp, Type, Signed, Tmp),
     Ret(Tmp),
     Copy(Tmp, Type, Value),
     Call(Call),
-    Bin(Tmp, BinOp, Tmp, Tmp),
+    Bin(Tmp, Type, BinOp, Tmp, Tmp),
     Jnz(Tmp, u16, u16),
     Label(u16),
     Jump(u16),
@@ -189,14 +197,18 @@ impl Display for Stmt {
             Stmt::Ret(t) => write!(f, "ret %t{t}"),
             Stmt::Copy(tmp, typ, val) => write!(f, "%t{tmp} ={typ} copy {val}"),
             Stmt::Call(c) => write!(f, "{c}"),
-            Stmt::Bin(t, bin_op, l, r) => write!(f, "%t{t} =l {bin_op} %t{l}, %t{r}"),
+            Stmt::Bin(t, typ, bin_op, l, r) => write!(f, "%t{t} ={typ} {bin_op} %t{l}, %t{r}"),
             Stmt::Jnz(t, r, e) => write!(f, "jnz %t{t}, @l{r}, @l{e}"),
             Stmt::Label(l) => write!(f, "@l{l}"),
-            Stmt::Load(tmp, typ, l) => write!(f, "%t{tmp} =l load{typ} %t{l}"),
+            Stmt::Load(tmp, typ, ltyp, l) => write!(f, "%t{tmp} ={typ} load{ltyp} %t{l}"),
             Stmt::Jump(l) => write!(f, "jmp @l{l}"),
             Stmt::Blit(a, b, c) => write!(f, "blit %t{b}, %t{a}, {c}"),
             Stmt::Alloc(t, a, s) => write!(f, "%t{t} =l alloc{a} {s}"),
             Stmt::Store(t, a, b) => write!(f, "store{t} %t{a}, %t{b}"),
+            Stmt::Stosi(typ, t, t2) => write!(f, "%t{t} ={typ} stosi %t{t2}"),
+            Stmt::Extub(t, t2) => write!(f, "%t{t} =l extub %t{t2}"),
+            Stmt::Exts(t, t2) => write!(f, "%t{t} =d exts %t{t2}"),
+            Stmt::Dtosi(typ, t, t2) => write!(f, "%t{t} ={typ} dtosi %t{t2}"),
         }
     }
 }
@@ -249,6 +261,8 @@ impl Display for BinOp {
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
+    Float(f32),
+    Double(f64),
     Const(u16),
     Tmp(Tmp),
 }
@@ -265,6 +279,8 @@ impl Display for Value {
             Value::Int(n) => write!(f, "{n}"),
             Value::Const(n) => write!(f, "$s{n}"),
             Value::Tmp(t) => write!(f, "%t{t}"),
+            Value::Float(n) => write!(f, "s_{n}"),
+            Value::Double(n) => write!(f, "d_{n}"),
         }
     }
 }

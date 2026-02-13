@@ -2,8 +2,8 @@ use crate::{
     Location,
     link::{
         ast::{
-            Array, Assign, BinOp, Binary, Block, Call, Cast, Expr, FieldExpr, Get, If, Let, Loop,
-            New, NewField, Postfix, Ref, Return,
+            Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, Get, If, Let,
+            Loop, New, NewField, Postfix, Ref, Return,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -22,6 +22,7 @@ impl<'a> Parse<'a> {
             |p| Ok(p.loop_expr_()?.into()),
             |p| Ok(p.ref_expr_()?.into()),
             |p| Ok(p.ret_()?.into()),
+            |p| Ok(p.break_()?.into()),
             |p| Ok(p.block_()?.into()),
             Self::par_expr,
             |p| Ok(p.new_expr_()?.into()),
@@ -55,6 +56,15 @@ impl<'a> Parse<'a> {
             .maybe(|p| p.expr(0))
             .unwrap_or_else(|| self.implicit_unit(self.here()));
         Ok(Return { expr, location })
+    }
+
+    fn break_(&mut self) -> Result<Break<'a>, Fail> {
+        let location = self.here();
+        self.expect_(Name("break"))?;
+        let expr = self
+            .maybe(|p| p.expr(0))
+            .unwrap_or_else(|| self.implicit_unit(self.here()));
+        Ok(Break { expr, location })
     }
 
     fn ref_expr_(&mut self) -> Result<Ref<'a>, Fail> {
@@ -213,8 +223,19 @@ impl<'a> Parse<'a> {
         self.either(&[
             |p| Ok(p.block()?.into()),
             |p| {
+                let before_do = p.here();
                 p.expect(Name("do"))?;
-                p.expr(0)
+                let res = p.expr(0)?;
+                let last_semi_location = Some(p.here());
+                Ok(match p.expect(Semicolon) {
+                    Ok(_) => Block {
+                        stmts: vec![res],
+                        last_semi_location,
+                        ret: p.implicit_unit(before_do),
+                    }
+                    .into(),
+                    Err(_) => res,
+                })
             },
         ])
     }

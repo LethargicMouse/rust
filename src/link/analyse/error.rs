@@ -78,6 +78,7 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
+    Nil(NotInLoop<'a>),
     Nct(NotCompTime<'a>),
     NIm(NotImpl<'a>),
     NM(NoMethod<'a>),
@@ -90,6 +91,12 @@ pub enum CheckErrorKind<'a> {
     NIn(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<NotInLoop<'a>> for CheckErrorKind<'a> {
+    fn from(v: NotInLoop<'a>) -> Self {
+        Self::Nil(v)
+    }
 }
 
 impl<'a> From<NotCompTime<'a>> for CheckErrorKind<'a> {
@@ -180,6 +187,7 @@ impl Display for CheckErrorKind<'_> {
             CheckErrorKind::NM(no_method) => write!(f, "{no_method}"),
             CheckErrorKind::NIm(not_impl) => write!(f, "{not_impl}"),
             CheckErrorKind::Nct(not_comp_time) => write!(f, "{not_comp_time}"),
+            CheckErrorKind::Nil(not_in_loop) => write!(f, "{not_in_loop}"),
         }
     }
 }
@@ -386,6 +394,20 @@ impl Display for NotCompTime<'_> {
         write!(
             f,
             "{}\n{Red}--! cannot evaluate this at compile time",
+            self.location
+        )
+    }
+}
+
+pub struct NotInLoop<'a> {
+    pub location: Location<'a>,
+}
+
+impl Display for NotInLoop<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! cannot use {Reset}`break` {Red}outside of a loop",
             self.location
         )
     }

@@ -14,7 +14,7 @@ use crate::{
         Asg, Context,
         analyse::error::{
             CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll, NotCompTime,
-            NotDeclared, NotImpl, NotStruct, SemicolonEndBlock, WrongType,
+            NotDeclared, NotImpl, NotInLoop, NotStruct, SemicolonEndBlock, WrongType,
         },
         asg::{self, Tuple},
         ast::{self, *},
@@ -156,6 +156,7 @@ pub struct Info<'a> {
 
 struct Analyse<'a> {
     ret_type: Type<'a>,
+    break_types: Vec<Type<'a>>,
     ast_structs: HashMap<&'a str, ast::Struct<'a>>,
     type_aliases: HashMap<&'a str, ast::Type<'a>>,
     asg_structs: HashMap<&'a str, asg::Struct<'a>>,
@@ -167,6 +168,7 @@ struct Analyse<'a> {
     cold_types: Vec<Type<'a>>,
     types: Vec<Type<'a>>,
     impls: HashMap<&'a str, Vec<Type<'a>>>,
+    constraints: HashMap<&'a str, Option<&'a str>>,
 }
 
 impl<'a> Analyse<'a> {
@@ -184,6 +186,8 @@ impl<'a> Analyse<'a> {
             type_aliases: HashMap::new(),
             ret_type: Type::Unknown(None),
             impls: HashMap::new(),
+            break_types: Vec::new(),
+            constraints: HashMap::new(),
         }
     }
 
@@ -250,17 +254,8 @@ impl<'a> Analyse<'a> {
             .collect();
         self.type_context.new_layer();
         let mut trait_funs = HashMap::new();
-        for (i, impl_) in ast.impls.into_iter().enumerate() {
-            let typ = if self
-                .impls
-                .get(impl_.lame.name)
-                .and_then(|is| is.get(i))
-                .is_some_and(|i| !matches!(i, Type::Error))
-            {
-                self.typ(impl_.typ)
-            } else {
-                Type::Error
-            };
+        for impl_ in ast.impls {
+            let typ = self.typ(impl_.typ);
             let asg_type = self.asg_type(&typ);
             self.type_context.insert("self", typ);
             match trait_header_names.get(impl_.lame.name) {
@@ -376,9 +371,10 @@ impl<'a> Analyse<'a> {
             Expr::Loop(loop_expr) => self.loop_expr(*loop_expr).map_into(),
             Expr::Ref(ref_expr) => self.ref_expr(*ref_expr).map_into(),
             Expr::Return(ret) => self.ret(*ret).map_into(),
-            Expr::Cast(cast) => self.cast(*cast),
+            Expr::Cast(cast) => self.cast(*cast).map_into(),
             Expr::Array(array) => self.array(array).map_into(),
             Expr::ImplicitUnit(_) => self.literal(Literal::Unit).map_into(),
+            Expr::Break(break_expr) => self.break_expr(*break_expr).map_into(),
         }
     }
 
@@ -398,11 +394,13 @@ impl<'a> Analyse<'a> {
         typed(asg::Tuple { exprs }, Type::Ptr(Box::new(typ)))
     }
 
-    fn cast(&mut self, cast: Cast<'a>) -> Typed<'a, asg::Expr<'a>> {
-        let (expr, from) = self.expr(cast.expr).into();
+    fn cast(&mut self, cast: Cast<'a>) -> Typed<'a, asg::Cast<'a>> {
+        let (expr, from_typ) = self.expr(cast.expr).into();
         let to = self.typ(cast.typ);
-        let typ = self.cast_typ(cast.location, from, to);
-        typed(expr, typ)
+        let typ = self.cast_typ(cast.location, from_typ.clone(), to);
+        let from = self.asg_type(&from_typ);
+        let to = self.asg_type(&typ);
+        typed(asg::Cast { expr, from, to }, typ)
     }
 
     fn cast_typ(&mut self, location: Location<'a>, from: Type<'a>, to: Type<'a>) -> Type<'a> {
@@ -431,6 +429,24 @@ impl<'a> Analyse<'a> {
         typed(asg::Return { expr }, Type::Unreachable)
     }
 
+    fn break_expr(&mut self, break_expr: Break<'a>) -> Typed<'a, asg::Break<'a>> {
+        let location = break_expr.expr.location();
+        let (expr, expr_typ) = self.expr(break_expr.expr).into();
+        let typ = match self.break_types.last_mut() {
+            Some(typ) => take(typ),
+            None => {
+                self.fail(NotInLoop {
+                    location: break_expr.location,
+                });
+                Type::Error
+            }
+        };
+        if !matches!(typ, Type::Error) {
+            *self.break_types.last_mut().unwrap() = self.unify(location, typ, expr_typ);
+        }
+        typed(asg::Break { expr }, Type::Unreachable)
+    }
+
     fn ref_expr(&mut self, ref_expr: Ref<'a>) -> Typed<'a, asg::Ref<'a>> {
         let (expr, typ) = self.expr(ref_expr.expr).into();
         let expr_typ = self.asg_type(&typ);
@@ -438,8 +454,9 @@ impl<'a> Analyse<'a> {
     }
 
     fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
+        self.break_types.push(Type::Unreachable);
         let body = self.block(loop_expr.body.into()).sup;
-        typed(asg::Loop { body }, Type::Unreachable)
+        typed(asg::Loop { body }, self.break_types.pop().unwrap())
     }
 
     fn new_expr(&mut self, new: New<'a>, is_const: bool) -> Typed<'a, asg::Expr<'a>> {
@@ -527,7 +544,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn fake_expr(&self) -> Typed<'a, asg::Expr<'a>> {
-        typed(asg::Literal::Int(0).into(), Type::Error)
+        typed(asg::Literal::Int(0, asg::Type::I32).into(), Type::Error)
     }
 
     fn field(&mut self, field_expr: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
@@ -658,8 +675,10 @@ impl<'a> Analyse<'a> {
                     left: index.sup,
                     op: asg::BinOp::Multiply,
                     right: asg::Literal::SizeOf(asg_type).into(),
+                    typ: asg::Type::U64,
                 }
                 .into(),
+                typ: asg::Type::U64,
             }
             .into(),
             typ: self.asg_type(&typ),
@@ -735,6 +754,11 @@ impl<'a> Analyse<'a> {
             (Type::Error, _) => Ok(Type::Error),
             (Type::Unknown(None), b) => Ok(b),
             (a, Type::Unknown(None)) => Ok(a),
+            (Type::Unknown(Some(a)), Type::Generic(b))
+                if self.constraints[b].is_some_and(|b| a == b) =>
+            {
+                Ok(Type::Generic(b))
+            }
             (Type::Unknown(Some(name)), typ) => Ok(self.constrain(location, name, typ)),
             (a, Type::Unreachable) => Ok(a),
             (Type::Unreachable, b) => Ok(b),
@@ -804,6 +828,7 @@ impl<'a> Analyse<'a> {
                 Ok(Type::Name(a, ga))
             }
             (a, Type::Number) if a.is_number() => Ok(a),
+            (Type::Number, b) if b.is_number() => Ok(b),
             (mut expected, mut found) => {
                 self.reveal(&mut expected);
                 self.reveal(&mut found);
@@ -816,10 +841,11 @@ impl<'a> Analyse<'a> {
         }
     }
 
-    fn constrain(&mut self, location: Location<'a>, name: &'a str, mut typ: Type<'a>) -> Type<'a> {
-        self.reveal(&mut typ);
+    fn constrain(&mut self, location: Location<'a>, name: &'a str, typ: Type<'a>) -> Type<'a> {
+        let mut ttyp = typ.clone();
+        self.reveal(&mut ttyp);
         for impl_typ in self.impls.get(name).cloned().into_iter().flatten() {
-            if let Ok(typ) = self.try_unify(location, impl_typ, typ.clone()) {
+            if self.try_unify(location, impl_typ, ttyp.clone()).is_ok() {
                 return typ;
             }
         }
@@ -916,12 +942,21 @@ impl<'a> Analyse<'a> {
             self.type_context.insert(generic.name, typ);
         }
         self.specify_fun_type(&mut typ);
-        let generics = self
-            .type_context
-            .pop_layer()
-            .into_iter()
-            .map(|(n, t)| (n, self.asg_type(&t)))
+        let generics = typ
+            .generics
+            .iter()
+            .map(|g| {
+                let typ = self
+                    .type_context
+                    .sup
+                    .last_mut()
+                    .unwrap()
+                    .remove(g.name)
+                    .unwrap();
+                (g.name, self.asg_type(&typ))
+            })
             .collect();
+        self.type_context.pop_layer();
         let args = args
             .into_iter()
             .zip(typ.params)
@@ -1016,9 +1051,30 @@ impl<'a> Analyse<'a> {
 
     fn binary(&mut self, binary: Binary<'a>) -> Typed<'a, asg::Binary<'a>> {
         let (left, left_typ) = self.expr(binary.left).into();
-        let right = self.expr(binary.right).sup;
+        let right_location = binary.right.location();
+        let (right, right_typ) = self.expr(binary.right).into();
         let op = self.bin_op(binary.op);
-        let expr = match &left_typ {
+        let typ = match binary.op {
+            BinOp::Plus
+            | BinOp::Mod
+            | BinOp::Div
+            | BinOp::And
+            | BinOp::Subtract
+            | BinOp::Multiply => {
+                if matches!(left_typ, Type::Ptr(_)) {
+                    self.unify(right_location, Prime::U64.into(), right_typ);
+                    left_typ
+                } else {
+                    self.unify(right_location, left_typ, right_typ)
+                }
+            }
+            BinOp::Equal | BinOp::NotEqual | BinOp::Less => {
+                self.unify(right_location, left_typ, right_typ);
+                Prime::Bool.into()
+            }
+        };
+        let asg_type = self.asg_type(&typ);
+        let expr = match &typ {
             Type::Ptr(typ) => asg::Binary {
                 left,
                 op,
@@ -1026,19 +1082,17 @@ impl<'a> Analyse<'a> {
                     left: right,
                     op: asg::BinOp::Multiply,
                     right: asg::Literal::SizeOf(self.asg_type(typ)).into(),
+                    typ: asg::Type::U64,
                 }
                 .into(),
+                typ: asg_type,
             },
-            _ => asg::Binary { left, op, right },
-        };
-        let typ = match binary.op {
-            BinOp::Plus
-            | BinOp::Mod
-            | BinOp::Div
-            | BinOp::And
-            | BinOp::Subtract
-            | BinOp::Multiply => left_typ,
-            BinOp::Equal | BinOp::NotEqual | BinOp::Less => Prime::Bool.into(),
+            _ => asg::Binary {
+                left,
+                op,
+                right,
+                typ: asg_type,
+            },
         };
         typed(expr, typ)
     }
@@ -1059,13 +1113,20 @@ impl<'a> Analyse<'a> {
 
     fn literal(&mut self, literal: Literal<'a>) -> Typed<'a, asg::Literal<'a>> {
         match literal {
-            Literal::Unit => typed(asg::Literal::Int(0), Prime::Unit.into()),
-            Literal::Int(i) => typed(asg::Literal::Int(i), self.new_type_var(Type::Number)),
+            Literal::Unit => typed(asg::Literal::Int(0, asg::Type::I32), Prime::Unit.into()),
+            Literal::Int(i) => {
+                let typ = self.new_type_var(Type::Number);
+                let asg_type = self.asg_type(&typ);
+                typed(asg::Literal::Int(i, asg_type), typ)
+            }
             Literal::Str(s) => typed(
                 asg::Literal::Str(s),
                 Type::Name("arr", vec![Prime::U8.into()]),
             ),
-            Literal::Bool(b) => typed(asg::Literal::Int(b as i64), Prime::Bool.into()),
+            Literal::Bool(b) => typed(
+                asg::Literal::Int(b as i64, asg::Type::U8),
+                Prime::Bool.into(),
+            ),
             Literal::Size(typ) => {
                 let typ = self.typ(typ);
                 typed(asg::Literal::SizeOf(self.asg_type(&typ)), typ)
@@ -1168,6 +1229,7 @@ impl<'a> Analyse<'a> {
         self.context.new_layer();
         self.type_context.new_layer();
         for generic in fun.header.typ.generics {
+            self.constraints.insert(generic.name, generic.constraint);
             self.type_context
                 .insert(generic.name, Type::Generic(generic.name));
         }
@@ -1255,6 +1317,8 @@ impl<'a> Analyse<'a> {
             Prime::U8 => asg::Type::U8,
             Prime::U64 => asg::Type::U64,
             Prime::I64 => asg::Type::I64,
+            Prime::F32 => asg::Type::F32,
+            Prime::F64 => asg::Type::F64,
         }
     }
 }
