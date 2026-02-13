@@ -23,7 +23,6 @@ impl<'a> Lex<'a> {
     }
 
     pub fn str(&mut self) -> Option<Token<'a>> {
-        self.skip();
         if !self.source.code[self.cursor..].starts_with(b"\"") {
             return None;
         }
@@ -41,6 +40,18 @@ impl<'a> Lex<'a> {
         self.cursor -= res.len() + 1;
         let tok = self.token(lexeme, res.len() + 2);
         Some(tok)
+    }
+
+    pub fn char(&mut self) -> Option<Token<'a>> {
+        if !self.source.code[self.cursor..].starts_with(b"'") {
+            return None;
+        }
+        let char = self.source.code[self.cursor + 1];
+        if let Some(b'\'') = self.source.code.get(self.cursor + 2) {
+            Some(self.token(Lexeme::Char(char), 3))
+        } else {
+            None
+        }
     }
 
     pub fn name(&mut self) -> Option<Token<'a>> {
@@ -102,4 +113,5 @@ pub const LIST: LexList = &[
     (b"/", Slash),
     (b"-", Minus),
     (b"@", At),
+    (b"|", Bar),
 ];

@@ -240,6 +240,7 @@ pub enum BinOp {
     Inequal,
     Urem,
     Udiv,
+    Or,
 }
 
 impl Display for BinOp {
@@ -254,6 +255,7 @@ impl Display for BinOp {
             BinOp::Udiv => write!(f, "udiv"),
             BinOp::And => write!(f, "and"),
             BinOp::Sub => write!(f, "sub"),
+            BinOp::Or => write!(f, "or"),
         }
     }
 }

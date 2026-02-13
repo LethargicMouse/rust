@@ -11,6 +11,7 @@ impl<'a> Parse<'a> {
             Self::bool_,
             |p| Ok(Literal::Int(p.int_()?)),
             |p| Ok(Literal::Str(p.str_()?)),
+            |p| Ok(Literal::Char(p.char_()?)),
             |p| Ok(Literal::Size(p.size_()?)),
         ])
     }
@@ -65,6 +66,15 @@ impl<'a> Parse<'a> {
         if let Str(s) = self.next() {
             self.cursor += 1;
             Ok(s)
+        } else {
+            Err(Fail)
+        }
+    }
+
+    fn char_(&mut self) -> Result<u8, Fail> {
+        if let Char(c) = self.next() {
+            self.cursor += 1;
+            Ok(c)
         } else {
             Err(Fail)
         }

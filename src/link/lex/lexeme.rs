@@ -14,9 +14,11 @@ pub enum Lexeme<'a> {
     Int(i64),
     Plus,
     Str(&'a str),
+    Char(u8),
     Semicolon,
     Colon,
     Star,
+    Bar,
     Comma,
     BraL,
     BraR,
@@ -63,6 +65,8 @@ impl<'a> Lexeme<'a> {
             Slash => "`/`",
             Minus => "`-`",
             At => "`@`",
+            Bar => "`|`",
+            Char(c) => (c as char).to_string().leak(), // nyah ha ha
         }
     }
 }

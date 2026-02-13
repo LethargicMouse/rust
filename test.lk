@@ -11,6 +11,9 @@ extern fn GetFrameTime() f32;
 extern fn sin(f64) f64;
 extern fn cos(f64) f64;
 extern fn write(fd, *u8, size);
+extern fn DrawCircle(i32, i32, f32, color);
+extern fn IsKeyPressed(u8) bool;
+extern fn GetKeyPressed() u8;
 
 struct arr<t> {
   ptr: *t,
@@ -25,6 +28,8 @@ struct color { r: u8, g: u8, b: u8, a: u8 }
 
 let black: color = color {r: 0, g: 0, b: 0, a: 255};
 let lightgray: color = color {r: 200, g: 200, b: 200, a: 255};
+let blue: color = color {r: 102, g: 191, b: 255, a: 255};
+let yellow: color = color {r: 253, g: 249, b: 0, a: 255};
 
 fn main() {
   init();
@@ -37,19 +42,19 @@ fn main() {
   deinit();
 }
 
+impl display for bool {
+  fn wprint<w: writer>(w, self)
+    do if self
+      do w.wprint("true")
+    else w.wprint("false")
+}
+
 let should_close: bool = false;
 let time: f32 = 0;
 
 fn update() {
   if check_if_should_close()
     do return;
-  update_colors();
-}
-
-fn update_colors() {
-  time = time + GetFrameTime();
-  black.r = (sin(time as f64) * 100 + 100) as u8;
-  lightgray.r = (100 - sin(time as f64) * 100) as u8;
 }
 
 impl display for u8 {
@@ -75,13 +80,13 @@ impl display for non_null {
       do return;
     let c = (48 + self.i64 % 10) as u8;
     w.wprint(non_null(self.i64 / 10));
-    w.wprint(c2str(&c));
+    w.wprint(c2str(c));
   }
 }
 
-fn c2str(*u8) str
+fn c2str(&u8) str
   do str {
-    ptr: u8,
+    ptr: u8 as *u8,
     len: 1
   }
 
@@ -120,7 +125,7 @@ impl display for str {
 }
 
 fn check_if_should_close() bool
-  do should_close = WindowShouldClose()
+  do should_close = WindowShouldClose() | IsKeyPressed('Q')
 
 let width: i32 = 800;
 let height: i32 = 600;
@@ -137,9 +142,11 @@ fn deinit() {
 fn draw() {
   BeginDrawing();
   ClearBackground(black);
-  let text = "Graphics test".ptr;
-  let font_size = 80;
-  let text_len = MeasureText(text, font_size);
-  DrawText(text, (width - text_len) / 2, (height - font_size) / 2, font_size, lightgray);
+  draw_bird();
   EndDrawing();
 }
+
+let bird_r: f32 = 30;
+
+fn draw_bird()
+  do DrawCircle(width / 6, height / 2, bird_r, yellow);

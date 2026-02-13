@@ -304,6 +304,7 @@ impl<'a> Parse<'a> {
             |p| p.expect_(Ampersand).map(|_| BinOp::And),
             |p| p.expect_(Minus).map(|_| BinOp::Subtract),
             |p| p.expect_(Star).map(|_| BinOp::Multiply),
+            |p| p.expect_(Bar).map(|_| BinOp::Or),
         ])?;
         if res.priority() >= min_priority {
             Ok(res)

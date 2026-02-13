@@ -114,6 +114,7 @@ pub struct FunType<'a> {
 pub enum Literal<'a> {
     Unit,
     Int(i64),
+    Char(u8),
     Str(&'a str),
     Bool(bool),
     Size(Type<'a>),
@@ -355,15 +356,17 @@ pub enum BinOp {
     Mod,
     Div,
     And,
+    Or,
 }
 
 impl BinOp {
     pub fn priority(&self) -> u8 {
         match self {
-            BinOp::And => 0,
-            BinOp::Equal | BinOp::Less | BinOp::NotEqual => 1,
-            BinOp::Plus | BinOp::Subtract => 2,
-            BinOp::Mod | BinOp::Div | BinOp::Multiply => 3,
+            BinOp::Or => 0,
+            BinOp::And => 1,
+            BinOp::Equal | BinOp::Less | BinOp::NotEqual => 2,
+            BinOp::Plus | BinOp::Subtract => 3,
+            BinOp::Mod | BinOp::Div | BinOp::Multiply => 4,
         }
     }
 }

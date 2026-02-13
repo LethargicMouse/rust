@@ -31,6 +31,7 @@ pub struct If<'a> {
     pub condition: Expr<'a>,
     pub then_expr: Expr<'a>,
     pub else_expr: Expr<'a>,
+    pub typ: Type<'a>,
 }
 
 #[derive(Debug)]
@@ -189,6 +190,7 @@ pub enum BinOp {
     NotEqual,
     Modulo,
     Divide,
+    Or,
 }
 
 #[derive(Debug)]
@@ -257,6 +259,7 @@ pub enum Type<'a> {
     I64,
     F32,
     F64,
+    Bool,
 }
 
 impl Type<'_> {
@@ -271,6 +274,7 @@ impl Type<'_> {
             Type::I64 => true,
             Type::F32 => false,
             Type::F64 => false,
+            Type::Bool => true,
         }
     }
 }

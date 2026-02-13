@@ -78,6 +78,7 @@ impl<'a> Generate<'a> {
             Type::I64 => *full_name += "$$il",
             Type::F32 => *full_name += "$$fw",
             Type::F64 => *full_name += "$$fl",
+            Type::Bool => *full_name += "$$bool",
         }
     }
 
@@ -109,6 +110,7 @@ impl<'a> Generate<'a> {
             Type::I64 => ir::Type::Long,
             Type::F32 => ir::Type::Float,
             Type::F64 => ir::Type::Double,
+            Type::Bool => ir::Type::Word,
         }
     }
 
@@ -130,7 +132,7 @@ impl<'a> Generate<'a> {
         contents: &mut Vec<(DataType, Value)>,
     ) {
         match literal {
-            Literal::Int(i, _) => contents.push((self.data_type(typ), Value::Int(*i))),
+            Literal::Int(i, _) => contents.push((self.data_type(typ), int_val(*i, typ))),
             Literal::Str(_) => todo!(),
             Literal::SizeOf(_) => todo!(),
         }
@@ -341,6 +343,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Type::I64 => 8,
             Type::F32 => 4,
             Type::F64 => 8,
+            Type::Bool => 1,
         }
     }
 
@@ -498,15 +501,20 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let then_label = self.new_label();
         let else_label = self.new_label();
         let end_label = self.new_label();
+        let res = self.new_tmp();
         self.stmts
             .push(Stmt::Jnz(condition, then_label, else_label));
         self.stmts.push(Stmt::Label(then_label));
-        let then = self.expr(&if_expr.then_expr);
+        let then_expr = self.expr(&if_expr.then_expr);
+        let typ = self.heat_up(&if_expr.typ);
+        let typ = self.sup.base(&typ);
+        self.stmts.push(Stmt::Copy(res, typ, Value::Tmp(then_expr)));
         self.stmts.push(Stmt::Jump(end_label));
         self.stmts.push(Stmt::Label(else_label));
-        let _ = self.expr(&if_expr.else_expr);
+        let else_expr = self.expr(&if_expr.else_expr);
+        self.stmts.push(Stmt::Copy(res, typ, Value::Tmp(else_expr)));
         self.stmts.push(Stmt::Label(end_label));
-        then
+        res
     }
 
     fn new_label(&mut self) -> u16 {
@@ -647,6 +655,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             BinOp::Divide => ir::BinOp::Udiv,
             BinOp::And => ir::BinOp::And,
             BinOp::Subtract => ir::BinOp::Sub,
+            BinOp::Or => ir::BinOp::Or,
         }
     }
 
@@ -664,11 +673,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     fn int(&mut self, n: i64, typ: &Type<'a>) -> Tmp {
         let tmp = self.new_tmp();
         let typ = self.heat_up(typ);
-        let val = match typ {
-            Type::F32 => Value::Float(n as f32),
-            Type::F64 => Value::Double(n as f64),
-            _ => Value::Int(n),
-        };
+        let val = int_val(n, &typ);
         self.stmts.push(Stmt::Copy(tmp, self.sup.base(&typ), val));
         tmp
     }
@@ -719,6 +724,14 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             }
             _ => expr,
         }
+    }
+}
+
+fn int_val(n: i64, typ: &Type<'_>) -> Value {
+    match *typ {
+        Type::F32 => Value::Float(n as f32),
+        Type::F64 => Value::Double(n as f64),
+        _ => Value::Int(n),
     }
 }
 

@@ -109,6 +109,10 @@ impl<'a> Type<'a> {
             _ => false,
         }
     }
+
+    fn is_ptr(&self) -> bool {
+        matches!(self, Type::Ptr(_) | Type::Ref(_))
+    }
 }
 
 struct Typed<'a, T> {
@@ -413,6 +417,7 @@ impl<'a> Analyse<'a> {
                 Type::Var(id)
             }
             (Type::Var(id), to) => self.cast_typ(location, self.types[id].clone(), to),
+            (a, b) if a.is_ptr() && b.is_ptr() => b,
             (from, to) if from.is_number() && to.is_number() => to,
             (from, to) => {
                 let from = from.clone();
@@ -910,10 +915,12 @@ impl<'a> Analyse<'a> {
             location = then_location;
         }
         let typ = self.unify(location, then_typ, else_typ);
+        let asg_type = self.asg_type(&typ);
         let res = asg::If {
             condition,
             then_expr,
             else_expr,
+            typ: asg_type,
         };
         typed(res, typ)
     }
@@ -961,9 +968,22 @@ impl<'a> Analyse<'a> {
             .into_iter()
             .zip(typ.params)
             .map(|((location, expr), expected)| {
+                let needs_deref = self.is_ref(&expected) && !self.is_ref(&expr.typ);
                 let typ = self.unify(location, expected, expr.typ);
                 let asg_type = self.asg_type(&typ);
-                (asg_type, expr.sup)
+                let expr = if needs_deref {
+                    asg::Ref {
+                        expr: expr.sup,
+                        expr_typ: match typ {
+                            Type::Ref(typ) => self.asg_type(&typ),
+                            _ => unreachable!(),
+                        },
+                    }
+                    .into()
+                } else {
+                    expr.sup
+                };
+                (asg_type, expr)
             })
             .collect();
         let ret_type = self.asg_type(&typ.ret_type);
@@ -1059,6 +1079,7 @@ impl<'a> Analyse<'a> {
             | BinOp::Mod
             | BinOp::Div
             | BinOp::And
+            | BinOp::Or
             | BinOp::Subtract
             | BinOp::Multiply => {
                 if matches!(left_typ, Type::Ptr(_)) {
@@ -1099,6 +1120,7 @@ impl<'a> Analyse<'a> {
 
     fn bin_op(&self, bin_op: BinOp) -> asg::BinOp {
         match bin_op {
+            BinOp::Or => asg::BinOp::Or,
             BinOp::Plus => asg::BinOp::Add,
             BinOp::Equal => asg::BinOp::Equal,
             BinOp::Less => asg::BinOp::Less,
@@ -1131,6 +1153,7 @@ impl<'a> Analyse<'a> {
                 let typ = self.typ(typ);
                 typed(asg::Literal::SizeOf(self.asg_type(&typ)), typ)
             }
+            Literal::Char(c) => typed(asg::Literal::Int(c as i64, asg::Type::U8), Prime::U8.into()),
         }
     }
 
@@ -1312,7 +1335,7 @@ impl<'a> Analyse<'a> {
     fn asg_prime(&self, prime: &Prime) -> asg::Type<'a> {
         match prime {
             Prime::Unit => asg::Type::I32,
-            Prime::Bool => asg::Type::U8,
+            Prime::Bool => asg::Type::Bool,
             Prime::I32 => asg::Type::I32,
             Prime::U8 => asg::Type::U8,
             Prime::U64 => asg::Type::U64,
