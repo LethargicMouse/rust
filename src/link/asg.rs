@@ -51,6 +51,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Negate(Box<Negate<'a>>),
     Cast(Box<Cast<'a>>),
     Break(Box<Break<'a>>),
     Return(Box<Return<'a>>),
@@ -67,6 +68,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Negate<'a>> for Expr<'a> {
+    fn from(v: Negate<'a>) -> Self {
+        Self::Negate(Box::new(v))
+    }
 }
 
 impl<'a> From<Cast<'a>> for Expr<'a> {
@@ -187,6 +194,7 @@ pub enum BinOp {
     Multiply,
     Equal,
     Less,
+    More,
     NotEqual,
     Modulo,
     Divide,
@@ -284,4 +292,10 @@ pub struct Cast<'a> {
     pub expr: Expr<'a>,
     pub from: Type<'a>,
     pub to: Type<'a>,
+}
+
+#[derive(Debug)]
+pub struct Negate<'a> {
+    pub expr: Expr<'a>,
+    pub expr_typ: Type<'a>,
 }

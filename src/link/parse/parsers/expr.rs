@@ -3,7 +3,7 @@ use crate::{
     link::{
         ast::{
             Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, Get, If, Let,
-            Loop, New, NewField, Postfix, Ref, Return,
+            Loop, Negate, New, NewField, Postfix, Ref, Return,
         },
         lex::Lexeme::*,
         parse::{Parse, error::Fail},
@@ -21,6 +21,7 @@ impl<'a> Parse<'a> {
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(p.loop_expr_()?.into()),
             |p| Ok(p.ref_expr_()?.into()),
+            |p| Ok(p.negate_()?.into()),
             |p| Ok(p.ret_()?.into()),
             |p| Ok(p.break_()?.into()),
             |p| Ok(p.block_()?.into()),
@@ -72,6 +73,13 @@ impl<'a> Parse<'a> {
         self.expect_(Ampersand)?;
         let expr = self.expr_1()?;
         Ok(Ref { expr, location })
+    }
+
+    fn negate_(&mut self) -> Result<Negate<'a>, Fail> {
+        let location = self.here();
+        self.expect_(Minus)?;
+        let expr = self.expr_1()?;
+        Ok(Negate { expr, location })
     }
 
     fn loop_expr_(&mut self) -> Result<Loop<'a>, Fail> {
@@ -162,6 +170,21 @@ impl<'a> Parse<'a> {
                     }
                     .into()
                 }
+                Postfix::AddAssign(expr) => {
+                    let location = res.location().combine(expr.location());
+                    res = Assign {
+                        expr: Binary {
+                            location,
+                            left: res.clone(),
+                            op: BinOp::Plus,
+                            right: expr,
+                        }
+                        .into(),
+                        to: res,
+                        location,
+                    }
+                    .into()
+                }
             }
         }
         Ok(res)
@@ -178,6 +201,10 @@ impl<'a> Parse<'a> {
             |p| {
                 p.expect_(Equal)?;
                 Ok(Postfix::Assign(p.expr(0)?))
+            },
+            |p| {
+                p.expect(PlusEqual)?;
+                Ok(Postfix::AddAssign(p.expr(0)?))
             },
             |p| {
                 p.expect_(Name("as"))?;
@@ -298,6 +325,7 @@ impl<'a> Parse<'a> {
             |p| p.expect_(Plus).map(|_| BinOp::Plus),
             |p| p.expect_(Equal2).map(|_| BinOp::Equal),
             |p| p.expect_(Less).map(|_| BinOp::Less),
+            |p| p.expect_(More).map(|_| BinOp::More),
             |p| p.expect_(BangEqual).map(|_| BinOp::NotEqual),
             |p| p.expect_(Mod).map(|_| BinOp::Mod),
             |p| p.expect_(Slash).map(|_| BinOp::Div),

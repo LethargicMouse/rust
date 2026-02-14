@@ -21,7 +21,7 @@ use crate::{
     },
 };
 
-pub const DEBUG: bool = false;
+pub const DEBUG: bool = true;
 
 #[derive(Clone, PartialEq, Debug)]
 struct FunType<'a> {
@@ -82,9 +82,9 @@ impl Display for Type<'_> {
             Type::Fun(fun_type) => write!(f, "{fun_type}"),
             Type::Prime(prime) => write!(f, "{prime}"),
             Type::Number => write!(f, "<number>"),
-            Type::Var(id) => write!(f, "<#{id}>"),
+            Type::Var(id) => write!(f, "#{id}"),
             Type::Unreachable => write!(f, "<unreachable>"),
-            Type::Generic(n) => write!(f, "{n}"),
+            Type::Generic(n) => write!(f, "<{n}>"),
             Type::Unknown(None) => write!(f, "_"),
             Type::Unknown(Some(c)) => write!(f, "impl {c}"),
             Type::Ref(typ) => write!(f, "&{typ}"),
@@ -245,6 +245,9 @@ impl<'a> Analyse<'a> {
         }
         for const_ in ast.consts {
             let location = const_.expr.location();
+            if DEBUG {
+                eprintln!("> const {}", const_.name)
+            }
             let expr = self.const_expr(const_.expr);
             let typ = self.context.get(const_.name).unwrap().clone();
             let typ = self.unify(location, typ, expr.typ);
@@ -379,6 +382,7 @@ impl<'a> Analyse<'a> {
             Expr::Array(array) => self.array(array).map_into(),
             Expr::ImplicitUnit(_) => self.literal(Literal::Unit).map_into(),
             Expr::Break(break_expr) => self.break_expr(*break_expr).map_into(),
+            Expr::Negate(negate) => self.negate(*negate).map_into(),
         }
     }
 
@@ -458,6 +462,12 @@ impl<'a> Analyse<'a> {
         typed(asg::Ref { expr, expr_typ }, Type::Ptr(Box::new(typ)))
     }
 
+    fn negate(&mut self, negate: Negate<'a>) -> Typed<'a, asg::Negate<'a>> {
+        let (expr, typ) = self.expr(negate.expr).into();
+        let expr_typ = self.asg_type(&typ);
+        typed(asg::Negate { expr, expr_typ }, typ)
+    }
+
     fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
         self.break_types.push(Type::Unreachable);
         let body = self.block(loop_expr.body.into()).sup;
@@ -465,6 +475,9 @@ impl<'a> Analyse<'a> {
     }
 
     fn new_expr(&mut self, new: New<'a>, is_const: bool) -> Typed<'a, asg::Expr<'a>> {
+        if DEBUG {
+            eprintln!("> new {}", new.lame.name);
+        }
         let typ = self.typ(ast::Type::name(new.lame));
         if matches!(typ, Type::Error) {
             return self.fake_expr();
@@ -485,6 +498,9 @@ impl<'a> Analyse<'a> {
         let mut fields = self.structs[name].fields.clone();
         exprs.resize_with(new.fields.len(), Default::default);
         for field in new.fields {
+            if DEBUG {
+                eprintln!("> field {}", field.lame.name);
+            }
             let location = field.expr.location();
             let (expr, typ) = if is_const {
                 self.const_expr(field.expr)
@@ -553,12 +569,13 @@ impl<'a> Analyse<'a> {
     }
 
     fn field(&mut self, field_expr: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
-        let (expr, typ) = self.expr(field_expr.expr).into();
+        let (expr, mut typ) = self.expr(field_expr.expr).into();
         if matches!(typ, Type::Error) {
             return Err(Fail);
         }
         let is_ref = self.is_ref(&typ);
         let (name, generics) = self.type_name(typ.clone()).ok_or_else(|| {
+            self.reveal(&mut typ);
             self.fail(NoField {
                 location: field_expr.name_location,
                 name: field_expr.name,
@@ -569,11 +586,15 @@ impl<'a> Analyse<'a> {
         self.specify_struct_generics(name, &generics);
         let Field { mut typ, id } = match self.structs[name].fields.get(field_expr.name) {
             Some(field) => Ok(field),
-            None => Err(self.fail(NoField {
-                location: field_expr.name_location,
-                name: field_expr.name,
-                typ: Type::Name(name, generics),
-            })),
+            None => {
+                let mut typ = Type::Name(name, generics);
+                self.reveal(&mut typ);
+                Err(self.fail(NoField {
+                    location: field_expr.name_location,
+                    name: field_expr.name,
+                    typ,
+                }))
+            }
         }?
         .clone();
         self.specify(&mut typ);
@@ -605,17 +626,15 @@ impl<'a> Analyse<'a> {
 
     fn specify_struct_generics(&mut self, name: &str, generics: &Vec<Type<'a>>) {
         for (index, generic) in self.structs[name].generics.iter().enumerate() {
-            let id = self.types.len();
-            self.types.push(
-                generics
-                    .get(index)
-                    .cloned()
-                    .unwrap_or(Type::Unknown(generic.constraint)),
-            );
-            if DEBUG {
-                eprintln!("{id} = {}", self.types[id]);
-            }
-            self.type_context.insert(generic.name, Type::Var(id));
+            let typ = generics.get(index).cloned().unwrap_or_else(|| {
+                let id = self.types.len();
+                self.types.push(Type::Unknown(generic.constraint));
+                if DEBUG {
+                    eprintln!("{id} = {}", self.types[id]);
+                }
+                Type::Var(id)
+            });
+            self.type_context.insert(generic.name, typ);
         }
     }
 
@@ -936,12 +955,7 @@ impl<'a> Analyse<'a> {
             .collect();
         let mut typ = match self.get_fun_type(typ, location) {
             Ok(typ) => typ,
-            Err(_) => {
-                for (location, expr) in args.into_iter() {
-                    self.unify(location, Type::Error, expr.typ);
-                }
-                return Err(Fail);
-            }
+            Err(_) => return Err(Fail),
         };
         self.type_context.new_layer();
         for generic in &typ.generics {
@@ -1006,6 +1020,9 @@ impl<'a> Analyse<'a> {
     }
 
     fn specify(&mut self, typ: &mut Type<'a>) {
+        if DEBUG {
+            eprintln!("> specify {typ}");
+        }
         match typ {
             Type::Ptr(typ) => self.specify(typ),
             Type::Name(_, generics) => {
@@ -1041,6 +1058,9 @@ impl<'a> Analyse<'a> {
             }
             Type::Unknown(_) => {}
             Type::Ref(typ) => self.specify(typ),
+        }
+        if DEBUG {
+            eprintln!("> specified to {typ}")
         }
     }
 
@@ -1089,7 +1109,7 @@ impl<'a> Analyse<'a> {
                     self.unify(right_location, left_typ, right_typ)
                 }
             }
-            BinOp::Equal | BinOp::NotEqual | BinOp::Less => {
+            BinOp::Equal | BinOp::NotEqual | BinOp::Less | BinOp::More => {
                 self.unify(right_location, left_typ, right_typ);
                 Prime::Bool.into()
             }
@@ -1130,6 +1150,7 @@ impl<'a> Analyse<'a> {
             BinOp::And => asg::BinOp::And,
             BinOp::Subtract => asg::BinOp::Subtract,
             BinOp::Multiply => asg::BinOp::Multiply,
+            BinOp::More => asg::BinOp::More,
         }
     }
 
@@ -1167,6 +1188,9 @@ impl<'a> Analyse<'a> {
     }
 
     fn lame_type(&mut self, lame: Lame<'a>, generics: Vec<ast::Type<'a>>) -> Type<'a> {
+        if DEBUG {
+            eprintln!("> got {}", lame.name);
+        }
         let mut generics: Vec<_> = generics.into_iter().map(|t| self.typ(t)).collect();
         if let Some(typ) = self.type_context.get(lame.name) {
             typ.clone()
@@ -1176,10 +1200,10 @@ impl<'a> Analyse<'a> {
             typ
         } else if let Some(struct_) = self.structs.get(lame.name) {
             if generics.is_empty() {
-                generics = struct_
-                    .generics
-                    .iter()
-                    .map(|g| Type::Generic(g.name))
+                let gs = struct_.generics.clone();
+                generics = gs
+                    .into_iter()
+                    .map(|g| self.new_type_var(Type::Unknown(g.constraint)))
                     .collect();
             }
             Type::Name(lame.name, generics)
@@ -1187,6 +1211,13 @@ impl<'a> Analyse<'a> {
             Type::Error
         } else if let Some(r#struct) = self.ast_structs.remove(lame.name) {
             self.r#struct(lame.name, r#struct);
+            if generics.is_empty() {
+                let gs = self.structs[lame.name].generics.clone();
+                generics = gs
+                    .into_iter()
+                    .map(|g| self.new_type_var(Type::Unknown(g.constraint)))
+                    .collect();
+            }
             Type::Name(lame.name, generics)
         } else {
             self.corrupt.insert(lame.name);
@@ -1226,7 +1257,13 @@ impl<'a> Analyse<'a> {
     fn typ(&mut self, typ: ast::Type<'a>) -> Type<'a> {
         match typ {
             ast::Type::Ptr(t, _) => Type::Ptr(Box::new(self.typ(*t))),
-            ast::Type::Name(lame, generics) => self.lame_type(lame, generics),
+            ast::Type::Name(lame, generics) => {
+                let res = self.lame_type(lame, generics);
+                if DEBUG {
+                    eprintln!("> made {res}");
+                }
+                res
+            }
             ast::Type::Fun(fun_type) => self.fun_type(*fun_type).into(),
             ast::Type::Prime(prime, _) => Type::Prime(prime),
             ast::Type::Ref(t, _) => Type::Ref(Box::new(self.typ(*t))),
@@ -1249,6 +1286,9 @@ impl<'a> Analyse<'a> {
     }
 
     fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
+        if DEBUG {
+            eprintln!("> fun {}", fun.header.lame.name);
+        }
         self.context.new_layer();
         self.type_context.new_layer();
         for generic in fun.header.typ.generics {

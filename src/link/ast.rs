@@ -111,6 +111,7 @@ pub struct FunType<'a> {
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub enum Literal<'a> {
     Unit,
     Int(i64),
@@ -120,6 +121,7 @@ pub enum Literal<'a> {
     Size(Type<'a>),
 }
 
+#[derive(Clone)]
 pub struct If<'a> {
     pub location: Location<'a>,
     pub condition: Expr<'a>,
@@ -127,6 +129,7 @@ pub struct If<'a> {
     pub else_expr: Expr<'a>,
 }
 
+#[derive(Clone)]
 pub struct Block<'a> {
     pub stmts: Vec<Expr<'a>>,
     pub last_semi_location: Option<Location<'a>>,
@@ -143,6 +146,7 @@ impl<'a> From<Expr<'a>> for Block<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct Let<'a> {
     pub location: Location<'a>,
     pub name: &'a str,
@@ -150,6 +154,7 @@ pub struct Let<'a> {
     pub expr: Expr<'a>,
 }
 
+#[derive(Clone)]
 pub struct FieldExpr<'a> {
     pub expr: Expr<'a>,
     pub name: &'a str,
@@ -162,7 +167,9 @@ pub struct Lame<'a> {
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub enum Expr<'a> {
+    Negate(Box<Negate<'a>>),
     Break(Box<Break<'a>>),
     ImplicitUnit(Location<'a>),
     Array(Array<'a>),
@@ -181,6 +188,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Negate<'a>> for Expr<'a> {
+    fn from(v: Negate<'a>) -> Self {
+        Self::Negate(Box::new(v))
+    }
 }
 
 impl<'a> From<Break<'a>> for Expr<'a> {
@@ -282,6 +295,7 @@ impl<'a> Expr<'a> {
             Expr::Array(array) => array.location,
             Expr::ImplicitUnit(location) => *location,
             Expr::Break(break_expr) => break_expr.location,
+            Expr::Negate(negate) => negate.location,
         }
     }
 
@@ -311,6 +325,7 @@ impl<'a> Expr<'a> {
             Expr::Array(_) => true,
             Expr::ImplicitUnit(_) => true,
             Expr::Break(_) => true,
+            Expr::Negate(_) => false,
         }
     }
 }
@@ -333,11 +348,13 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct Call<'a> {
     pub lame: Lame<'a>,
     pub args: Vec<Expr<'a>>,
 }
 
+#[derive(Clone)]
 pub struct Binary<'a> {
     pub left: Expr<'a>,
     pub op: BinOp,
@@ -352,6 +369,7 @@ pub enum BinOp {
     Plus,
     Equal,
     Less,
+    More,
     NotEqual,
     Mod,
     Div,
@@ -364,7 +382,7 @@ impl BinOp {
         match self {
             BinOp::Or => 0,
             BinOp::And => 1,
-            BinOp::Equal | BinOp::Less | BinOp::NotEqual => 2,
+            BinOp::Equal | BinOp::Less | BinOp::NotEqual | BinOp::More => 2,
             BinOp::Plus | BinOp::Subtract => 3,
             BinOp::Mod | BinOp::Div | BinOp::Multiply => 4,
         }
@@ -373,6 +391,7 @@ impl BinOp {
 
 pub enum Postfix<'a> {
     Assign(Expr<'a>),
+    AddAssign(Expr<'a>),
     Get(Expr<'a>),
     Call(Call<'a>),
     Field(&'a str, Location<'a>),
@@ -385,6 +404,7 @@ impl<'a> From<Call<'a>> for Postfix<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct Get<'a> {
     pub from: Expr<'a>,
     pub index: Expr<'a>,
@@ -514,47 +534,56 @@ impl<'a> From<FunType<'a>> for Type<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct Assign<'a> {
     pub expr: Expr<'a>,
     pub to: Expr<'a>,
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub struct New<'a> {
     pub lame: Lame<'a>,
     pub fields: Vec<NewField<'a>>,
 }
 
+#[derive(Clone)]
 pub struct Loop<'a> {
     pub body: Expr<'a>,
 }
 
+#[derive(Clone)]
 pub struct Ref<'a> {
     pub expr: Expr<'a>,
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub struct Return<'a> {
     pub expr: Expr<'a>,
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub struct Break<'a> {
     pub expr: Expr<'a>,
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub struct Cast<'a> {
     pub expr: Expr<'a>,
     pub typ: Type<'a>,
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub struct Array<'a> {
     pub elems: Vec<Expr<'a>>,
     pub location: Location<'a>,
 }
 
+#[derive(Clone)]
 pub struct NewField<'a> {
     pub lame: Lame<'a>,
     pub expr: Expr<'a>,
@@ -573,4 +602,10 @@ pub struct Trait<'a> {
 pub struct Generic<'a> {
     pub name: &'a str,
     pub constraint: Option<&'a str>,
+}
+
+#[derive(Clone)]
+pub struct Negate<'a> {
+    pub expr: Expr<'a>,
+    pub location: Location<'a>,
 }

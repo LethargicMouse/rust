@@ -251,6 +251,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Expr::Return(ret) => self.ret(ret),
             Expr::Break(break_expr) => self.break_expr(break_expr),
             Expr::Cast(cast) => self.cast(cast),
+            Expr::Negate(negate) => self.negate(negate),
         }
     }
 
@@ -272,6 +273,15 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
 
     fn ref_expr(&mut self, ref_expr: &'a Ref<'a>) -> Tmp {
         self.expr_ref(&ref_expr.expr, &ref_expr.expr_typ)
+    }
+
+    fn negate(&mut self, negate: &'a Negate<'a>) -> Tmp {
+        let expr = self.expr(&negate.expr);
+        let typ = self.heat_up(&negate.expr_typ);
+        let typ = self.sup.base(&typ);
+        let res = self.new_tmp();
+        self.stmts.push(Stmt::Neg(res, typ, expr));
+        res
     }
 
     fn loop_expr(&mut self, loop_expr: &'a Loop<'a>) -> Tmp {
@@ -656,6 +666,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             BinOp::And => ir::BinOp::And,
             BinOp::Subtract => ir::BinOp::Sub,
             BinOp::Or => ir::BinOp::Or,
+            BinOp::More => ir::BinOp::More,
         }
     }
 

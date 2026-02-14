@@ -95,6 +95,7 @@ pub const LIST: LexList = &[
     (b")", ParR),
     (b"{", CurL),
     (b"}", CurR),
+    (b"+=", PlusEqual),
     (b"+", Plus),
     (b";", Semicolon),
     (b",", Comma),

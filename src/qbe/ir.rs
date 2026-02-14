@@ -183,6 +183,7 @@ pub enum Stmt {
     Label(u16),
     Jump(u16),
     Store(Unsigned, Tmp, Tmp),
+    Neg(Tmp, Type, Tmp),
 }
 
 impl From<Call> for Stmt {
@@ -209,6 +210,7 @@ impl Display for Stmt {
             Stmt::Extub(t, t2) => write!(f, "%t{t} =l extub %t{t2}"),
             Stmt::Exts(t, t2) => write!(f, "%t{t} =d exts %t{t2}"),
             Stmt::Dtosi(typ, t, t2) => write!(f, "%t{t} ={typ} dtosi %t{t2}"),
+            Stmt::Neg(t, typ, t2) => write!(f, "%t{t} ={typ} neg %t{t2}"),
         }
     }
 }
@@ -237,6 +239,7 @@ pub enum BinOp {
     Multiply,
     Equal,
     Less,
+    More,
     Inequal,
     Urem,
     Udiv,
@@ -250,6 +253,7 @@ impl Display for BinOp {
             BinOp::Multiply => write!(f, "mul"),
             BinOp::Equal => write!(f, "ceql"),
             BinOp::Less => write!(f, "csltl"),
+            BinOp::More => write!(f, "csgtl"),
             BinOp::Inequal => write!(f, "cnel"),
             BinOp::Urem => write!(f, "urem"),
             BinOp::Udiv => write!(f, "udiv"),

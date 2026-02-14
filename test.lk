@@ -50,11 +50,43 @@ impl display for bool {
 }
 
 let should_close: bool = false;
-let time: f32 = 0;
+let pipe_timer: f32 = 0;
 
 fn update() {
   if check_if_should_close()
     do return;
+  update_pipes();
+  update_bird();
+}
+
+let pipe_period: f32 = 0;
+
+fn update_pipes() {
+  pipe_timer += GetFrameTime();
+  if pipe_timer > pipe_period {
+    pipe_timer = 0;
+    pipes.push(width);
+  }
+}
+
+fn push<t>(&vec<t>, t) {
+  if (vec.size == vec.buf.size)
+    do vec.buf.grow();
+  vec.buf.ptr[vec.size] = t;
+  vec.size += 1;
+}
+
+let jump_speed: f32 = 300;
+let g: f32 = 700;
+let v: f32 = 0;
+let y: f32 = 0;
+
+fn update_bird() {
+  let dt = GetFrameTime();
+  y += v * dt;
+  v += g * dt;
+  if IsKeyPressed(' ')
+    do v = -jump_speed;
 }
 
 impl display for u8 {
@@ -139,6 +171,16 @@ fn deinit() {
   CloseWindow();
 }
 
+let pipes: vec<i32> = vec {
+  buf: arr {ptr: 0, size: 0},
+  size: 0
+};
+
+struct vec<t> {
+  buf: arr<t>,
+  size
+}
+
 fn draw() {
   BeginDrawing();
   ClearBackground(black);
@@ -146,7 +188,7 @@ fn draw() {
   EndDrawing();
 }
 
-let bird_r: f32 = 30;
+let bird_r: f32 = 20;
 
 fn draw_bird()
-  do DrawCircle(width / 6, height / 2, bird_r, yellow);
+  do DrawCircle(width / 6, height / 2 + y as i32, bird_r, yellow);

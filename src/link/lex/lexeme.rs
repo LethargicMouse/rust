@@ -12,6 +12,7 @@ pub enum Lexeme<'a> {
     CurL,
     CurR,
     Int(i64),
+    PlusEqual,
     Plus,
     Str(&'a str),
     Char(u8),
@@ -66,7 +67,8 @@ impl<'a> Lexeme<'a> {
             Minus => "`-`",
             At => "`@`",
             Bar => "`|`",
-            Char(c) => (c as char).to_string().leak(), // nyah ha ha
+            Char(c) => (c as char).to_string().leak(),
+            PlusEqual => "`+=`",
         }
     }
 }
