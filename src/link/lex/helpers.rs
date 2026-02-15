@@ -1,5 +1,8 @@
 use crate::{
-    link::lex::{Lex, Token, lexeme::Lexeme},
+    link::{
+        ast::{Assign, BinOp, Binary, Expr},
+        lex::{Lex, Token, lexeme::Lexeme},
+    },
     location::Location,
 };
 
@@ -42,4 +45,25 @@ impl<'a> Lex<'a> {
             .count();
         &self.source.code[self.cursor..self.cursor + len]
     }
+}
+
+pub fn op_assign<'a>(
+    location: Location<'a>,
+    left: Expr<'a>,
+    op: BinOp,
+    right: Expr<'a>,
+) -> Expr<'a> {
+    let to = left.clone();
+    Assign {
+        expr: Binary {
+            location,
+            left,
+            op,
+            right,
+        }
+        .into(),
+        to,
+        location,
+    }
+    .into()
 }

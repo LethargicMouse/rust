@@ -387,6 +387,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         offsets.reserve(struct_.fields.len());
         fields.reserve(struct_.fields.len());
         for field in &struct_.fields {
+            let field = &self.heat_up(field);
             offsets.push(offset);
             offset += self.size(field);
             align = align.max(self.align(field));
@@ -571,7 +572,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             &mut first_g_name,
             &generics.first().cloned().unwrap_or_default().clone(),
         );
-        let name: String = self.sup.make_name(call.name, &generics);
+        let mut name: String = self.sup.make_name(call.name, &generics);
         if let Some(fun) = self.sup.asg.funs.get(call.name).or_else(|| {
             for (typ, fun) in self
                 .sup
@@ -582,7 +583,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
                 .flat_map(|v| v.iter())
             {
                 let mut buf = String::new();
-                self.sup.add_to_name(&mut buf, typ);
+                self.sup.add_to_name(&mut buf, &self.heat_up(typ));
                 if first_g_name == buf {
                     return Some(fun);
                 }
@@ -594,6 +595,8 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             let generics = &g_names.into_iter().zip(generics).collect();
             let fun = GenFun::new(self.sup, generics).run(&name, fun);
             self.sup.funs.push(fun);
+        } else {
+            name = call.name.into();
         }
         if DEBUG {
             eprintln!("> ret type");
@@ -646,7 +649,8 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     fn binary(&mut self, binary: &'a Binary<'a>) -> Tmp {
         let left = self.expr(&binary.left);
         let right = self.expr(&binary.right);
-        let op = self.bin_op(&binary.op);
+        let typ = self.heat_up(&binary.args_typ);
+        let op = self.bin_op(&binary.op, &typ);
         let tmp = self.new_tmp();
         let typ = self.heat_up(&binary.typ);
         self.stmts
@@ -654,7 +658,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         tmp
     }
 
-    fn bin_op(&self, bin_op: &BinOp) -> ir::BinOp {
+    fn bin_op(&self, bin_op: &BinOp, typ: &Type<'a>) -> ir::BinOp {
         match bin_op {
             BinOp::Add => ir::BinOp::Add,
             BinOp::Multiply => ir::BinOp::Multiply,
@@ -666,7 +670,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             BinOp::And => ir::BinOp::And,
             BinOp::Subtract => ir::BinOp::Sub,
             BinOp::Or => ir::BinOp::Or,
-            BinOp::More => ir::BinOp::More,
+            BinOp::More => ir::BinOp::More(self.sup.base(typ)),
         }
     }
 

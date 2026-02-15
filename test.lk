@@ -14,11 +14,10 @@ extern fn write(fd, *u8, size);
 extern fn DrawCircle(i32, i32, f32, color);
 extern fn IsKeyPressed(u8) bool;
 extern fn GetKeyPressed() u8;
+extern fn realloc<t>(*t, size) *t;
+extern fn malloc<t>(size) *t;
 
-struct arr<t> {
-  ptr: *t,
-  len: size
-}
+struct arr<t> { *t, size }
 
 type size = u64;
 
@@ -75,6 +74,15 @@ fn push<t>(&vec<t>, t) {
   vec.buf.ptr[vec.size] = t;
   vec.size += 1;
 }
+
+fn grow<t>(&arr<t>)
+  do if arr.size == 0 {
+    arr.size = 8;
+    arr.ptr = malloc(arr.size * @size t);
+  } else {
+    arr.size *= 2;
+    arr.ptr = realloc(arr.ptr, arr.size * @size t);
+  }
 
 let jump_speed: f32 = 300;
 let g: f32 = 700;
@@ -143,7 +151,7 @@ type str = arr<u8>;
 
 impl writer for file {
   fn wwrite(self, str)
-    do write(self.fd, str.ptr, str.len)
+    do write(self.fd, str.ptr, str.size)
 }
 
 fn eprintln<s: display>(s) {

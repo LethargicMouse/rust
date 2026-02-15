@@ -392,6 +392,7 @@ impl BinOp {
 pub enum Postfix<'a> {
     Assign(Expr<'a>),
     AddAssign(Expr<'a>),
+    MulAssign(Expr<'a>),
     Get(Expr<'a>),
     Call(Call<'a>),
     Field(&'a str, Location<'a>),
@@ -437,7 +438,7 @@ impl<'a> Type<'a> {
 
     pub fn get_name(&self) -> &'a str {
         match self {
-            Type::Ptr(typ, _) => typ.get_name(),
+            Type::Ptr(_, _) => "ptr",
             Type::Name(lame, _) => lame.name,
             Type::Fun(_) => "fun",
             Type::Prime(prime, _) => prime.get_name(),
@@ -514,7 +515,10 @@ impl Prime {
 
 impl Display for Prime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.get_name())
+        match self {
+            Self::Unit => write!(f, "()"),
+            _ => write!(f, "{}", self.get_name()),
+        }
     }
 }
 

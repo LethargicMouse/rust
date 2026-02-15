@@ -139,7 +139,7 @@ impl Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DataType::Unsigned(unsigned) => write!(f, "{unsigned}"),
-            DataType::Name(name) => write!(f, "{name}"),
+            DataType::Name(name) => write!(f, ":{name}"),
         }
     }
 }
@@ -239,7 +239,7 @@ pub enum BinOp {
     Multiply,
     Equal,
     Less,
-    More,
+    More(Type),
     Inequal,
     Urem,
     Udiv,
@@ -253,7 +253,10 @@ impl Display for BinOp {
             BinOp::Multiply => write!(f, "mul"),
             BinOp::Equal => write!(f, "ceql"),
             BinOp::Less => write!(f, "csltl"),
-            BinOp::More => write!(f, "csgtl"),
+            BinOp::More(typ) => match typ {
+                Type::Float | Type::Double => write!(f, "cgt{typ}"),
+                _ => write!(f, "csgt{typ}"),
+            },
             BinOp::Inequal => write!(f, "cnel"),
             BinOp::Urem => write!(f, "urem"),
             BinOp::Udiv => write!(f, "udiv"),

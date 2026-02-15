@@ -5,7 +5,7 @@ use crate::{
             Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, Get, If, Let,
             Loop, Negate, New, NewField, Postfix, Ref, Return,
         },
-        lex::Lexeme::*,
+        lex::{Lexeme::*, helpers::op_assign},
         parse::{Parse, error::Fail},
     },
 };
@@ -172,18 +172,11 @@ impl<'a> Parse<'a> {
                 }
                 Postfix::AddAssign(expr) => {
                     let location = res.location().combine(expr.location());
-                    res = Assign {
-                        expr: Binary {
-                            location,
-                            left: res.clone(),
-                            op: BinOp::Plus,
-                            right: expr,
-                        }
-                        .into(),
-                        to: res,
-                        location,
-                    }
-                    .into()
+                    res = op_assign(location, res, BinOp::Plus, expr)
+                }
+                Postfix::MulAssign(expr) => {
+                    let location = res.location().combine(expr.location());
+                    res = op_assign(location, res, BinOp::Plus, expr)
                 }
             }
         }
@@ -205,6 +198,10 @@ impl<'a> Parse<'a> {
             |p| {
                 p.expect(PlusEqual)?;
                 Ok(Postfix::AddAssign(p.expr(0)?))
+            },
+            |p| {
+                p.expect(StarEqual)?;
+                Ok(Postfix::MulAssign(p.expr(0)?))
             },
             |p| {
                 p.expect_(Name("as"))?;

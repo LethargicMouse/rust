@@ -183,6 +183,7 @@ pub struct Binary<'a> {
     pub left: Expr<'a>,
     pub op: BinOp,
     pub right: Expr<'a>,
+    pub args_typ: Type<'a>,
     pub typ: Type<'a>,
 }
 

@@ -1,5 +1,5 @@
 mod error;
-mod helpers;
+pub mod helpers;
 pub mod lexeme;
 pub use lexeme::Lexeme;
 mod lexers;

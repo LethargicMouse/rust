@@ -21,7 +21,7 @@ use crate::{
     },
 };
 
-pub const DEBUG: bool = true;
+pub const DEBUG: bool = false;
 
 #[derive(Clone, PartialEq, Debug)]
 struct FunType<'a> {
@@ -700,9 +700,11 @@ impl<'a> Analyse<'a> {
                     op: asg::BinOp::Multiply,
                     right: asg::Literal::SizeOf(asg_type).into(),
                     typ: asg::Type::U64,
+                    args_typ: asg::Type::U64,
                 }
                 .into(),
                 typ: asg::Type::U64,
+                args_typ: asg::Type::U64,
             }
             .into(),
             typ: self.asg_type(&typ),
@@ -1094,6 +1096,7 @@ impl<'a> Analyse<'a> {
         let right_location = binary.right.location();
         let (right, right_typ) = self.expr(binary.right).into();
         let op = self.bin_op(binary.op);
+        let args_typ = self.asg_type(&left_typ);
         let typ = match binary.op {
             BinOp::Plus
             | BinOp::Mod
@@ -1124,15 +1127,18 @@ impl<'a> Analyse<'a> {
                     op: asg::BinOp::Multiply,
                     right: asg::Literal::SizeOf(self.asg_type(typ)).into(),
                     typ: asg::Type::U64,
+                    args_typ: asg::Type::U64,
                 }
                 .into(),
                 typ: asg_type,
+                args_typ: asg::Type::U64,
             },
             _ => asg::Binary {
                 left,
                 op,
                 right,
                 typ: asg_type,
+                args_typ,
             },
         };
         typed(expr, typ)
@@ -1172,7 +1178,7 @@ impl<'a> Analyse<'a> {
             ),
             Literal::Size(typ) => {
                 let typ = self.typ(typ);
-                typed(asg::Literal::SizeOf(self.asg_type(&typ)), typ)
+                typed(asg::Literal::SizeOf(self.asg_type(&typ)), Prime::U64.into())
             }
             Literal::Char(c) => typed(asg::Literal::Int(c as i64, asg::Type::U8), Prime::U8.into()),
         }
