@@ -3,15 +3,15 @@ use crate::{
     link::{
         ast::{
             Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, Get, If, Let,
-            Loop, Negate, New, NewField, Postfix, Ref, Return,
+            Loop, Match, Negate, New, NewField, Pattern, PatternMatch, Postfix, Ref, Return,
         },
         lex::{Lexeme::*, helpers::op_assign},
-        parse::{Parse, error::Fail},
+        parse::{Parse, Result, error::Fail},
     },
 };
 
 impl<'a> Parse<'a> {
-    fn expr_2(&mut self) -> Result<Expr<'a>, Fail> {
+    fn expr_2(&mut self) -> Result<Expr<'a>> {
         self.either(&[
             |p| {
                 let location = p.here();
@@ -34,7 +34,7 @@ impl<'a> Parse<'a> {
         .or_else(|_| self.fail("expression"))
     }
 
-    fn array_(&mut self) -> Result<Array<'a>, Fail> {
+    fn array_(&mut self) -> Result<Array<'a>> {
         let location = self.here();
         self.expect_(BraL)?;
         let elems = self.sep(|p| p.expr(0)).collect();
@@ -43,14 +43,14 @@ impl<'a> Parse<'a> {
         Ok(Array { elems, location })
     }
 
-    fn par_expr(&mut self) -> Result<Expr<'a>, Fail> {
+    fn par_expr(&mut self) -> Result<Expr<'a>> {
         self.expect_(ParL)?;
         let res = self.expr(0)?;
         self.expect(ParR)?;
         Ok(res)
     }
 
-    fn ret_(&mut self) -> Result<Return<'a>, Fail> {
+    fn ret_(&mut self) -> Result<Return<'a>> {
         let location = self.here();
         self.expect_(Name("return"))?;
         let expr = self
@@ -59,7 +59,7 @@ impl<'a> Parse<'a> {
         Ok(Return { expr, location })
     }
 
-    fn break_(&mut self) -> Result<Break<'a>, Fail> {
+    fn break_(&mut self) -> Result<Break<'a>> {
         let location = self.here();
         self.expect_(Name("break"))?;
         let expr = self
@@ -68,27 +68,27 @@ impl<'a> Parse<'a> {
         Ok(Break { expr, location })
     }
 
-    fn ref_expr_(&mut self) -> Result<Ref<'a>, Fail> {
+    fn ref_expr_(&mut self) -> Result<Ref<'a>> {
         let location = self.here();
         self.expect_(Ampersand)?;
         let expr = self.expr_1()?;
         Ok(Ref { expr, location })
     }
 
-    fn negate_(&mut self) -> Result<Negate<'a>, Fail> {
+    fn negate_(&mut self) -> Result<Negate<'a>> {
         let location = self.here();
         self.expect_(Minus)?;
         let expr = self.expr_1()?;
         Ok(Negate { expr, location })
     }
 
-    fn loop_expr_(&mut self) -> Result<Loop<'a>, Fail> {
+    fn loop_expr_(&mut self) -> Result<Loop<'a>> {
         self.expect_(Name("loop"))?;
         let body = self.expr(0)?;
         Ok(Loop { body })
     }
 
-    fn new_expr_(&mut self) -> Result<New<'a>, Fail> {
+    fn new_expr_(&mut self) -> Result<New<'a>> {
         let lame = self.lame(false)?;
         self.expect(CurL)?;
         let fields = self.sep(Self::new_field).collect();
@@ -96,7 +96,7 @@ impl<'a> Parse<'a> {
         Ok(New { lame, fields })
     }
 
-    fn new_field(&mut self) -> Result<NewField<'a>, Fail> {
+    fn new_field(&mut self) -> Result<NewField<'a>> {
         self.either(&[
             |p| {
                 let lame = p.lame(true)?;
@@ -112,10 +112,10 @@ impl<'a> Parse<'a> {
         ])
     }
 
-    fn let_expr_(&mut self) -> Result<Let<'a>, Fail> {
+    fn let_expr_(&mut self) -> Result<Let<'a>> {
         let location = self.here();
         self.expect_(Name("let"))?;
-        let name = self.name(true)?;
+        let lame = self.lame(true)?;
         let typ = self.maybe(|p| {
             p.expect(Colon)?;
             p.typ()
@@ -123,14 +123,14 @@ impl<'a> Parse<'a> {
         self.expect(Equal)?;
         let expr = self.expr(0)?;
         Ok(Let {
-            name,
             typ,
             expr,
             location,
+            lame,
         })
     }
 
-    fn expr_1(&mut self) -> Result<Expr<'a>, Fail> {
+    fn expr_1(&mut self) -> Result<Expr<'a>> {
         let mut res = self.expr_2()?;
         while let Some(postfix) = self.maybe(Self::postfix_) {
             match postfix {
@@ -170,20 +170,24 @@ impl<'a> Parse<'a> {
                     }
                     .into()
                 }
-                Postfix::AddAssign(expr) => {
+                Postfix::OpAssign(op, expr) => {
                     let location = res.location().combine(expr.location());
-                    res = op_assign(location, res, BinOp::Plus, expr)
+                    res = op_assign(location, res, op, expr)
                 }
-                Postfix::MulAssign(expr) => {
-                    let location = res.location().combine(expr.location());
-                    res = op_assign(location, res, BinOp::Plus, expr)
+                Postfix::Match(location, pattern_matches) => {
+                    res = Match {
+                        expr: res,
+                        pattern_matches,
+                        location,
+                    }
+                    .into()
                 }
             }
         }
         Ok(res)
     }
 
-    fn postfix_(&mut self) -> Result<Postfix<'a>, Fail> {
+    fn postfix_(&mut self) -> Result<Postfix<'a>> {
         self.either(&[
             |p| {
                 p.expect_(BraL)?;
@@ -196,16 +200,29 @@ impl<'a> Parse<'a> {
                 Ok(Postfix::Assign(p.expr(0)?))
             },
             |p| {
-                p.expect(PlusEqual)?;
-                Ok(Postfix::AddAssign(p.expr(0)?))
+                p.expect_(PlusEqual)?;
+                Ok(Postfix::OpAssign(BinOp::Add, p.expr(0)?))
             },
             |p| {
-                p.expect(StarEqual)?;
-                Ok(Postfix::MulAssign(p.expr(0)?))
+                p.expect_(StarEqual)?;
+                Ok(Postfix::OpAssign(BinOp::Multiply, p.expr(0)?))
+            },
+            |p| {
+                p.expect_(MinusEqual)?;
+                Ok(Postfix::OpAssign(BinOp::Subtract, p.expr(0)?))
             },
             |p| {
                 p.expect_(Name("as"))?;
                 Ok(Postfix::Cast(p.typ()?))
+            },
+            |p| {
+                p.expect_(Dot)?;
+                let location = p.here();
+                p.expect_(Name("match"))?;
+                p.expect(CurL)?;
+                let pattern_matches = p.sep(Self::pattern_match).collect();
+                p.expect(CurR)?;
+                Ok(Postfix::Match(location, pattern_matches))
             },
             |p| {
                 p.expect_(Dot)?;
@@ -220,7 +237,25 @@ impl<'a> Parse<'a> {
         ])
     }
 
-    fn if_expr_(&mut self) -> Result<If<'a>, Fail> {
+    fn pattern_match(&mut self) -> Result<PatternMatch<'a>> {
+        let pattern = self.pattern()?;
+        self.expect(EqualMore)?;
+        let expr = self.expr(0)?;
+        Ok(PatternMatch { pattern, expr })
+    }
+
+    fn pattern(&mut self) -> Result<Pattern<'a>> {
+        let name = self.name(true)?;
+        let value = self.maybe(|p| {
+            p.expect(ParL)?;
+            let lame = p.lame(true)?;
+            p.expect(ParR)?;
+            Ok(lame)
+        });
+        Ok(Pattern { name, value })
+    }
+
+    fn if_expr_(&mut self) -> Result<If<'a>> {
         let location = self.here();
         self.expect_(Name("if"))?;
         let condition = self.expr(0)?;
@@ -243,34 +278,23 @@ impl<'a> Parse<'a> {
         Expr::ImplicitUnit(location)
     }
 
-    pub fn block_or_do(&mut self) -> Result<Expr<'a>, Fail> {
+    pub fn block_or_do(&mut self) -> Result<Expr<'a>> {
         self.either(&[
             |p| Ok(p.block()?.into()),
             |p| {
-                let before_do = p.here();
                 p.expect(Name("do"))?;
-                let res = p.expr(0)?;
-                let last_semi_location = Some(p.here());
-                Ok(match p.expect(Semicolon) {
-                    Ok(_) => Block {
-                        stmts: vec![res],
-                        last_semi_location,
-                        ret: p.implicit_unit(before_do),
-                    }
-                    .into(),
-                    Err(_) => res,
-                })
+                p.expr(0)
             },
         ])
     }
 
-    fn block(&mut self) -> Result<Block<'a>, Fail> {
+    fn block(&mut self) -> Result<Block<'a>> {
         self.maybe(Self::block_)
             .ok_or(Fail)
             .or_else(|_| self.fail(CurL.show()))
     }
 
-    fn block_(&mut self) -> Result<Block<'a>, Fail> {
+    fn block_(&mut self) -> Result<Block<'a>> {
         let location = self.here();
         self.expect_(CurL)?;
         let mut stmts = self.many(Self::stmt);
@@ -297,7 +321,7 @@ impl<'a> Parse<'a> {
         })
     }
 
-    pub fn expr(&mut self, min_priority: u8) -> Result<Expr<'a>, Fail> {
+    pub fn expr(&mut self, min_priority: u8) -> Result<Expr<'a>> {
         let mut expr = self.expr_1()?;
         while let Some((op, right)) = self.maybe(|p| p.bin_postfix_(min_priority)) {
             expr = Binary {
@@ -311,25 +335,27 @@ impl<'a> Parse<'a> {
         Ok(expr)
     }
 
-    fn bin_postfix_(&mut self, min_priority: u8) -> Result<(BinOp, Expr<'a>), Fail> {
+    fn bin_postfix_(&mut self, min_priority: u8) -> Result<(BinOp, Expr<'a>)> {
         let op = self.bin_op_(min_priority)?;
         let expr = self.expr(min_priority.max(op.priority() + 1))?;
         Ok((op, expr))
     }
 
-    fn bin_op_(&mut self, min_priority: u8) -> Result<BinOp, Fail> {
+    fn bin_op_(&mut self, min_priority: u8) -> Result<BinOp> {
         let res = self.either(&[
-            |p| p.expect_(Plus).map(|_| BinOp::Plus),
+            |p| p.expect_(Plus).map(|_| BinOp::Add),
             |p| p.expect_(Equal2).map(|_| BinOp::Equal),
             |p| p.expect_(Less).map(|_| BinOp::Less),
             |p| p.expect_(More).map(|_| BinOp::More),
             |p| p.expect_(BangEqual).map(|_| BinOp::NotEqual),
             |p| p.expect_(Mod).map(|_| BinOp::Mod),
             |p| p.expect_(Slash).map(|_| BinOp::Div),
-            |p| p.expect_(Ampersand).map(|_| BinOp::And),
+            |p| p.expect_(Ampersand).map(|_| BinOp::BitAnd),
+            |p| p.expect_(Ampersand2).map(|_| BinOp::And),
             |p| p.expect_(Minus).map(|_| BinOp::Subtract),
             |p| p.expect_(Star).map(|_| BinOp::Multiply),
-            |p| p.expect_(Bar).map(|_| BinOp::Or),
+            |p| p.expect_(Bar).map(|_| BinOp::BitOr),
+            |p| p.expect_(Bar2).map(|_| BinOp::Or),
         ])?;
         if res.priority() >= min_priority {
             Ok(res)
@@ -338,7 +364,7 @@ impl<'a> Parse<'a> {
         }
     }
 
-    fn call(&mut self, loud: bool) -> Result<Call<'a>, Fail> {
+    fn call(&mut self, loud: bool) -> Result<Call<'a>> {
         let lame = self.lame(loud)?;
         self.expect_(ParL)?;
         let args = self.sep(|p| p.expr(0)).collect();
@@ -346,7 +372,7 @@ impl<'a> Parse<'a> {
         Ok(Call { lame, args })
     }
 
-    pub fn stmt(&mut self) -> Result<Expr<'a>, Fail> {
+    pub fn stmt(&mut self) -> Result<Expr<'a>> {
         let expr = self.expr(0)?;
         if expr.needs_semicolon() {
             self.expect(Semicolon)?;

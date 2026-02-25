@@ -1,0 +1,396 @@
+extern fn InitWindow(i32, i32, cstr);
+extern fn SetTargetFPS(i32);
+extern fn WindowShouldClose() bool;
+extern fn CloseWindow();
+extern fn BeginDrawing();
+extern fn ClearBackground(color);
+extern fn DrawText(cstr, i32, i32, i32, color);
+extern fn EndDrawing();
+extern fn MeasureText(cstr, i32) i32;
+extern fn GetFrameTime() f32;
+extern fn sin(f64) f64;
+extern fn cos(f64) f64;
+extern fn write(fd, *u8, size);
+extern fn DrawCircle(i32, i32, f32, color);
+extern fn IsKeyPressed(u8) bool;
+extern fn GetKeyPressed() u8;
+extern fn realloc<t>(*t, size) *t;
+extern fn malloc<t>(size) *t;
+extern fn DrawRectangle(i32, i32, i32, i32, color); 
+extern fn time(u64) i32;
+
+struct arr<t> { *t, size }
+
+type size = u64;
+
+type cstr = *u8;
+
+struct color { r: u8, g: u8, b: u8, a: u8 }
+
+let black: color = color {r: 0, g: 0, b: 0, a: 255};
+let lightgray: color = color {r: 200, g: 200, b: 200, a: 255};
+let blue: color = color {r: 102, g: 191, b: 255, a: 255};
+let yellow: color = color {r: 253, g: 249, b: 0, a: 255};
+let white: color = color {r: 255, g: 255, b: 255, a: 255};
+
+fn main() {
+  init();
+  loop {
+    if should_close 
+      do break;
+    draw();
+    update();
+  }
+  deinit();
+}
+
+impl display for bool {
+  fn wprint<w: wrarr>(w, self)
+    do if self
+      do w.wprint("true")
+    else w.wprint("false")
+}
+
+let should_close: bool = false;
+let pipe_timer: f32 = 0;
+
+let state: state = game;
+
+enum state {
+  game,
+  death
+}
+
+fn update() {
+  if check_if_should_close()
+    do return;
+  state.match {
+    game => update_game(),
+    death => update_death(),
+  }
+}
+
+fn update_game() {
+  update_pipes();
+  update_bird();
+  if bird_in_pipes()
+    do state = death;
+}
+
+fn update_death() 
+  do if IsKeyPressed('R')
+    do reset()
+
+fn reset() {
+  state = game;
+  y = 0;
+  v = 0;
+  clear(pipes);
+}
+
+fn clear<t>(&vec<t>)
+  do vec.size = 0
+
+let pipe_period: f32 = 1;
+
+fn update_pipes() {
+    let i = 0;
+    loop if i == pipes.size do break else {
+      update_pipe(pipes.buf.ptr[i]);
+      if pipes.buf.ptr[i].x + pipe_width < 0
+        do pipes.swap_pop(i) as ()
+      else i += 1;
+    }
+    spawn_pipe();
+}
+
+let speed: f32 = 300;
+
+fn update_pipe(&pipe) 
+  do pipe.x -= (speed * GetFrameTime()) as i32
+
+fn swap_pop<t>(&vec<t>, index) t {
+  vec.swap(index, vec.size - 1);
+  vec.pop()
+}
+
+type index = size;
+
+fn swap<t>(&vec<t>, a: index, b: index) {
+  let c = vec.buf.ptr[a];
+  vec.buf.ptr[a] = vec.buf.ptr[b];
+  vec.buf.ptr[b] = c;
+}
+
+fn pop<t>(&vec<t>) t {
+  vec.size -= 1;    
+  vec.buf.ptr[vec.size]
+}
+
+fn spawn_pipe() {
+  pipe_timer += GetFrameTime();
+  if pipe_timer < pipe_period
+    do return;
+  pipe_timer = 0;
+
+  let spread = bird_r as u64 * 8;
+
+  let pipe = pipe {
+    height: random(height as u64 / 2 - spread, height as u64 / 2 + spread) as i32,
+    x: width,
+    gap: bird_r as i32 * 8
+  };
+  pipes.push(pipe);
+}
+
+fn random(min: u64, max: u64) u64
+  do min + (max - min) * rand() / rand_mod
+
+fn push<t>(&vec<t>, t) {
+  if (vec.size == vec.buf.size)
+    do vec.buf.grow();
+  vec.buf.ptr[vec.size] = t;
+  vec.size += 1;
+}
+
+fn grow<t>(&arr<t>)
+  do if arr.size == 0 {
+    arr.size = 8;
+    arr.ptr = malloc(arr.size * @size t);
+  } else {
+    arr.size *= 2;
+    arr.ptr = realloc(arr.ptr, arr.size * @size t);
+  }
+
+let jump_speed: f32 = 450;
+let g: f32 = 1400;
+let v: f32 = 0;
+let y: f32 = 0;
+
+fn update_bird() {
+  let dt = GetFrameTime();
+  y += v * dt;
+  v += g * dt;
+  if IsKeyPressed(' ')
+    do v = -jump_speed;
+}
+
+impl display for u8 {
+  fn wprint<w: wrarr>(w, self)
+    do w.wprint(self as i64)
+}
+
+impl display for i64 {
+  fn wprint<w: wrarr>(w, self)
+    do if self == 0
+      do w.wprint("0")
+    else w.wprint(non_null {i64: self})
+}
+
+struct non_null {i64}
+
+fn non_null(i64) non_null
+  do non_null {i64}
+
+impl display for non_null {
+  fn wprint<w: wrarr>(w, self) {
+    if self.i64 == 0
+      do return;
+    let c = (48 + self.i64 % 10) as u8;
+    w.wprint(non_null(self.i64 / 10));
+    w.wprint(c2str(c));
+  }
+}
+
+fn c2str(&u8) str
+  do str {
+    ptr: u8 as *u8,
+    size: 1
+  }
+
+fn eprint<s: display>(s) 
+  do stderr.wprint(s)
+
+let stderr: file = file {fd: 2};
+
+struct file {fd}
+
+type fd = i32;
+
+trait display {
+  fn wprint<w: wrarr>(w, self);
+}
+
+trait wrarr {
+  fn wwrite(self, str);
+}
+
+type str = arr<u8>;
+
+impl wrarr for file {
+  fn wwrite(self, str)
+    do write(self.fd, str.ptr, str.size)
+}
+
+fn eprintln<s: display>(s) {
+  eprint(s);
+  eprint("\n")
+}
+
+impl display for str {
+  fn wprint<w: wrarr>(w, self)
+    do w.wwrite(self)
+}
+
+fn check_if_should_close() bool { 
+  should_close = WindowShouldClose() | IsKeyPressed('Q');
+  should_close
+}
+
+let width: i32 = 800;
+let height: i32 = 600;
+
+fn init() {
+  seed = time(0) as u64;
+  InitWindow(width, height, "test window".ptr);
+  SetTargetFPS(60);
+}
+
+fn deinit() {
+  CloseWindow();
+}
+
+let pipes: vec<pipe> = vec {
+  buf: arr {ptr: 0, size: 0},
+  size: 0
+};
+
+struct vec<t> {
+  buf: arr<t>,
+  size
+}
+
+fn draw() {
+  BeginDrawing();
+  ClearBackground(black);
+  draw_pipes();
+  draw_bird();
+  EndDrawing();
+}
+
+fn draw_pipes() {
+  let i = 0;
+  loop if i == pipes.size do break else {
+    draw_pipe(pipes.buf.ptr[i]);
+    i += 1;
+  }
+}
+
+let pipe_width: i32 = 50;
+
+fn draw_pipe(pipe) {
+  let below_gap = pipe.height + pipe.gap;
+  DrawRectangle(pipe.x, 0, pipe_width, pipe.height, white);
+  DrawRectangle(pipe.x, below_gap, pipe_width, height - below_gap, white);
+}
+
+let rand_mod: u64 = 2147483647;
+let seed: u64 = 1;
+
+fn rand() u64 {
+  let rand_a: u64 = 48271;
+  seed = (seed * rand_a) % rand_mod;
+  seed
+}
+
+fn vec2(x: f32, y: f32) vec2
+  do vec2 {x, y}
+
+struct pipe {
+  x: i32,
+  height: i32,
+  gap: i32
+}
+
+let bird_r: f32 = 15;
+
+fn draw_bird()
+  do DrawCircle(width / 6, height / 2 + y as i32, bird_r, yellow)
+
+struct vec2 {
+  x: f32,
+  y: f32
+}
+
+enum maybe<t> {
+  some(t),
+  none,
+}
+
+fn bird_in_pipes() bool
+  do pipes.slice(0, 2).any(bird_in_pipe)
+
+fn is_some_and<t>(maybe<t>, fn(t) bool) bool
+  do maybe.match {
+    some(t) => fn(t)
+  }
+
+fn get<t>(vec<t>, index) maybe<t>
+  do if index < vec.size
+    do some(vec.buf.ptr[index])
+  else none
+
+fn bird_in_pipe(pipe) bool
+  do [
+    vec2i(pipe.x, pipe.height), 
+    vec2i(pipe.x + pipe_width, pipe.height), 
+    vec2i(pipe.x, pipe.height + pipe.gap), 
+    vec2i(pipe.x + pipe_width, pipe.height + pipe.gap)
+  ].any(in_bird)
+
+fn vec2i(a: i32, b: i32) vec2
+  do vec2(a as f32, b as f32)
+
+fn in_bird(vec2) bool
+  do (vec2.x - width as f32 / 6).pow(2) * (vec2.y - y).pow(2) < bird_r.pow(2)
+
+fn pow(f32, u64) f32
+  do if u64 == 0
+    do 1
+  else if u64 == 1
+    do 2
+  else {
+    let x = pow(f32, u64 / 2);
+    x *= x;
+    if u64 & 1 == 1 
+      do x *= f32;
+    x
+  }
+
+fn slice<t>(vec<t>, from: index, to: index) arr<t> {
+  from = from.min(vec.size);
+  to = to.min(vec.size);
+  arr {
+    ptr: vec.buf.ptr + from,
+    size: to - from
+  }
+}
+
+fn min(a: u64, b: u64) u64
+  do if a < b
+    do a
+  else b
+
+fn any<t>(arr<t>, fn(t) bool) bool
+  do loop arr.next().match {
+    some(t) => if fn(t) do return true,
+    none => return false
+  }
+
+fn next<t>(&arr<t>) maybe<t>
+  do if arr.size == 0
+    do none
+  else {
+    arr.size -= 1;
+    some(arr.ptr[arr.size])
+  }

@@ -9,14 +9,14 @@ use crate::{
     link::{
         ast::{Ast, Field, FunType, Generic, Item, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
-        parse::{Fail, Parse},
+        parse::{Fail, Parse, Result},
     },
 };
 
-pub type Parser<'a, T> = fn(&mut Parse<'a>) -> Result<T, Fail>;
+pub type Parser<'a, T> = fn(&mut Parse<'a>) -> Result<T>;
 
 impl<'a> Parse<'a> {
-    pub fn ast(&mut self) -> Result<Ast<'a>, Fail> {
+    pub fn ast(&mut self) -> Result<Ast<'a>> {
         let mut funs = Vec::new();
         let mut externs = Vec::new();
         let mut structs = HashMap::new();
@@ -24,6 +24,7 @@ impl<'a> Parse<'a> {
         let mut traits = HashMap::new();
         let mut impls = Vec::new();
         let mut consts = Vec::new();
+        let mut enums = HashMap::new();
         while let Some(item) = self.maybe(Self::item) {
             match item {
                 Item::Fun(fun) => funs.push(*fun),
@@ -39,6 +40,9 @@ impl<'a> Parse<'a> {
                 }
                 Item::Impl(impl_) => impls.push(impl_),
                 Item::Const(let_) => consts.push(let_),
+                Item::Enum(name, enum_) => {
+                    enums.insert(name, enum_);
+                }
             }
         }
         let end = self.here();
@@ -47,6 +51,7 @@ impl<'a> Parse<'a> {
             funs,
             externs,
             structs,
+            enums,
             type_aliases,
             traits,
             impls,
@@ -55,11 +60,11 @@ impl<'a> Parse<'a> {
         })
     }
 
-    pub fn expect(&mut self, lexeme: Lexeme<'a>) -> Result<(), Fail> {
+    pub fn expect(&mut self, lexeme: Lexeme<'a>) -> Result<()> {
         self.expect_(lexeme).or_else(|_| self.fail(lexeme.show()))
     }
 
-    fn expect_(&mut self, lexeme: Lexeme) -> Result<(), Fail> {
+    fn expect_(&mut self, lexeme: Lexeme) -> Result<()> {
         if self.tokens[self.cursor].lexeme == lexeme {
             self.cursor += 1;
             Ok(())
@@ -76,7 +81,7 @@ impl<'a> Parse<'a> {
         self.tokens[self.cursor].location
     }
 
-    fn typ(&mut self) -> Result<Type<'a>, Fail> {
+    fn typ(&mut self) -> Result<Type<'a>> {
         self.either(&[
             |p| {
                 let location = p.here();
@@ -110,7 +115,7 @@ impl<'a> Parse<'a> {
         .or_else(|_| self.fail("type"))
     }
 
-    fn fun_type_(&mut self) -> Result<FunType<'a>, Fail> {
+    fn fun_type_(&mut self) -> Result<FunType<'a>> {
         let location = self.here();
         self.expect_(Name("fn"))?;
         let generics = self.maybe(Self::generics).unwrap_or_default();
@@ -128,14 +133,14 @@ impl<'a> Parse<'a> {
         })
     }
 
-    fn generics(&mut self) -> Result<Vec<Generic<'a>>, Fail> {
+    fn generics(&mut self) -> Result<Vec<Generic<'a>>> {
         self.expect(Less)?;
         let res: Vec<_> = self.sep(Self::generic).collect();
         self.expect(More)?;
         Ok(res)
     }
 
-    fn generic(&mut self) -> Result<Generic<'a>, Fail> {
+    fn generic(&mut self) -> Result<Generic<'a>> {
         let name = self.name(true)?;
         let constraint = self.maybe(|p| {
             p.expect_(Colon)?;
@@ -144,18 +149,18 @@ impl<'a> Parse<'a> {
         Ok(Generic { name, constraint })
     }
 
-    fn field(&mut self) -> Result<Field<'a>, Fail> {
+    fn field(&mut self) -> Result<Field<'a>> {
         self.either(&[
             |p| {
-                let name = p.name(true)?;
+                let lame = p.lame(true)?;
                 p.expect(Colon)?;
                 let typ = p.typ()?;
-                Ok(Field { name, typ })
+                Ok(Field { lame, typ })
             },
             |p| {
                 let typ = p.typ()?;
-                let name = typ.get_name();
-                Ok(Field { name, typ })
+                let lame = typ.get_lame();
+                Ok(Field { lame, typ })
             },
         ])
     }

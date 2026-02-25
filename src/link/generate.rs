@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     link::{Context, analyse::DEBUG, asg::*},
-    qbe::ir::{self, Const, DataType, IR, Signed, Stmt, Tmp, Unsigned, Value},
+    qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Unsigned, Value},
 };
 
 pub fn generate(asg: &Asg) -> IR {
@@ -10,7 +10,7 @@ pub fn generate(asg: &Asg) -> IR {
 }
 
 pub struct TypeDeclInfo {
-    offsets: Vec<u32>,
+    offsets: Vec<Vec<u32>>,
     size: u32,
     align: u32,
 }
@@ -39,7 +39,7 @@ impl<'a> Generate<'a> {
     }
 
     fn run(mut self) -> IR {
-        for (name, typ, const_) in self.asg.consts.iter() {
+        for (name, (typ, const_)) in self.asg.consts.iter() {
             let id = self.eval_const(const_, typ);
             self.context.insert(name, (Value::Const(id), typ.clone()))
         }
@@ -79,6 +79,7 @@ impl<'a> Generate<'a> {
             Type::F32 => *full_name += "$$fw",
             Type::F64 => *full_name += "$$fl",
             Type::Bool => *full_name += "$$bool",
+            Type::Unit => *full_name += "$$unit",
         }
     }
 
@@ -111,6 +112,7 @@ impl<'a> Generate<'a> {
             Type::F32 => ir::Type::Float,
             Type::F64 => ir::Type::Double,
             Type::Bool => ir::Type::Word,
+            Type::Unit => ir::Type::Word,
         }
     }
 
@@ -129,10 +131,10 @@ impl<'a> Generate<'a> {
         &self,
         literal: &Literal<'_>,
         typ: &Type<'a>,
-        contents: &mut Vec<(DataType, Value)>,
+        contents: &mut Vec<(Unsigned, Value)>,
     ) {
         match literal {
-            Literal::Int(i, _) => contents.push((self.data_type(typ), int_val(*i, typ))),
+            Literal::Int(i, _) => contents.push((self.unsigned(typ), int_val(*i, typ))),
             Literal::Str(_) => todo!(),
             Literal::SizeOf(_) => todo!(),
         }
@@ -142,16 +144,22 @@ impl<'a> Generate<'a> {
         &self,
         expr: &Expr<'_>,
         typ: &Type<'a>,
-        contents: &mut Vec<(DataType, Value)>,
+        contents: &mut Vec<(Unsigned, Value)>,
     ) {
         match expr {
             Expr::Literal(literal) => self.const_add_literal(literal, typ, contents),
             Expr::Tuple(tuple) => self.const_add_tuple(tuple, contents),
+            Expr::Var(name) => {
+                if DEBUG {
+                    eprintln!("> const var {name}");
+                }
+                self.const_add_expr(&self.asg.consts[name].1, &self.asg.consts[name].0, contents)
+            }
             _ => unreachable!("{expr:?}"),
         }
     }
 
-    fn const_add_tuple(&self, tuple: &'a Tuple<'a>, contents: &mut Vec<(DataType, Value)>) {
+    fn const_add_tuple(&self, tuple: &'a Tuple<'a>, contents: &mut Vec<(Unsigned, Value)>) {
         for (typ, expr) in &tuple.exprs {
             self.const_add_expr(expr, typ, contents);
         }
@@ -165,6 +173,7 @@ struct GenFun<'a, 'b, 'c> {
     label: u16,
     loop_ends: Vec<u16>,
     generics: &'c HashMap<&'a str, Type<'a>>,
+    typ_generics: HashMap<&'a str, Type<'a>>,
 }
 
 impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
@@ -176,6 +185,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             label: 0,
             generics,
             sup,
+            typ_generics: HashMap::new(),
         }
     }
 
@@ -240,7 +250,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Expr::Literal(literal) => self.literal(literal),
             Expr::Var(name) => self.var(name),
             Expr::If(if_expr) => self.if_expr(if_expr),
-            Expr::Deref(expr) => self.deref(expr),
+            Expr::Deref(deref) => self.deref(&deref.expr, &deref.typ),
             Expr::Block(block) => self.block(block),
             Expr::Let(let_expr) => self.let_expr(let_expr),
             Expr::Field(field) => self.field(field),
@@ -252,7 +262,37 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Expr::Break(break_expr) => self.break_expr(break_expr),
             Expr::Cast(cast) => self.cast(cast),
             Expr::Negate(negate) => self.negate(negate),
+            Expr::Expr(match_expr) => self.match_expr(match_expr),
         }
+    }
+
+    fn match_expr(&mut self, match_expr: &'a Match<'a>) -> Tmp {
+        let tmp = self.deref(&match_expr.expr, &Type::U8);
+        let res = self.new_tmp();
+        let end = self.new_label();
+        let typ = self.heat_up(&match_expr.typ);
+        for (val, expr) in &match_expr.pattern_matches {
+            let val = self.int((*val) as i64, &Type::U8);
+            let f = self.new_tmp();
+            self.stmts.push(Stmt::Bin(
+                f,
+                self.sup.base(&Type::Bool),
+                ir::BinOp::Equal(ir::Type::Word),
+                val,
+                tmp,
+            ));
+            let then = self.new_label();
+            let next = self.new_label();
+            self.stmts.push(Stmt::Jnz(f, then, next));
+            self.stmts.push(Stmt::Label(then));
+            let expr = self.expr(expr);
+            self.stmts
+                .push(Stmt::Copy(res, self.sup.base(&typ), Value::Tmp(expr)));
+            self.stmts.push(Stmt::Jump(end));
+            self.stmts.push(Stmt::Label(next));
+        }
+        self.stmts.push(Stmt::Label(end));
+        res
     }
 
     fn ret(&mut self, ret: &'a Return<'a>) -> Tmp {
@@ -302,6 +342,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             .iter()
             .map(|(typ, _)| (self.align(typ), self.size(typ)))
             .fold((1, 0), |(fa, fs), (a, s)| (fa.max(a), fs + s));
+        self.stmts.push(Stmt::Comment("tuple".into()));
         self.stmts.push(Stmt::Alloc(tmp, align, size));
         let mut offset = 0;
         for (typ, expr) in &tuple.exprs {
@@ -332,7 +373,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let expr = self.expr(&assign.expr);
         let typ = self.heat_up(&assign.expr_type);
         self.put(to, expr, &typ);
-        expr
+        self.int(0, &Type::Unit)
     }
 
     fn size(&mut self, typ: &Type<'a>) -> u32 {
@@ -341,8 +382,8 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
         match typ {
             Type::Name(name, generics) => {
+                self.typ(name, generics);
                 let full_name = self.sup.make_name(name, generics);
-                self.typ(&full_name, name);
                 self.sup.type_infos[&full_name].size
             }
             Type::Cold(id) => self.size(&self.sup.asg.info.types[*id]),
@@ -354,6 +395,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Type::F32 => 4,
             Type::F64 => 8,
             Type::Bool => 1,
+            Type::Unit => 0,
         }
     }
 
@@ -363,8 +405,8 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
         match typ {
             Type::Name(name, generics) => {
+                self.typ(name, generics);
                 let full_name = self.sup.make_name(name, generics);
-                self.typ(&full_name, name);
                 self.sup.type_infos[&full_name].align
             }
             Type::Cold(id) => self.align(&self.sup.asg.info.types[*id]),
@@ -372,36 +414,49 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
     }
 
-    fn typ(&mut self, full_name: &String, name: &str) {
+    fn typ(&mut self, name: &str, generics: &[Type<'a>]) {
+        let full_name = self.sup.make_name(name, generics);
         if DEBUG {
             eprintln!("> making typ {full_name}");
         }
-        if self.sup.type_infos.contains_key(full_name) {
+        if self.sup.type_infos.contains_key(&full_name) {
             return;
         }
-        let mut offset = 0;
         let mut align = 1;
-        let mut offsets = Vec::new();
         let struct_ = &self.sup.asg.structs[name];
-        let mut fields = Vec::new();
-        offsets.reserve(struct_.fields.len());
-        fields.reserve(struct_.fields.len());
-        for field in &struct_.fields {
-            let field = &self.heat_up(field);
-            offsets.push(offset);
-            offset += self.size(field);
-            align = align.max(self.align(field));
-            fields.push(self.sup.data_type(field));
+        self.typ_generics = struct_
+            .generics
+            .iter()
+            .zip(generics)
+            .map(|(n, t)| (*n, t.clone()))
+            .collect();
+        let mut variants = Vec::with_capacity(struct_.variants.len());
+        let mut offsets = Vec::with_capacity(struct_.variants.len());
+        let mut size = 0;
+        for variant_fields in &struct_.variants {
+            let mut variant_offsets = Vec::with_capacity(variant_fields.len());
+            let mut fields = Vec::with_capacity(variant_fields.len());
+            let mut offset = 0;
+            for field in variant_fields {
+                let field = &self.heat_up(field);
+                variant_offsets.push(offset);
+                offset += self.size(field);
+                align = align.max(self.align(field));
+                fields.push(self.sup.data_type(field));
+            }
+            variants.push(fields);
+            offsets.push(variant_offsets);
+            size = size.max(offset);
         }
         self.sup.types.push(ir::TypeDecl {
             name: full_name.clone(),
-            fields,
+            variants,
         });
         self.sup.type_infos.insert(
             full_name.clone(),
             TypeDeclInfo {
                 offsets,
-                size: offset,
+                size,
                 align,
             },
         );
@@ -420,6 +475,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         match expr {
             Expr::Var(s) => self.var_ref(s).0,
             Expr::Field(field) => self.field_ref(field),
+            Expr::Deref(e) => self.expr(&e.expr),
             e => {
                 let tmp = self.expr(e);
                 let typ = self.heat_up(typ);
@@ -438,10 +494,10 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             _ => unreachable!(),
         };
         let off = self.new_tmp();
+        self.typ(name, &generics);
         let full_name = self.sup.make_name(name, &generics);
-        self.typ(&full_name, name);
         let offset = self.int(
-            self.sup.type_infos[&full_name].offsets[field.id] as i64,
+            self.sup.type_infos[&full_name].offsets[0][field.id] as i64,
             &Type::U64,
         );
         self.stmts
@@ -491,13 +547,22 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         res
     }
 
-    fn deref(&mut self, deref: &'a Deref<'a>) -> Tmp {
-        let expr = self.expr(&deref.expr);
-        if matches!(deref.typ, Type::Name(_, _)) {
-            return expr;
+    fn store_big(&mut self, tmp: Tmp, typ: &Type<'a>) -> Tmp {
+        let res = self.new_tmp();
+        let align = self.align(typ);
+        let size = self.size(typ);
+        self.stmts.push(Stmt::Alloc(res, align, size));
+        self.put(res, tmp, typ);
+        res
+    }
+
+    fn deref(&mut self, expr: &'a Expr<'a>, typ: &Type<'a>) -> Tmp {
+        let expr = self.expr(expr);
+        let typ = self.heat_up(typ);
+        if matches!(typ, Type::Name(_, _)) {
+            return self.store_big(expr, &typ);
         }
         let tmp = self.new_tmp();
-        let typ = self.heat_up(&deref.typ);
         self.stmts.push(Stmt::Load(
             tmp,
             self.sup.base(&typ),
@@ -539,6 +604,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Value::Tmp(tmp) => tmp,
             _ => {
                 let tmp = self.new_tmp();
+                self.stmts.push(Stmt::Comment(format!("ref var {name}")));
                 self.stmts.push(Stmt::Copy(tmp, ir::Type::Long, val));
                 tmp
             }
@@ -553,6 +619,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             return tmp;
         }
         let res = self.new_tmp();
+        self.stmts.push(Stmt::Comment(format!("var {name}")));
         self.stmts
             .push(Stmt::Load(res, self.sup.base(&typ), self.signed(&typ), tmp));
         res
@@ -589,12 +656,13 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
                 }
             }
             None
-        }) && !self.sup.booked.contains(&name)
-        {
-            self.sup.booked.insert(name.clone());
-            let generics = &g_names.into_iter().zip(generics).collect();
-            let fun = GenFun::new(self.sup, generics).run(&name, fun);
-            self.sup.funs.push(fun);
+        }) {
+            if !self.sup.booked.contains(&name) {
+                self.sup.booked.insert(name.clone());
+                let generics = &g_names.into_iter().zip(generics).collect();
+                let fun = GenFun::new(self.sup, generics).run(&name, fun);
+                self.sup.funs.push(fun);
+            }
         } else {
             name = call.name.into();
         }
@@ -630,9 +698,16 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn heat_up(&self, typ: &Type<'a>) -> Type<'a> {
+        if DEBUG {
+            eprintln!("> heat up {typ:?}");
+        }
         match typ {
             Type::Cold(id) => self.heat_up(&self.sup.asg.info.types[*id]),
-            Type::Generic(g) => self.heat_up(&self.generics[g]),
+            Type::Generic(g) => self.heat_up(
+                self.generics
+                    .get(g)
+                    .unwrap_or_else(|| &self.typ_generics[g]),
+            ),
             Type::Name(name, generics) => {
                 let generics = generics.iter().map(|typ| self.heat_up(typ)).collect();
                 Type::Name(name, generics)
@@ -659,11 +734,14 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn bin_op(&self, bin_op: &BinOp, typ: &Type<'a>) -> ir::BinOp {
+        if DEBUG {
+            eprintln!("> binop {typ:?}");
+        }
         match bin_op {
             BinOp::Add => ir::BinOp::Add,
             BinOp::Multiply => ir::BinOp::Multiply,
-            BinOp::Equal => ir::BinOp::Equal,
-            BinOp::Less => ir::BinOp::Less,
+            BinOp::Equal => ir::BinOp::Equal(self.sup.base(typ)),
+            BinOp::Less => ir::BinOp::Less(self.sup.base(typ)),
             BinOp::NotEqual => ir::BinOp::Inequal,
             BinOp::Modulo => ir::BinOp::Urem,
             BinOp::Divide => ir::BinOp::Udiv,
@@ -717,6 +795,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let from = self.heat_up(&cast.from);
         let to = self.heat_up(&cast.to);
         match (from, to) {
+            (_, Type::Unit) => self.int(0, &Type::Unit),
             (Type::F32, to) if to.is_i() => {
                 let res = self.new_tmp();
                 self.stmts.push(Stmt::Stosi(self.sup.base(&to), res, expr));
@@ -730,6 +809,11 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             (Type::U8, Type::I64) => {
                 let res = self.new_tmp();
                 self.stmts.push(Stmt::Extub(res, expr));
+                res
+            }
+            (Type::I32, Type::U64) => {
+                let res = self.new_tmp();
+                self.stmts.push(Stmt::Extsw(res, expr));
                 res
             }
             (Type::F32, Type::F64) => {

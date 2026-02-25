@@ -9,11 +9,15 @@ pub struct IR {
 impl Display for IR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for decl in &self.types {
-            write!(f, "\ntype :{} = {{ ", decl.name)?;
-            for field in &decl.fields {
-                write!(f, "{field},")?;
+            write!(f, "\ntype :{} = {{", decl.name)?;
+            for fields in &decl.variants {
+                write!(f, "\n  {{")?;
+                for field in fields {
+                    write!(f, "{field},")?;
+                }
+                write!(f, " }}")?;
             }
-            write!(f, "}}")?;
+            write!(f, "\n}}")?;
         }
         for (i, c) in self.consts.iter().enumerate() {
             write!(f, "\ndata $s{} = {{ {c} }}", i + 1)?;
@@ -31,7 +35,7 @@ impl Display for IR {
 #[derive(Clone)]
 pub enum Const {
     String(String),
-    Struct(Vec<(DataType, Value)>),
+    Struct(Vec<(Unsigned, Value)>),
 }
 
 impl Display for Const {
@@ -168,10 +172,12 @@ impl Display for Unsigned {
 }
 
 pub enum Stmt {
+    Comment(String),
     Stosi(Type, Tmp, Tmp),
     Dtosi(Type, Tmp, Tmp),
     Exts(Tmp, Tmp),
     Extub(Tmp, Tmp),
+    Extsw(Tmp, Tmp),
     Alloc(Tmp, u32, u32),
     Blit(Tmp, Tmp, u32),
     Load(Tmp, Type, Signed, Tmp),
@@ -211,6 +217,8 @@ impl Display for Stmt {
             Stmt::Exts(t, t2) => write!(f, "%t{t} =d exts %t{t2}"),
             Stmt::Dtosi(typ, t, t2) => write!(f, "%t{t} ={typ} dtosi %t{t2}"),
             Stmt::Neg(t, typ, t2) => write!(f, "%t{t} ={typ} neg %t{t2}"),
+            Stmt::Comment(c) => write!(f, "# {c}"),
+            Stmt::Extsw(t, t2) => write!(f, "%t{t} =l extsw %t{t2}"),
         }
     }
 }
@@ -237,8 +245,8 @@ pub enum BinOp {
     And,
     Add,
     Multiply,
-    Equal,
-    Less,
+    Equal(Type),
+    Less(Type),
     More(Type),
     Inequal,
     Urem,
@@ -251,8 +259,11 @@ impl Display for BinOp {
         match self {
             BinOp::Add => write!(f, "add"),
             BinOp::Multiply => write!(f, "mul"),
-            BinOp::Equal => write!(f, "ceql"),
-            BinOp::Less => write!(f, "csltl"),
+            BinOp::Equal(typ) => write!(f, "ceq{typ}"),
+            BinOp::Less(typ) => match typ {
+                Type::Float | Type::Double => write!(f, "clt{typ}"),
+                _ => write!(f, "cslt{typ}"),
+            },
             BinOp::More(typ) => match typ {
                 Type::Float | Type::Double => write!(f, "cgt{typ}"),
                 _ => write!(f, "csgt{typ}"),
@@ -322,5 +333,5 @@ impl Display for AbiType {
 
 pub struct TypeDecl {
     pub name: String,
-    pub fields: Vec<DataType>,
+    pub variants: Vec<Vec<DataType>>,
 }

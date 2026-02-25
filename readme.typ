@@ -1,33 +1,34 @@
-# Good language manual
+#title[Good language manual]
 Good is a strongly typed general-purpose programming language that is designed
 - to allow high code reusability with
-  - [generics](#generics)
-  - [traits](#traits)
+  - generics
+  - traits
 - to allow using thousands of libraries and embed Good programs in C projects with
-  - [full C compatibility](#c-compatibility)
-- to allow high level programming with 
-  - [algebraic data types](#algebraic-data-types)
-  - [type inference](#type-inference)
-  - [RAII](#raii)
-  - [custom coercion](#coercion)
-  - [error system](#error-system)
+  - algebraic data types
+  - type inference
+  - RAII
+  - custom coercion
+  - error system
+  - environments
 - to allow low level programming with
-  - [manual memory management with raw pointers](#manual-memory-management)
-  - [full C compatibility](#c-compatibility)
+  - manual memory management with raw pointers
+  - full C compatibility
 
 Basically the Good language allows everything one may need. The Good language is a good language.
 
-## Basics
-The Good program is a file that contains several `items`. An `item` can be
-- a [function](#functions)
-- an [extern declaration](#extern-declarations)
-- a [struct](#structs)
-- a [type alias](#type-aliases)
-- a [trait](#traits)
-- a [trait implementation](#traits)
-- a [constant](#constants)
+#outline()
 
-### Functions
+== Basics
+The Good program is a file that contains several `items`. An `item` can be
+- a function
+- an extern declaration
+- a struct
+- a type alias
+- a trait
+- a trait implementation
+- a constant
+
+=== Functions
 All (or almost all) the Good code is contained in functions:
 ```good
 fn one_two_three() {
@@ -90,41 +91,44 @@ fn main()
 Here the `println` function is called with "dot-notation", and `add(123, 321)` becomes its first argument.
 This expression is equivalent to the previous one.
 
-### Type Aliases
+=== Type Aliases
 *work in progress*
 
-### Constants
+=== Constants
 *work in progress*
 
-## Generics
+== Generics
 *work in progress*
 
-## Traits
+== Traits
 *work in progress*
 
-## C Compatibility
+== C Compatibility
 *work in progress*
 
-### Extern Declarations
+=== Extern Declarations
 *work in progress*
 
-## Algebraic Data Types
+== Algebraic Data Types
 *work in progress*
 
-### Structs
+=== Structs
 *work in progress*
 
-## Type Inference
+== Type Inference
 *work in progress*
 
-## RAII
+== RAII
 *work in progress*
 
-## Coercion
+== Coercion
 *work in progress*
 
-## Error System
+== Error System
 *work in progress*
 
-## Manual Memory Management
+== Environments
+*work in progress*
+
+== Manual Memory Management
 *work in progress*

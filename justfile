@@ -1,3 +1,5 @@
-run bin="linc" *args:
-  cargo run --quiet --bin {{bin}} {{if bin == "linc" {"run test.lk -cc -lraylib -lm"} else {""}}} {{args}}
+bird: (good "bird" "-cc" "-lraylib" "-lm")
+
+good file *args:
+  cargo run --quiet -- run {{file}}.good {{args}}
 

@@ -23,7 +23,7 @@ struct Parse<'a> {
 }
 
 impl<'a> Parse<'a> {
-    const RESERVED: &'static [&'static str] = &["do", "new", "return", "if", "else"];
+    const RESERVED: &'static [&'static str] = &["do", "new", "return", "if", "else", "match"];
 
     fn new(tokens: Vec<Token<'a>>) -> Self {
         Self {
@@ -38,3 +38,5 @@ impl<'a> Parse<'a> {
         f(&mut self).or_die_with(|_| self.error())
     }
 }
+
+type Result<T> = std::result::Result<T, Fail>;

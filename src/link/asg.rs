@@ -9,7 +9,8 @@ pub struct Block<'a> {
 }
 
 pub struct Struct<'a> {
-    pub fields: Vec<Type<'a>>,
+    pub generics: Vec<&'a str>,
+    pub variants: Vec<Vec<Type<'a>>>,
 }
 
 pub struct Asg<'a> {
@@ -17,7 +18,7 @@ pub struct Asg<'a> {
     pub trait_funs: HashMap<&'a str, Vec<(Type<'a>, Fun<'a>)>>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub info: Info<'a>,
-    pub consts: Vec<(&'a str, Type<'a>, Expr<'a>)>,
+    pub consts: HashMap<&'a str, (Type<'a>, Expr<'a>)>,
 }
 
 pub struct Fun<'a> {
@@ -51,6 +52,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    Expr(Box<Match<'a>>),
     Negate(Box<Negate<'a>>),
     Cast(Box<Cast<'a>>),
     Break(Box<Break<'a>>),
@@ -68,6 +70,12 @@ pub enum Expr<'a> {
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<Match<'a>> for Expr<'a> {
+    fn from(v: Match<'a>) -> Self {
+        Self::Expr(Box::new(v))
+    }
 }
 
 impl<'a> From<Negate<'a>> for Expr<'a> {
@@ -264,6 +272,7 @@ pub enum Type<'a> {
     U8,
     U64,
     #[default]
+    Unit,
     I32,
     I64,
     F32,
@@ -284,6 +293,7 @@ impl Type<'_> {
             Type::F32 => false,
             Type::F64 => false,
             Type::Bool => true,
+            Type::Unit => false,
         }
     }
 }
@@ -299,4 +309,11 @@ pub struct Cast<'a> {
 pub struct Negate<'a> {
     pub expr: Expr<'a>,
     pub expr_typ: Type<'a>,
+}
+
+#[derive(Debug)]
+pub struct Match<'a> {
+    pub expr: Expr<'a>,
+    pub typ: Type<'a>,
+    pub pattern_matches: Vec<(u8, Expr<'a>)>,
 }

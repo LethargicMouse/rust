@@ -78,6 +78,7 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
+    R(Redeclared<'a>),
     Nil(NotInLoop<'a>),
     Nct(NotCompTime<'a>),
     NIm(NotImpl<'a>),
@@ -91,6 +92,12 @@ pub enum CheckErrorKind<'a> {
     NIn(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<Redeclared<'a>> for CheckErrorKind<'a> {
+    fn from(v: Redeclared<'a>) -> Self {
+        Self::R(v)
+    }
 }
 
 impl<'a> From<NotInLoop<'a>> for CheckErrorKind<'a> {
@@ -188,6 +195,7 @@ impl Display for CheckErrorKind<'_> {
             CheckErrorKind::NIm(not_impl) => write!(f, "{not_impl}"),
             CheckErrorKind::Nct(not_comp_time) => write!(f, "{not_comp_time}"),
             CheckErrorKind::Nil(not_in_loop) => write!(f, "{not_in_loop}"),
+            CheckErrorKind::R(redeclared) => write!(f, "{redeclared}"),
         }
     }
 }
@@ -409,6 +417,23 @@ impl Display for NotInLoop<'_> {
             f,
             "{}\n{Red}--! cannot use {Reset}`break` {Red}outside of a loop",
             self.location
+        )
+    }
+}
+
+pub struct Redeclared<'a> {
+    pub location: Location<'a>,
+    pub kind: &'a str,
+    pub name: &'a str,
+    pub other: Location<'a>,
+}
+
+impl Display for Redeclared<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! {} {Reset}`{}` {Red}is already declared {Blue}in {}",
+            self.location, self.kind, self.name, self.other
         )
     }
 }

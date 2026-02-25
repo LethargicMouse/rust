@@ -6,6 +6,7 @@ pub struct Ast<'a> {
     pub type_aliases: HashMap<&'a str, Type<'a>>,
     pub end: Location<'a>,
     pub structs: HashMap<&'a str, Struct<'a>>,
+    pub enums: HashMap<&'a str, Enum<'a>>,
     pub funs: Vec<Fun<'a>>,
     pub externs: Vec<Extern<'a>>,
     pub traits: HashMap<&'a str, Trait<'a>>,
@@ -14,7 +15,7 @@ pub struct Ast<'a> {
 }
 
 pub struct Const<'a> {
-    pub name: &'a str,
+    pub lame: Lame<'a>,
     pub typ: Type<'a>,
     pub expr: Expr<'a>,
 }
@@ -26,7 +27,7 @@ pub struct Impl<'a> {
 }
 
 pub struct Extern<'a> {
-    pub name: &'a str,
+    pub lame: Lame<'a>,
     pub typ: FunType<'a>,
 }
 
@@ -36,11 +37,12 @@ pub struct Struct<'a> {
 }
 
 pub struct Field<'a> {
-    pub name: &'a str,
+    pub lame: Lame<'a>,
     pub typ: Type<'a>,
 }
 
 pub enum Item<'a> {
+    Enum(&'a str, Enum<'a>),
     Const(Const<'a>),
     Impl(Impl<'a>),
     Trait(&'a str, Trait<'a>),
@@ -48,6 +50,12 @@ pub enum Item<'a> {
     Fun(Box<Fun<'a>>),
     Extern(Extern<'a>),
     Struct(&'a str, Struct<'a>),
+}
+
+impl<'a> From<(&'a str, Enum<'a>)> for Item<'a> {
+    fn from(v: (&'a str, Enum<'a>)) -> Self {
+        Self::Enum(v.0, v.1)
+    }
 }
 
 impl<'a> From<Const<'a>> for Item<'a> {
@@ -99,7 +107,7 @@ pub struct Fun<'a> {
 
 pub struct Header<'a> {
     pub lame: Lame<'a>,
-    pub params: Vec<&'a str>,
+    pub params: Vec<Lame<'a>>,
     pub typ: FunType<'a>,
 }
 
@@ -149,7 +157,7 @@ impl<'a> From<Expr<'a>> for Block<'a> {
 #[derive(Clone)]
 pub struct Let<'a> {
     pub location: Location<'a>,
-    pub name: &'a str,
+    pub lame: Lame<'a>,
     pub typ: Option<Type<'a>>,
     pub expr: Expr<'a>,
 }
@@ -169,6 +177,7 @@ pub struct Lame<'a> {
 
 #[derive(Clone)]
 pub enum Expr<'a> {
+    Match(Box<Match<'a>>),
     Negate(Box<Negate<'a>>),
     Break(Box<Break<'a>>),
     ImplicitUnit(Location<'a>),
@@ -188,6 +197,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Match<'a>> for Expr<'a> {
+    fn from(v: Match<'a>) -> Self {
+        Self::Match(Box::new(v))
+    }
 }
 
 impl<'a> From<Negate<'a>> for Expr<'a> {
@@ -296,6 +311,7 @@ impl<'a> Expr<'a> {
             Expr::ImplicitUnit(location) => *location,
             Expr::Break(break_expr) => break_expr.location,
             Expr::Negate(negate) => negate.location,
+            Expr::Match(match_expr) => match_expr.location,
         }
     }
 
@@ -326,6 +342,7 @@ impl<'a> Expr<'a> {
             Expr::ImplicitUnit(_) => true,
             Expr::Break(_) => true,
             Expr::Negate(_) => false,
+            Expr::Match(_) => false,
         }
     }
 }
@@ -366,13 +383,15 @@ pub struct Binary<'a> {
 pub enum BinOp {
     Multiply,
     Subtract,
-    Plus,
+    Add,
     Equal,
     Less,
     More,
     NotEqual,
     Mod,
     Div,
+    BitAnd,
+    BitOr,
     And,
     Or,
 }
@@ -383,16 +402,30 @@ impl BinOp {
             BinOp::Or => 0,
             BinOp::And => 1,
             BinOp::Equal | BinOp::Less | BinOp::NotEqual | BinOp::More => 2,
-            BinOp::Plus | BinOp::Subtract => 3,
+            BinOp::Add | BinOp::Subtract => 3,
             BinOp::Mod | BinOp::Div | BinOp::Multiply => 4,
+            BinOp::BitOr => 5,
+            BinOp::BitAnd => 6,
         }
     }
 }
 
+#[derive(Clone)]
+pub struct PatternMatch<'a> {
+    pub pattern: Pattern<'a>,
+    pub expr: Expr<'a>,
+}
+
+#[derive(Clone)]
+pub struct Pattern<'a> {
+    pub name: &'a str,
+    pub value: Option<Lame<'a>>,
+}
+
 pub enum Postfix<'a> {
+    Match(Location<'a>, Vec<PatternMatch<'a>>),
     Assign(Expr<'a>),
-    AddAssign(Expr<'a>),
-    MulAssign(Expr<'a>),
+    OpAssign(BinOp, Expr<'a>),
     Get(Expr<'a>),
     Call(Call<'a>),
     Field(&'a str, Location<'a>),
@@ -440,9 +473,16 @@ impl<'a> Type<'a> {
         match self {
             Type::Ptr(_, _) => "ptr",
             Type::Name(lame, _) => lame.name,
-            Type::Fun(_) => "fun",
+            Type::Fun(_) => "fn",
             Type::Prime(prime, _) => prime.get_name(),
             Type::Ref(typ, _) => typ.get_name(),
+        }
+    }
+
+    pub fn get_lame(&self) -> Lame<'a> {
+        Lame {
+            name: self.get_name(),
+            location: self.location(),
         }
     }
 }
@@ -612,4 +652,21 @@ pub struct Generic<'a> {
 pub struct Negate<'a> {
     pub expr: Expr<'a>,
     pub location: Location<'a>,
+}
+
+pub struct Enum<'a> {
+    pub generics: Vec<Generic<'a>>,
+    pub variants: Vec<Variant<'a>>,
+}
+
+#[derive(Clone)]
+pub struct Match<'a> {
+    pub expr: Expr<'a>,
+    pub pattern_matches: Vec<PatternMatch<'a>>,
+    pub location: Location<'a>,
+}
+
+pub struct Variant<'a> {
+    pub lame: Lame<'a>,
+    pub value: Option<Type<'a>>,
 }
