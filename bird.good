@@ -18,6 +18,10 @@ extern fn realloc<t>(*t, size) *t;
 extern fn malloc<t>(size) *t;
 extern fn DrawRectangle(i32, i32, i32, i32, color); 
 extern fn time(u64) i32;
+extern fn ToggleBorderlessWindowed();
+extern fn GetScreenWidth() i32;
+extern fn GetScreenHeight() i32;
+extern fn printf(cstr, f64);
 
 struct arr<t> { *t, size }
 
@@ -83,7 +87,7 @@ fn update_death()
 
 fn reset() {
   state = game;
-  y = 0;
+  y = height() as f32 / 2;
   v = 0;
   clear(pipes);
 }
@@ -136,8 +140,8 @@ fn spawn_pipe() {
   let spread = bird_r as u64 * 8;
 
   let pipe = pipe {
-    height: random(height as u64 / 2 - spread, height as u64 / 2 + spread) as i32,
-    x: width,
+    height: random(height() as u64 / 2 - spread, height() as u64 / 2 + spread) as i32,
+    x: width(),
     gap: bird_r as i32 * 8
   };
   pipes.push(pipe);
@@ -247,13 +251,18 @@ fn check_if_should_close() bool {
   should_close
 }
 
-let width: i32 = 800;
-let height: i32 = 600;
+fn width() i32
+  do GetScreenWidth()
+
+fn height() i32
+  do GetScreenHeight()
 
 fn init() {
   seed = time(0) as u64;
-  InitWindow(width, height, "test window".ptr);
+  InitWindow(800, 600, "test window".ptr);
+  -- ToggleBorderlessWindowed();
   SetTargetFPS(60);
+  reset();
 }
 
 fn deinit() {
@@ -291,7 +300,7 @@ let pipe_width: i32 = 50;
 fn draw_pipe(pipe) {
   let below_gap = pipe.height + pipe.gap;
   DrawRectangle(pipe.x, 0, pipe_width, pipe.height, white);
-  DrawRectangle(pipe.x, below_gap, pipe_width, height - below_gap, white);
+  DrawRectangle(pipe.x, below_gap, pipe_width, height() - below_gap, white);
 }
 
 let rand_mod: u64 = 2147483647;
@@ -315,7 +324,7 @@ struct pipe {
 let bird_r: f32 = 15;
 
 fn draw_bird()
-  do DrawCircle(width / 6, height / 2 + y as i32, bird_r, yellow)
+  do DrawCircle(width() / 6, y as i32, bird_r, yellow)
 
 struct vec2 {
   x: f32,
@@ -328,7 +337,7 @@ enum maybe<t> {
 }
 
 fn bird_in_pipes() bool
-  do pipes.slice(0, 2).any(bird_in_pipe)
+  do pipes.slice(0, 1).any(bird_in_pipe)
 
 fn is_some_and<t>(maybe<t>, fn(t) bool) bool
   do maybe.match {
@@ -348,17 +357,25 @@ fn bird_in_pipe(pipe) bool
     vec2i(pipe.x + pipe_width, pipe.height + pipe.gap)
   ].any(in_bird)
 
+fn bird_x() f32
+  do width() as f32 / 6
+
 fn vec2i(a: i32, b: i32) vec2
   do vec2(a as f32, b as f32)
 
-fn in_bird(vec2) bool
-  do (vec2.x - width as f32 / 6).pow(2) * (vec2.y - y).pow(2) < bird_r.pow(2)
+fn in_bird(vec2) bool { 
+  let distx = vec2.x - bird_x();
+  let disty = vec2.y - y;
+  let dist = distx.pow(2) + disty.pow(2);
+  -- printf("%f\n".ptr, disty as f64);
+  dist < bird_r.pow(2) 
+}
 
 fn pow(f32, u64) f32
   do if u64 == 0
     do 1
   else if u64 == 1
-    do 2
+    do f32
   else {
     let x = pow(f32, u64 / 2);
     x *= x;
@@ -383,7 +400,8 @@ fn min(a: u64, b: u64) u64
 
 fn any<t>(arr<t>, fn(t) bool) bool
   do loop arr.next().match {
-    some(t) => if fn(t) do return true,
+    some(t) => if fn(t) 
+      do return true,
     none => return false
   }
 

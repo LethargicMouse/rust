@@ -174,7 +174,9 @@ impl Display for Unsigned {
 pub enum Stmt {
     Comment(String),
     Stosi(Type, Tmp, Tmp),
+    Stoui(Type, Tmp, Tmp),
     Dtosi(Type, Tmp, Tmp),
+    Swtof(Type, Tmp, Tmp),
     Exts(Tmp, Tmp),
     Extub(Tmp, Tmp),
     Extsw(Tmp, Tmp),
@@ -219,6 +221,8 @@ impl Display for Stmt {
             Stmt::Neg(t, typ, t2) => write!(f, "%t{t} ={typ} neg %t{t2}"),
             Stmt::Comment(c) => write!(f, "# {c}"),
             Stmt::Extsw(t, t2) => write!(f, "%t{t} =l extsw %t{t2}"),
+            Stmt::Swtof(typ, t, t2) => write!(f, "%t{t} ={typ} swtof %t{t2}"),
+            Stmt::Stoui(typ, t, t2) => write!(f, "%t{t} ={typ} stoui %t{t2}"),
         }
     }
 }
@@ -226,13 +230,13 @@ impl Display for Stmt {
 pub struct Call {
     pub tmp: Tmp,
     pub ret_type: AbiType,
-    pub name: String,
+    pub name: Tmp,
     pub args: Vec<(AbiType, Tmp)>,
 }
 
 impl Display for Call {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "%t{} ={} call ${}(", self.tmp, self.ret_type, self.name)?;
+        write!(f, "%t{} ={} call %t{}(", self.tmp, self.ret_type, self.name)?;
         for (typ, arg) in &self.args {
             write!(f, "{typ} %t{arg},")?;
         }
@@ -250,7 +254,7 @@ pub enum BinOp {
     More(Type),
     Inequal,
     Urem,
-    Udiv,
+    Div,
     Or,
 }
 
@@ -270,7 +274,7 @@ impl Display for BinOp {
             },
             BinOp::Inequal => write!(f, "cnel"),
             BinOp::Urem => write!(f, "urem"),
-            BinOp::Udiv => write!(f, "udiv"),
+            BinOp::Div => write!(f, "div"),
             BinOp::And => write!(f, "and"),
             BinOp::Sub => write!(f, "sub"),
             BinOp::Or => write!(f, "or"),
@@ -284,6 +288,7 @@ pub enum Value {
     Float(f32),
     Double(f64),
     Const(u16),
+    Fun(String),
     Tmp(Tmp),
 }
 
@@ -301,6 +306,7 @@ impl Display for Value {
             Value::Tmp(t) => write!(f, "%t{t}"),
             Value::Float(n) => write!(f, "s_{n}"),
             Value::Double(n) => write!(f, "d_{n}"),
+            Value::Fun(fun) => write!(f, "${fun}"),
         }
     }
 }

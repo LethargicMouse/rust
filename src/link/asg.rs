@@ -52,6 +52,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub enum Expr<'a> {
+    FunRef(FunRef<'a>),
     Expr(Box<Match<'a>>),
     Negate(Box<Negate<'a>>),
     Cast(Box<Cast<'a>>),
@@ -65,11 +66,17 @@ pub enum Expr<'a> {
     Let(Box<Let<'a>>),
     Block(Box<Block<'a>>),
     Deref(Box<Deref<'a>>),
-    Call(Call<'a>),
+    Call(Box<Call<'a>>),
     Binary(Box<Binary<'a>>),
     Literal(Literal<'a>),
     Var(&'a str),
     If(Box<If<'a>>),
+}
+
+impl<'a> From<FunRef<'a>> for Expr<'a> {
+    fn from(v: FunRef<'a>) -> Self {
+        Self::FunRef(v)
+    }
 }
 
 impl<'a> From<Match<'a>> for Expr<'a> {
@@ -182,7 +189,7 @@ impl<'a> From<Binary<'a>> for Expr<'a> {
 
 impl<'a> From<Call<'a>> for Expr<'a> {
     fn from(v: Call<'a>) -> Self {
-        Self::Call(v)
+        Self::Call(Box::new(v))
     }
 }
 
@@ -212,9 +219,8 @@ pub enum BinOp {
 
 #[derive(Debug)]
 pub struct Call<'a> {
-    pub name: &'a str,
+    pub expr: Expr<'a>,
     pub args: Vec<(Type<'a>, Expr<'a>)>,
-    pub generics: Vec<(&'a str, Type<'a>)>,
     pub ret_type: Type<'a>,
 }
 
@@ -286,14 +292,45 @@ impl Type<'_> {
             Type::Name(_, _) => false,
             Type::Cold(_) => false,
             Type::Generic(_) => false,
-            Type::U8 => true,
-            Type::U64 => true,
+            Type::U8 => false,
+            Type::U64 => false,
             Type::I32 => true,
             Type::I64 => true,
             Type::F32 => false,
             Type::F64 => false,
             Type::Bool => true,
             Type::Unit => false,
+        }
+    }
+
+    pub fn is_f(&self) -> bool {
+        match self {
+            Type::Name(_, _) => false,
+            Type::Cold(_) => false,
+            Type::Generic(_) => false,
+            Type::U8 => false,
+            Type::U64 => false,
+            Type::Unit => false,
+            Type::I32 => false,
+            Type::I64 => false,
+            Type::F32 => true,
+            Type::F64 => true,
+            Type::Bool => false,
+        }
+    }
+
+    pub fn is_u(&self) -> bool {
+        match self {
+            Type::Name(_, _)
+            | Type::Cold(_)
+            | Type::Generic(_)
+            | Type::Unit
+            | Type::I32
+            | Type::I64
+            | Type::F32
+            | Type::F64
+            | Type::Bool => false,
+            Type::U8 | Type::U64 => true,
         }
     }
 }
@@ -314,6 +351,20 @@ pub struct Negate<'a> {
 #[derive(Debug)]
 pub struct Match<'a> {
     pub expr: Expr<'a>,
+    pub expr_typ: Type<'a>,
     pub typ: Type<'a>,
-    pub pattern_matches: Vec<(u8, Expr<'a>)>,
+    pub pattern_matches: Vec<PatternMatch<'a>>,
+}
+
+#[derive(Debug)]
+pub struct PatternMatch<'a> {
+    pub label: u8,
+    pub mtyp: Option<(&'a str, Type<'a>)>,
+    pub expr: Expr<'a>,
+}
+
+#[derive(Debug)]
+pub struct FunRef<'a> {
+    pub name: &'a str,
+    pub generics: Vec<(&'a str, Type<'a>)>,
 }
