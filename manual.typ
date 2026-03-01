@@ -269,7 +269,7 @@ When pattern matching on such enums,
 a value can be used with the following syntax:
 ```
 fn just_do_it()
-  do launch_missiles().match {
+  do loop launch_missiles().match {
     success => {
       log_info("missiles launched");
       break;
