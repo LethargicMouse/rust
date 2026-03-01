@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::display::repeat::Repeat;
+use crate::display::{
+    Repeat,
+    colors::{Blue, Reset},
+};
 
 pub struct Block<'a>(pub &'a str, pub &'a str);
 
@@ -19,7 +22,7 @@ impl Display for Block<'_> {
         };
         write!(
             f,
-            "\n{} {} {}\n{}{}{}",
+            "\n{Blue}{} {} {}\n{Reset}{}{}{Blue}{}{Reset}",
             Repeat('-', padding),
             self.0,
             Repeat('-', rest),

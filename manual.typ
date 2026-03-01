@@ -1,4 +1,5 @@
 #import "@preview/zebraw:0.6.1": zebraw
+#import "@preview/ansi-render:0.8.0": ansi-render, terminal-themes
 
 #set page("a4", numbering: "1 of 1")
 #set text(size: 12pt)
@@ -449,17 +450,10 @@ fn to_string(human) string
 ```
 If you try to run this code (having `cat` and `human` properly defined), 
 you will get an error:
-#raw(
-"! error checking test.good at 12:4:
-     |
-  12 | fn to_string(human) str
-     |    `````````
---! item `to_string` is already declared in test.good at 9:4:
-     |
-   9 | fn to_string(cat) str
-     |    `````````", 
-  block: true, lang: "error",
-)
+
+#let render-error = path => ansi-render(read(path), theme: terminal-themes.tango-light, font: "Fira Code")
+
+#render-error("redeclare_error.txt")
 
 The problem is clear: we need a way to define a function with different 
 behaviour for different types. That is where traits are used:
@@ -514,13 +508,7 @@ fn main()
   do my_cat.println()
 ```
 results in
-#raw("! error checking test.good at 30:3:
-     |
-  30 |   my_cat.println()
-     |   ``````
---! type cat does not implement trait `display`
---@ the trait is implemented by:
-    - human", block: true, lang: "error")
+#render-error("doesnt_impl_error.txt")
 
 = C Compatibility <compat>
 The Good language is fully compatible with C. 
@@ -537,15 +525,7 @@ extern fn realloc<t>(*t, size) *t;
 ```
 This states that these functions will be in scope during the linkinga fase of the compiler.
 If it turns out not to be true, the linker will throw an error:
-```error
-! error running `cc`:
-
----- stderr ---------------------------------------------
-/usr/bin/ld: /tmp/ccn4Qlck.o: in function `main':
-.../out.s:6:(.text+0x5): undefined reference to `reallok'
-collect2: error: ld returned 1 exit status
----------------------------------------------------------
-```
+#render-error("ld_error.txt")
 If the type of an extern function does not correspond to its actual type,
 the behaviour of the function is undefined.
 

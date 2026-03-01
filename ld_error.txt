@@ -1,0 +1,6 @@
+[1;31m! error running [0m`cc`:
+[0;34m---- stderr ---------------------------------------------
+[0m/usr/bin/ld: /tmp/ccw6Twtf.o: in function `main':
+.../out.s:6:(.text+0x5): undefined reference to `reallok'
+collect2: error: ld returned 1 exit status
+[0;34m---------------------------------------------------------[0m

@@ -1,6 +1,13 @@
 use std::{ffi::OsStr, fmt::Display, process::Command};
 
-use crate::{die::Mortal, display::Block, process::Error};
+use crate::{
+    die::Mortal,
+    display::{
+        Block,
+        colors::{Red, Reset},
+    },
+    process::Error,
+};
 
 pub fn call<'a>(path: &'a str, args: &'a [impl AsRef<OsStr>]) -> Result<(), Fail<'a>> {
     let output = Command::new(path)
@@ -22,7 +29,7 @@ impl Display for Fail<'_> {
         let stderr = str::from_utf8(&self.2).unwrap();
         write!(
             f,
-            "! error running `{}`:{}{}",
+            "{Red}! error running {Reset}`{}`:{}{}",
             self.0,
             Block("stdout", stdout),
             Block("stderr", stderr)

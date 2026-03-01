@@ -8,13 +8,20 @@ use std::{
     process::{Command, exit},
 };
 
-use crate::die::Mortal;
+use crate::{
+    die::Mortal,
+    display::colors::{Red, Reset},
+};
 
 struct Error<'a>(&'a str, io::Error);
 
 impl Display for Error<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "! error trying to run `{}`: {}", self.0, self.1)
+        write!(
+            f,
+            "{Red}! error trying to run {Reset}`{}`: {Red}{}",
+            self.0, self.1
+        )
     }
 }
 
