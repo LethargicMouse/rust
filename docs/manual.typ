@@ -453,7 +453,7 @@ you will get an error:
 
 #let render-error = path => ansi-render(read(path), theme: terminal-themes.tango-light, font: "Fira Code")
 
-#render-error("redeclare_error.txt")
+#render-error("errors/redeclare_error.txt")
 
 The problem is clear: we need a way to define a function with different 
 behaviour for different types. That is where traits are used:
@@ -508,7 +508,7 @@ fn main()
   do my_cat.println()
 ```
 results in
-#render-error("doesnt_impl_error.txt")
+#render-error("errors/doesnt_impl_error.txt")
 
 = C Compatibility <compat>
 The Good language is fully compatible with C. 
@@ -525,7 +525,7 @@ extern fn realloc<t>(*t, size) *t;
 ```
 This states that these functions will be in scope during the linkinga fase of the compiler.
 If it turns out not to be true, the linker will throw an error:
-#render-error("ld_error.txt")
+#render-error("errors/ld_error.txt")
 If the type of an extern function does not correspond to its actual type,
 the behaviour of the function is undefined.
 
