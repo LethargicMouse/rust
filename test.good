@@ -1,0 +1,29 @@
+struct cat {
+  name: str
+}
+
+struct human {
+  name: str
+}
+
+impl display for human {
+  fn to_string(human) str
+    do human.name
+}
+
+struct arr<t> { *t, size }
+
+type size = u64;
+type str = arr<u8>;
+
+trait display {
+  fn to_string(self) str;
+}
+
+fn println<t: display>(t) {}
+
+fn main() {
+  reallok()
+}
+
+extern fn reallok();

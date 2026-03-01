@@ -16,7 +16,9 @@ impl<'a> Lex<'a> {
 
     pub fn skip(&mut self) {
         self.skip_space();
-        while self.source.code[self.cursor..].starts_with(b"--") {
+        while self.source.code[self.cursor..].starts_with(b"--")
+            || self.source.code[self.cursor..].starts_with(b"//")
+        {
             self.cursor += self.source.code[self.cursor..]
                 .iter()
                 .take_while(|c| **c != b'\n')

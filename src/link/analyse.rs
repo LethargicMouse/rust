@@ -21,7 +21,7 @@ use crate::{
     },
 };
 
-pub const DEBUG: bool = true;
+pub const DEBUG: bool = false;
 
 #[derive(Clone, PartialEq, Debug)]
 struct FunType<'a> {
@@ -638,29 +638,13 @@ impl<'a> Analyse<'a> {
         let location = assign.expr.location();
         let (expr, expr_typ) = self.expr(assign.expr).into();
         let (to, to_typ) = self.expr(assign.to).into();
-        let needs_deref = self.is_ref(&to_typ) && !self.is_ref(&expr_typ);
         let typ_ = self.unify(location, to_typ, expr_typ);
-        let typ = if needs_deref {
-            match &typ_ {
-                Type::Ref(typ_) => self.asg_type(typ_),
-                _ => unreachable!(),
-            }
-        } else {
-            self.asg_type(&typ_)
-        };
+        let expr_type = self.asg_type(&typ_);
         typed(
             asg::Assign {
                 expr,
-                to: if needs_deref {
-                    asg::Deref {
-                        expr: to,
-                        typ: typ.clone(),
-                    }
-                    .into()
-                } else {
-                    to
-                },
-                expr_type: typ,
+                to,
+                expr_type,
             },
             Prime::Unit.into(),
         )
@@ -1088,10 +1072,10 @@ impl<'a> Analyse<'a> {
             .into_iter()
             .zip(typ.params)
             .map(|((location, expr), expected)| {
-                let needs_deref = self.is_ref(&expected) && !self.is_ref(&expr.typ);
+                let needs_ref = self.is_ref(&expected) && !self.is_ref(&expr.typ);
                 let typ = self.unify(location, expected, expr.typ);
                 let asg_type = self.asg_type(&typ);
-                let expr = if needs_deref {
+                let expr = if needs_ref {
                     asg::Ref {
                         expr: expr.sup,
                         expr_typ: match typ {
