@@ -621,18 +621,18 @@ fn main() {
 ```
 
 = Error System <errors>
-There are two ways of handling errors in the Good language: `result` enum and the error system.
-The first way is to return a `result<t, error>` instead of just `t` in an error-ish function, 
-where `result` is defined as
+There are two ways of handling errors in the Good language: `res` enum and the error system.
+The first way is to return a `res<t, error>` instead of just `t` in an error-ish function, 
+where `res` is defined as
 ```
-enum result<r, e> {
+enum res<r, e> {
   ok(r),
   err(e)
 }
 ```
 With this way working with errors is the same as working with any other value:
 ```
-fn get_present(boy) result<present, trash> 
+fn get_present(boy) res<present, trash> 
   do boy.attitude.match {
     good_boy => from_santa().ok(),
     bad_boy => err(coal)
@@ -666,6 +666,41 @@ fn main() {
   }
 }
 ```
+Such errors automatically fall through if not catched:
+```
+fn f() i32!error
+  do if is_dooms_day()
+    do throw most_fatal_error
+  else 2
+
+fn g() i32!error
+  do 2 + f() * 2
+```
+
+If an error-ish function is used in a normal one, the error must be catched:
+```
+fn h() i32
+  do (2 + g() * 2).catch err do die(err)
+```
+
+The first-way functions can easily be converted to the second-way with
+```
+fn second_way() i32 !error
+  do first_way()!
+```
+And the second-way functions can easily be converted to the first-way with
+```
+fn first_way() res<i32, error>
+  do second_way()?
+```
+
+But how to decide when to use one way or another?
+The answer is --- practically doesn't matter: they are so easy to convert from one to
+another and are compiled into same machine code. 
+The language aims to allow any style of programming 
+and the single rule is to use whatever you personally prefer.
+It is good to know though that it is much easier to chain error-ish actions
+in the second mode and you have better grip over control flow in the first.
 
 = Impl derivation
 _work in progress_
