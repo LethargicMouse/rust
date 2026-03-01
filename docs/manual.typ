@@ -4,6 +4,7 @@
 #set page("a4", numbering: "1 of 1")
 #set text(size: 12pt)
 #set heading(numbering: "1.1")
+#set table(align: center, inset: 8pt, column-gutter: 32pt, stroke: none)
 
 #show raw: set text(ligatures: true, font: "Fira Code")
 #show: zebraw.with(lang: false, numbering: false)
@@ -373,10 +374,6 @@ Notice that the types `fn(a, b) ()` and `fn(a, b)` are equivalent, just like the
 The names are inferred from the types as follows:
 #table(
   columns: (auto, auto),
-  align: center,
-  inset: 8pt,
-  column-gutter: 32pt,
-  stroke: none,
   [*Given type*], [*Inferred name*],
   [`some_name`], [`some_name`],
   [`*_`], [`ptr`],
@@ -621,7 +618,12 @@ fn main() {
 ```
 
 = Error System <errors>
-There are two ways of handling errors in the Good language: `res` enum and the error system.
+There are two ways of handling errors in the Good language: `res` enum way, which I will call `?-way` 
+and the Good error system way, which I will call `!-way`. These approaches can also be
+combined into `!?-way`, which is (imho) rarely useful and into `?!-way`, 
+which can (imho) be useful more often.
+
+== Doing errors ?-way
 The first way is to return a `res<t, error>` instead of just `t` in an error-ish function, 
 where `res` is defined as
 ```
@@ -645,9 +647,11 @@ fn main() {
   }
 }
 ```
-But that is not _the right way_ dictated by the local tyranny (by me), 
-so there is a second way, *the right way*:
 
+But that is not _the right way_ dictated by the local tyranny (by me), 
+so there is a second way, *the right way*.
+
+== Doing errors !-way
 ```
 enum punishment {
   shoot(head),
@@ -683,6 +687,7 @@ fn h() i32
   do (2 + g() * 2).catch err do die(err)
 ```
 
+== Combining into `!?+?!-way`
 The first-way functions can easily be converted to the second-way with
 ```
 fn second_way() i32 !error
@@ -701,6 +706,18 @@ The language aims to allow any style of programming
 and the single rule is to use whatever you personally prefer.
 It is good to know though that it is much easier to chain error-ish actions
 in the second mode and you have better grip over control flow in the first.
+
+Anyway, here is a table comparing approaches on standard error-related operations:
+#table(
+  columns: (auto, auto, auto),
+  [*`?-way`*], [*`!?-way`*], [*`!-way`*],
+  [`f().map(|x| g(x))`], [`f()!.g()?`], [`f().g()`],
+  [`f().then(|x| g(x))`], [`f()!.g()!?`], [`f().g()`],
+  [`f().ok_or(|x| g(x))`], [`f()!.catch x do g(x)`], [`f().catch x do g(x)`],
+  [`f().or(|x| g(x))`], [`f()!.ok().catch x do g(x)`], [`f().catch x do g(x)`],
+  [`f().map_err(|x| g(x))`], [`f()!.ok().catch x do err(g(x))`], [`f().catch x do throw g(x)`],
+  [_long pattern match_], [`f()!.catch x do return err(x)`], [`f()`]
+)
 
 = Impl derivation
 _work in progress_
