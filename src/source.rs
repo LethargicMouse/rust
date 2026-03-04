@@ -27,6 +27,7 @@ fn get_poses(code: &[u8]) -> Vec<Pos> {
         .iter()
         .scan(BEGIN, |p, c| Some(replace(p, p.after(*c))))
         .collect();
+    res.push(res.last().unwrap_or(&BEGIN).after(b' '));
     res.push(res.last().unwrap().after(b' '));
     res
 }

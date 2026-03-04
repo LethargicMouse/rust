@@ -67,6 +67,7 @@ impl Display for Type<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Ptr(typ) => write!(f, "*{typ}"),
+            Type::Name("arr", gs) if gs.len() == 1 => write!(f, "[{}]", gs[0]),
             Type::Name(n, gs) => {
                 write!(f, "{n}")?;
                 if gs.is_empty() {
@@ -201,13 +202,44 @@ impl<'a> Analyse<'a> {
         }
     }
 
+    fn gen_arr(&mut self) {
+        let fields = [
+            (
+                "ptr",
+                Field {
+                    id: 0,
+                    typ: Type::Ptr(Box::new(Type::Generic("t"))),
+                },
+            ),
+            (
+                "size",
+                Field {
+                    id: 1,
+                    typ: Prime::U64.into(),
+                },
+            ),
+        ]
+        .into();
+        let generics = [Generic {
+            name: "t",
+            constraint: None,
+        }]
+        .into();
+        let asg_fields = [asg::Type::U64, asg::Type::U64].into();
+        let asg_generics = ["t"].into();
+        let struct_ = Struct { fields, generics };
+        let asg_struct = asg::Struct {
+            variants: vec![asg_fields],
+            generics: asg_generics,
+        };
+        self.structs.insert("arr", struct_);
+        self.asg_structs.insert("arr", asg_struct);
+    }
+
     pub fn run(mut self, ast: Ast<'a>) -> Asg<'a> {
         self.ast_structs = ast.structs;
         self.type_aliases = ast.type_aliases;
-        self.typ(ast::Type::name(Lame {
-            name: "arr",
-            location: ast.end,
-        }));
+        self.gen_arr();
         let mut enum_variants = Vec::with_capacity(ast.enums.len());
         for (name, enum_) in ast.enums {
             enum_variants.push((name, enum_.variants));
@@ -281,11 +313,18 @@ impl<'a> Analyse<'a> {
             let asg_type = self.asg_type(&typ);
             consts.insert(const_.lame.name, (asg_type, expr.sup));
         }
-        let funs = ast
+        let funs: HashMap<_, _> = ast
             .funs
             .into_iter()
             .map(|fun| (fun.header.lame.name, self.fun(fun)))
             .collect();
+        if !funs.contains_key("main") {
+            self.fail(NotDeclared {
+                location: ast.end,
+                kind: "function",
+                name: "main",
+            });
+        }
         self.type_context.new_layer();
         let mut trait_funs = HashMap::new();
         for impl_ in ast.impls {

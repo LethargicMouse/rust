@@ -91,11 +91,7 @@ struct Unexpected(&'static str, String);
 
 impl Display for Unexpected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{ArgsError} unexpected {Reset}{}{Red}:{Reset} `{}`",
-            self.0, self.1
-        )
+        write!(f, "{ArgsError} unexpected {}:{Reset} `{}`", self.0, self.1)
     }
 }
 

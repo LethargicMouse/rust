@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::{
     Location,
     link::{
-        ast::{Ast, Field, FunType, Generic, Item, Prime, Type},
+        ast::{Ast, Field, FunType, Generic, Item, Lame, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse, Result},
     },
@@ -102,6 +102,20 @@ impl<'a> Parse<'a> {
                 let typ = p.typ()?;
                 let other = typ.location();
                 Ok(Type::Ref(Box::new(typ), location.combine(other)))
+            },
+            |p| {
+                let start = p.here();
+                p.expect_(BraL)?;
+                let typ = p.typ()?;
+                let end = p.here();
+                p.expect(BraR)?;
+                Ok(Type::Name(
+                    Lame {
+                        name: "arr",
+                        location: start.combine(end),
+                    },
+                    [typ].into(),
+                ))
             },
             |p| {
                 let lame = p.lame(false)?;

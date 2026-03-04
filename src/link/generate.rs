@@ -116,7 +116,7 @@ impl<'a> Generate<'a> {
         }
     }
 
-    fn eval_const(&mut self, expr: &Expr, typ: &Type<'a>) -> u16 {
+    fn eval_const(&mut self, expr: &'a Expr, typ: &Type<'a>) -> u16 {
         let mut contents = Vec::new();
         self.const_add_expr(expr, typ, &mut contents);
         self.new_const(Const::Struct(contents))
@@ -128,21 +128,25 @@ impl<'a> Generate<'a> {
     }
 
     fn const_add_literal(
-        &self,
+        &mut self,
         literal: &Literal<'_>,
         typ: &Type<'a>,
         contents: &mut Vec<(Unsigned, Value)>,
     ) {
         match literal {
             Literal::Int(i, _) => contents.push((self.unsigned(typ), int_val(*i, typ))),
-            Literal::Str(_) => todo!(),
+            Literal::Str(s) => {
+                let cs = self.new_const(Const::String((*s).into()));
+                contents.push((ir::Type::Long.into(), Value::Const(cs)));
+                contents.push((ir::Type::Long.into(), Value::Int(strlen(s))));
+            }
             Literal::SizeOf(_) => todo!(),
         }
     }
 
     fn const_add_expr(
-        &self,
-        expr: &Expr<'_>,
+        &mut self,
+        expr: &'a Expr<'_>,
         typ: &Type<'a>,
         contents: &mut Vec<(Unsigned, Value)>,
     ) {
@@ -159,7 +163,7 @@ impl<'a> Generate<'a> {
         }
     }
 
-    fn const_add_tuple(&self, tuple: &'a Tuple<'a>, contents: &mut Vec<(Unsigned, Value)>) {
+    fn const_add_tuple(&mut self, tuple: &'a Tuple<'a>, contents: &mut Vec<(Unsigned, Value)>) {
         for (typ, expr) in &tuple.exprs {
             self.const_add_expr(expr, typ, contents);
         }
@@ -200,7 +204,10 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
                 if DEBUG {
                     eprintln!("> param {name}");
                 }
-                (self.abi_type(&self.heat_up(typ)), self.new_tmp())
+
+                let typ = &self.heat_up(typ);
+                self.size(typ); // for typ call
+                (self.abi_type(typ), self.new_tmp())
             })
             .collect();
         self.sup.context.new_layer();

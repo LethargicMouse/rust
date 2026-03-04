@@ -44,7 +44,9 @@ impl<'a> Lex<'a> {
             }
             self.skip();
         }
-        self.cursor -= 1;
+        if self.cursor != 0 {
+            self.cursor -= 1;
+        }
         res.push(self.token(Eof, 1));
         res
     }

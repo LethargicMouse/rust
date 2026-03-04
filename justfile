@@ -1,8 +1,7 @@
 bird: (good "bird" "-cc" "-lraylib" "-lm")
 
-good file *args:
-  cargo run --quiet -- run {{file}}.good {{args}}
+good file *args: (goodc "run" (file + ".good") args)
 
 goodc *args:
-  cargo run --quiet -- {{args}}
+  @cargo run --quiet -- {{args}}
 

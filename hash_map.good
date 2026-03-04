@@ -1,0 +1,153 @@
+// this will open a file from args and output count of top 10 most popular words
+fn main(cargs) {
+   let args = args(cargs);
+   args.skip(1);
+   if args.is_empty()
+     do die(expected_path);
+   printf("%zu\n".ptr, args.size);
+   eprintln(args.ptr[0]);
+   let content = read_file(args.ptr[0]);
+   eprintln(content.buf)
+}
+
+extern fn printf(cstr, size);
+
+fn read_file(path) string {
+  let file = open_file(path);
+  let res = fread(file);
+  close(file.fd);
+  res
+}
+
+fn fread(file) string {
+  let size = fsize(file);
+  let ptr = malloc(size);
+  read(file.fd, ptr, size);
+  string {
+    buf: str { ptr, size },
+    size
+  }
+}
+
+// requires str to be heap allocated
+fn to_string(str) string
+  do string {
+    buf: str,
+    size: str.size
+  }
+
+fn fsize(file) size {
+  let res = lseek(file.fd, 0, seek_end) as size;
+  lseek(file.fd, 0, seek_set);
+  res
+}
+
+let seek_set: i32 = 0;
+let seek_end: i32 = 2;
+
+extern fn lseek(fd, i32, i32) i32;
+
+extern fn read(fd, cstr, size);
+
+extern fn malloc<t>(size) *t;
+
+extern fn close(fd);
+
+fn open_file(path) file
+  do file {
+    fd: open(path, 'r')
+  }
+
+extern fn open(path) fd;
+
+type path = cstr;
+
+type string = vec<u8>;
+
+struct vec<t> {
+  buf: [t],
+  size
+}
+
+struct cargs { size, *cstr }
+
+fn args(cargs) args
+  do args {
+    ptr: cargs.ptr,
+    size: cargs.size
+  }
+
+impl display for cstr {
+  fn wprint(file, self) {
+    let str = self.to_str();
+    file.wwrite(str)
+  }
+}
+
+fn to_str(cstr) str
+  do str {
+    ptr: cstr,
+    size: strlen(cstr)
+  }
+
+extern fn strlen(cstr) size;
+
+fn skip<t>(&[t], size) {
+  size = size.min(arr.size);
+  arr.ptr += size;
+  arr.size -= size;
+}
+
+fn is_empty<t>([t]) bool
+  do arr.size == 0
+
+fn die<e: display>(e) { 
+  eprintln(e);
+  exit(1)
+}
+
+fn eprintln<s: display>(s) 
+  do stderr.wprintln(s)
+
+extern fn exit(i32);
+
+let stderr: file = file {fd: 2};
+
+struct file { fd }
+
+type fd = i32;
+
+fn wprintln<s: display>(file, s) {
+  file.wprint(s);
+  file.wprint("\n");
+}
+
+trait display {
+  fn wprint(file, self);
+}
+
+fn wwrite(file, str)
+  do write(file.fd, str.ptr, str.size)
+
+impl display for [u8] {
+  fn wprint(file, self) {
+    file.wwrite(self);
+  }
+}
+
+extern fn write(fd, cstr, size);
+
+fn min(a: u64, b: u64) u64
+  do if a < b do a else b
+
+let expected_path: str = "! error reading args: expected path";
+
+type args = [cstr];
+
+type cstr = *u8;
+
+type size = u64;
+
+type index = size;
+
+type str = [u8];
