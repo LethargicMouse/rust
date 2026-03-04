@@ -78,6 +78,7 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
+    WC(WrongCount<'a>),
     R(Redeclared<'a>),
     Nil(NotInLoop<'a>),
     Nct(NotCompTime<'a>),
@@ -92,6 +93,12 @@ pub enum CheckErrorKind<'a> {
     NIn(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<WrongCount<'a>> for CheckErrorKind<'a> {
+    fn from(v: WrongCount<'a>) -> Self {
+        Self::WC(v)
+    }
 }
 
 impl<'a> From<Redeclared<'a>> for CheckErrorKind<'a> {
@@ -196,6 +203,7 @@ impl Display for CheckErrorKind<'_> {
             CheckErrorKind::Nct(not_comp_time) => write!(f, "{not_comp_time}"),
             CheckErrorKind::Nil(not_in_loop) => write!(f, "{not_in_loop}"),
             CheckErrorKind::R(redeclared) => write!(f, "{redeclared}"),
+            CheckErrorKind::WC(wrong_count) => write!(f, "{wrong_count}"),
         }
     }
 }
@@ -434,6 +442,22 @@ impl Display for Redeclared<'_> {
             f,
             "{}\n{Red}--! {} {Reset}`{}` {Red}is already declared {Blue}in {}",
             self.location, self.kind, self.name, self.other
+        )
+    }
+}
+
+pub struct WrongCount<'a> {
+    pub location: Location<'a>,
+    pub expected: usize,
+    pub found: usize,
+}
+
+impl Display for WrongCount<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! expected {Reset}{} {Red}arguments, got {Reset}{}",
+            self.location, self.expected, self.found
         )
     }
 }

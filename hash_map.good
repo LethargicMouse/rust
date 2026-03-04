@@ -1,14 +1,27 @@
-// this will open a file from args and output count of top 10 most popular words
 fn main(cargs) {
-   let args = args(cargs);
-   args.skip(1);
-   if args.is_empty()
-     do die(expected_path);
-   printf("%zu\n".ptr, args.size);
-   eprintln(args.ptr[0]);
-   let content = read_file(args.ptr[0]);
-   eprintln(content.buf)
+  let args = args(cargs);
+  args.skip(1);
+  if args.is_empty()
+    do die(expected_path);
+  let content = read_file(args.ptr[0]);
+  eprintln(content.buf)
 }
+
+fn c_die(cstr) {
+  perror(cstr);
+  exit(1)
+}
+
+extern fn perror(cstr);
+extern fn open(path, i32) fd;
+extern fn close(fd);
+let read_only: i32 = 0;
+
+type cstr = *u8;
+
+extern fn strcpy(cstr, cstr);
+
+extern fn free<t>(*t);
 
 extern fn printf(cstr, size);
 
@@ -51,14 +64,12 @@ extern fn read(fd, cstr, size);
 
 extern fn malloc<t>(size) *t;
 
-extern fn close(fd);
-
-fn open_file(path) file
-  do file {
-    fd: open(path, 'r')
-  }
-
-extern fn open(path) fd;
+fn open_file(path) file {
+  let fd = open(path, read_only);
+  if fd == -1
+    do c_die(path);
+  file { fd }
+}
 
 type path = cstr;
 
@@ -143,8 +154,6 @@ fn min(a: u64, b: u64) u64
 let expected_path: str = "! error reading args: expected path";
 
 type args = [cstr];
-
-type cstr = *u8;
 
 type size = u64;
 

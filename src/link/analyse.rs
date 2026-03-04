@@ -14,7 +14,8 @@ use crate::{
         Asg, Context,
         analyse::error::{
             CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll, NotCompTime,
-            NotDeclared, NotImpl, NotInLoop, NotStruct, Redeclared, SemicolonEndBlock, WrongType,
+            NotDeclared, NotImpl, NotInLoop, NotStruct, Redeclared, SemicolonEndBlock, WrongCount,
+            WrongType,
         },
         asg::{self},
         ast::{self, *},
@@ -1107,6 +1108,13 @@ impl<'a> Analyse<'a> {
             Ok(typ) => typ,
             Err(_) => return self.fake_expr(),
         };
+        if typ.params.len() != args.len() {
+            self.fail(WrongCount {
+                location,
+                expected: typ.params.len(),
+                found: args.len(),
+            });
+        }
         let args = args
             .into_iter()
             .zip(typ.params)

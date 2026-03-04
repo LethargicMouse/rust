@@ -1,2 +1,3 @@
-#include <stdio.h>
-int main() { SEEK_END; }
+#include <fcntl.h>
+
+int main() { write() }
