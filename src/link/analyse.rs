@@ -33,7 +33,11 @@ struct FunType<'a> {
 
 impl Display for FunType<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fn({})", Sep(", ", &self.params))?;
+        write!(f, "fn")?;
+        if !self.generics.is_empty() {
+            write!(f, "<{}>", Sep(", ", &self.generics))?;
+        }
+        write!(f, "({})", Sep(", ", &self.params))?;
         if matches!(self.ret_type, Type::Prime(Prime::Unit)) {
             Ok(())
         } else {
@@ -226,7 +230,11 @@ impl<'a> Analyse<'a> {
             constraint: None,
         }]
         .into();
-        let asg_fields = [asg::Type::U64, asg::Type::U64].into();
+        let asg_fields = [
+            asg::Type::Ptr(Box::new(asg::Type::Generic("t"))),
+            asg::Type::U64,
+        ]
+        .into();
         let asg_generics = ["t"].into();
         let struct_ = Struct { fields, generics };
         let asg_struct = asg::Struct {
@@ -350,9 +358,16 @@ impl<'a> Analyse<'a> {
                                 .unwrap()
                                 .0
                                 .clone();
+                            true_header.generics.remove(0);
                             self.specify_fun_type(&mut true_header);
-                            let found = self.fun_type(fun.header.typ.clone()).into();
-                            self.unify(fun.header.lame.location, true_header.into(), found);
+                            let found = self.fun_type(fun.header.typ.clone());
+                            if true_header != found {
+                                self.fail(WrongType {
+                                    location: fun.header.lame.location,
+                                    expected: true_header.into(),
+                                    found: found.into(),
+                                });
+                            }
                             let name = fun.header.lame.name;
                             let fun = self.fun(fun);
                             if !trait_funs.contains_key(name) {
@@ -522,10 +537,14 @@ impl<'a> Analyse<'a> {
             })
             .collect();
         let len = exprs.len();
+        let asg_type = self.asg_type(&typ);
         typed(
             asg::Tuple {
                 exprs: vec![
-                    (asg::Type::U64, asg::Tuple { exprs }.into()),
+                    (
+                        asg::Type::Ptr(Box::new(asg_type)),
+                        asg::Tuple { exprs }.into(),
+                    ),
                     (
                         asg::Type::U64,
                         asg::Literal::Int(len as i64, asg::Type::U64).into(),
@@ -824,16 +843,16 @@ impl<'a> Analyse<'a> {
                 right: asg::Binary {
                     left: index.sup,
                     op: asg::BinOp::Multiply,
-                    right: asg::Literal::SizeOf(asg_type).into(),
+                    right: asg::Literal::SizeOf(asg_type.clone()).into(),
                     typ: asg::Type::U64,
                     args_typ: asg::Type::U64,
                 }
                 .into(),
-                typ: asg::Type::U64,
+                typ: asg_type.clone(),
                 args_typ: asg::Type::U64,
             }
             .into(),
-            typ: self.asg_type(&typ),
+            typ: asg_type,
         };
         typed(res, typ)
     }
@@ -920,7 +939,9 @@ impl<'a> Analyse<'a> {
                 *expected = self.try_unify(location, *expected, found)?;
                 Ok(Type::Ref(expected))
             }
-            (Type::Fun(mut a), Type::Fun(mut b)) if a.params.len() == b.params.len() => {
+            (Type::Fun(mut a), Type::Fun(mut b))
+                if a.params.len() == b.params.len() && a.generics.len() == b.generics.len() =>
+            {
                 let len = a.params.len();
                 for i in 0..len {
                     a.params[i] = match self.try_unify(
@@ -997,8 +1018,13 @@ impl<'a> Analyse<'a> {
         let mut ttyp = typ.clone();
         self.reveal(&mut ttyp);
         for impl_typ in self.impls.get(name).cloned().into_iter().flatten() {
+            let needs_ref = self.is_ref(&impl_typ) && !self.is_ref(&ttyp);
             if self.try_unify(location, impl_typ, ttyp.clone()).is_ok() {
-                return typ;
+                return if needs_ref {
+                    Type::Ref(Box::new(typ))
+                } else {
+                    typ
+                };
             }
         }
         self.fail(NotImpl {
@@ -1119,15 +1145,17 @@ impl<'a> Analyse<'a> {
             .into_iter()
             .zip(typ.params)
             .map(|((location, expr), expected)| {
-                let needs_ref = self.is_ref(&expected) && !self.is_ref(&expr.typ);
+                let was_ref = self.is_ref(&expr.typ);
                 let typ = self.unify(location, expected, expr.typ);
+                let needs_ref = self.is_ref(&typ) && !was_ref;
                 let asg_type = self.asg_type(&typ);
                 let expr = if needs_ref {
                     asg::Ref {
                         expr: expr.sup,
-                        expr_typ: match typ {
-                            Type::Ref(typ) => self.asg_type(&typ),
-                            _ => unreachable!(),
+                        expr_typ: match self.asg_type(&typ) {
+                            asg::Type::Cold(_) => unreachable!(),
+                            asg::Type::Ref(typ) => *typ,
+                            typ => typ,
                         },
                     }
                     .into()
@@ -1384,7 +1412,7 @@ impl<'a> Analyse<'a> {
             }
             Literal::Str(s) => typed(
                 asg::Literal::Str(s),
-                Type::Name("arr", vec![Prime::U8.into()]),
+                Type::Ref(Box::new(Type::Name("arr", vec![Prime::U8.into()]))),
             ),
             Literal::Bool(b) => typed(
                 asg::Literal::Int(b as i64, asg::Type::U8),
@@ -1609,7 +1637,7 @@ impl<'a> Analyse<'a> {
 
     fn try_hot_type(&self, typ: &Type<'a>) -> Option<asg::Type<'a>> {
         match typ {
-            Type::Ptr(_) => Some(asg::Type::U64),
+            Type::Ptr(typ) => Some(asg::Type::Ptr(Box::new(self.try_hot_type(typ)?))),
             Type::Name(name, generics) => Some(asg::Type::Name(
                 name,
                 generics
@@ -1617,7 +1645,15 @@ impl<'a> Analyse<'a> {
                     .map(|t| self.try_hot_type(t))
                     .collect::<Option<_>>()?,
             )),
-            Type::Fun(_) => Some(asg::Type::U64),
+            Type::Fun(typ) => {
+                let mut typs = typ
+                    .params
+                    .iter()
+                    .map(|typ| self.try_hot_type(typ))
+                    .collect::<Option<Vec<_>>>()?;
+                typs.push(self.try_hot_type(&typ.ret_type)?);
+                Some(asg::Type::FunPtr(typs))
+            }
             Type::Prime(prime) => Some(self.asg_prime(prime)),
             Type::Error => Some(asg::Type::I32),
             Type::Number => None,
@@ -1625,7 +1661,7 @@ impl<'a> Analyse<'a> {
             Type::Unreachable => Some(asg::Type::I32),
             Type::Generic(g) => Some(asg::Type::Generic(g)),
             Type::Unknown(_) => None,
-            Type::Ref(_) => Some(asg::Type::U64),
+            Type::Ref(typ) => Some(asg::Type::Ref(Box::new(self.try_hot_type(typ)?))),
         }
     }
 

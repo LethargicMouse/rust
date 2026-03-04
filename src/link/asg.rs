@@ -273,6 +273,9 @@ pub struct Deref<'a> {
 #[derive(Debug, Clone, Default)]
 pub enum Type<'a> {
     Name(&'a str, Vec<Type<'a>>),
+    Ref(Box<Type<'a>>),
+    Ptr(Box<Type<'a>>),
+    FunPtr(Vec<Type<'a>>),
     Cold(usize),
     Generic(&'a str),
     U8,
@@ -288,50 +291,15 @@ pub enum Type<'a> {
 
 impl Type<'_> {
     pub fn is_i(&self) -> bool {
-        match self {
-            Type::Name(_, _) => false,
-            Type::Cold(_) => false,
-            Type::Generic(_) => false,
-            Type::U8 => false,
-            Type::U64 => false,
-            Type::I32 => true,
-            Type::I64 => true,
-            Type::F32 => false,
-            Type::F64 => false,
-            Type::Bool => true,
-            Type::Unit => false,
-        }
+        matches!(self, Type::I32 | Type::I64 | Type::Bool)
     }
 
     pub fn is_f(&self) -> bool {
-        match self {
-            Type::Name(_, _) => false,
-            Type::Cold(_) => false,
-            Type::Generic(_) => false,
-            Type::U8 => false,
-            Type::U64 => false,
-            Type::Unit => false,
-            Type::I32 => false,
-            Type::I64 => false,
-            Type::F32 => true,
-            Type::F64 => true,
-            Type::Bool => false,
-        }
+        matches!(self, Type::F32 | Type::F64)
     }
 
     pub fn is_u(&self) -> bool {
-        match self {
-            Type::Name(_, _)
-            | Type::Cold(_)
-            | Type::Generic(_)
-            | Type::Unit
-            | Type::I32
-            | Type::I64
-            | Type::F32
-            | Type::F64
-            | Type::Bool => false,
-            Type::U8 | Type::U64 => true,
-        }
+        matches!(self, Type::U8 | Type::U64)
     }
 }
 

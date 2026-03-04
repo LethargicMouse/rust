@@ -137,10 +137,10 @@ trait display {
   fn wprint(file, self);
 }
 
-fn wwrite(file, str)
+fn wwrite(file, &str)
   do write(file.fd, str.ptr, str.size)
 
-impl display for [u8] {
+impl display for &[u8] {
   fn wprint(file, self) {
     file.wwrite(self);
   }
@@ -151,7 +151,7 @@ extern fn write(fd, cstr, size);
 fn min(a: u64, b: u64) u64
   do if a < b do a else b
 
-let expected_path: str = "! error reading args: expected path";
+let expected_path: &str = "! error reading args: expected path";
 
 type args = [cstr];
 

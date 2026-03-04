@@ -70,6 +70,14 @@ impl<'a> Generate<'a> {
                     self.add_to_name(full_name, typ);
                 }
             }
+            Type::Ref(typ) => {
+                *full_name += "$$ref";
+                self.add_to_name(full_name, typ);
+            }
+            Type::Ptr(typ) => {
+                *full_name += "$$ptr";
+                self.add_to_name(full_name, typ);
+            }
             Type::Cold(_) => unreachable!(),
             Type::Generic(_) => unreachable!(),
             Type::U64 => *full_name += "$$ul",
@@ -80,6 +88,12 @@ impl<'a> Generate<'a> {
             Type::F64 => *full_name += "$$fl",
             Type::Bool => *full_name += "$$bool",
             Type::Unit => *full_name += "$$unit",
+            Type::FunPtr(items) => {
+                *full_name += "$$fun";
+                for typ in items {
+                    self.add_to_name(full_name, typ);
+                }
+            }
         }
     }
 
@@ -113,6 +127,9 @@ impl<'a> Generate<'a> {
             Type::F64 => ir::Type::Double,
             Type::Bool => ir::Type::Word,
             Type::Unit => ir::Type::Word,
+            Type::Ref(_) => ir::Type::Long,
+            Type::Ptr(_) => ir::Type::Long,
+            Type::FunPtr(_) => ir::Type::Long,
         }
     }
 
@@ -136,12 +153,19 @@ impl<'a> Generate<'a> {
         match literal {
             Literal::Int(i, _) => contents.push((self.unsigned(typ), int_val(*i, typ))),
             Literal::Str(s) => {
-                let cs = self.new_const(Const::String((*s).into()));
-                contents.push((ir::Type::Long.into(), Value::Const(cs)));
-                contents.push((ir::Type::Long.into(), Value::Int(strlen(s))));
+                let c = self.new_str(s);
+                contents.push((ir::Type::Long.into(), Value::Const(c)));
             }
             Literal::SizeOf(_) => todo!(),
         }
+    }
+
+    fn new_str(&mut self, s: &str) -> u16 {
+        let cs = self.new_const(Const::String(s.into()));
+        self.new_const(Const::Struct(vec![
+            (ir::Type::Long.into(), Value::Const(cs)),
+            (ir::Type::Long.into(), Value::Int(strlen(s))),
+        ]))
     }
 
     fn const_add_expr(
@@ -441,6 +465,9 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Type::F64 => 8,
             Type::Bool => 1,
             Type::Unit => 0,
+            Type::Ref(_) => 8,
+            Type::Ptr(_) => 8,
+            Type::FunPtr(_) => 8,
         }
     }
 
@@ -775,11 +802,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn str(&mut self, s: &str) -> Tmp {
-        let cs = self.sup.new_const(Const::String(s.into()));
-        let c = self.sup.new_const(Const::Struct(vec![
-            (ir::Type::Long.into(), Value::Const(cs)),
-            (ir::Type::Long.into(), Value::Int(strlen(s))),
-        ]));
+        let c = self.sup.new_str(s);
         let tmp = self.new_tmp();
         self.stmts
             .push(Stmt::Copy(tmp, ir::Type::Long, Value::Const(c)));

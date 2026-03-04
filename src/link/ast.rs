@@ -648,6 +648,16 @@ pub struct Generic<'a> {
     pub constraint: Option<&'a str>,
 }
 
+impl Display for Generic<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        match self.constraint {
+            Some(constraint) => write!(f, ": {constraint}"),
+            None => Ok(()),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Negate<'a> {
     pub expr: Expr<'a>,
