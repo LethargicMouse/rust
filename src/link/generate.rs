@@ -392,10 +392,10 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let end = self.new_label();
         self.loop_ends.push(end);
         self.stmts.push(Stmt::Label(start));
-        let body = self.block(&loop_expr.body);
+        self.block(&loop_expr.body);
         self.stmts.push(Stmt::Jump(start));
         self.stmts.push(Stmt::Label(end));
-        body
+        self.int(0, &Type::U64)
     }
 
     fn tuple(&mut self, tuple: &Tuple<'a>) -> Tmp {
@@ -495,7 +495,6 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         if self.sup.type_infos.contains_key(&full_name) {
             return;
         }
-        let mut align = 1;
         let struct_ = &self.sup.asg.structs[name];
         self.typ_generics = struct_
             .generics
@@ -506,6 +505,13 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let mut variants = Vec::with_capacity(struct_.variants.len());
         let mut offsets = Vec::with_capacity(struct_.variants.len());
         let mut size = 0;
+        let align = struct_
+            .variants
+            .iter()
+            .flatten()
+            .map(|f| self.align(&self.heat_up(f)))
+            .max()
+            .unwrap_or(1);
         for variant_fields in &struct_.variants {
             let mut variant_offsets = Vec::with_capacity(variant_fields.len());
             let mut fields = Vec::with_capacity(variant_fields.len());
@@ -513,8 +519,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             for field in variant_fields {
                 let field = &self.heat_up(field);
                 variant_offsets.push(offset);
-                offset += self.size(field);
-                align = align.max(self.align(field));
+                offset += self.size(field).max(align);
                 fields.push(self.sup.data_type(field));
             }
             variants.push(fields);

@@ -13,9 +13,9 @@ use crate::{
     link::{
         Asg, Context,
         analyse::error::{
-            CheckError, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll, NotCompTime,
-            NotDeclared, NotImpl, NotInLoop, NotStruct, Redeclared, SemicolonEndBlock, WrongCount,
-            WrongType,
+            CheckError, CheckErrorKind, Fail, NoCall, NoCast, NoField, NoIndex, NoMethod, NotAll,
+            NotCompTime, NotDeclared, NotImpl, NotInLoop, NotStruct, Redeclared, SemicolonEndBlock,
+            WrongCount, WrongType,
         },
         asg::{self},
         ast::{self, *},
@@ -769,6 +769,14 @@ impl<'a> Analyse<'a> {
         ))
     }
 
+    fn is_ref(&self, typ: &Type<'a>) -> bool {
+        match typ {
+            Type::Ref(_) => true,
+            Type::Var(id) => self.is_ref(&self.types[*id]),
+            _ => false,
+        }
+    }
+
     fn specify_struct_generics(&mut self, name: &str, generics: &Vec<Type<'a>>) {
         for (index, generic) in self.structs[name].generics.iter().enumerate() {
             let typ = generics.get(index).cloned().unwrap_or_else(|| {
@@ -780,14 +788,6 @@ impl<'a> Analyse<'a> {
                 Type::Var(id)
             });
             self.type_context.insert(generic.name, typ);
-        }
-    }
-
-    fn is_ref(&self, typ: &Type<'a>) -> bool {
-        match typ {
-            Type::Ref(_) => true,
-            Type::Var(id) => self.is_ref(&self.types[*id]),
-            _ => false,
         }
     }
 
@@ -848,7 +848,7 @@ impl<'a> Analyse<'a> {
                     args_typ: asg::Type::U64,
                 }
                 .into(),
-                typ: asg_type.clone(),
+                typ: asg::Type::U64,
                 args_typ: asg::Type::U64,
             }
             .into(),
@@ -860,7 +860,7 @@ impl<'a> Analyse<'a> {
     fn unify(&mut self, location: Location<'a>, expected: Type<'a>, found: Type<'a>) -> Type<'a> {
         self.try_unify(location, expected, found)
             .unwrap_or_else(|e| {
-                self.fail(*e);
+                self.fail(e);
                 Type::Error
             })
     }
@@ -870,13 +870,15 @@ impl<'a> Analyse<'a> {
         location: Location<'a>,
         mut expected: Box<Type<'a>>,
         found: Type<'a>,
-    ) -> Result<Type<'a>, Box<WrongType<'a>>> {
+    ) -> Result<Type<'a>, CheckErrorKind<'a>> {
         *expected = self
             .try_unify(location, *expected, found)
-            .map_err(|mut e| {
-                e.expected = Type::Ptr(Box::new(e.expected));
-                e.found = Type::Ptr(Box::new(e.found));
-                e
+            .map_err(|mut err| {
+                if let CheckErrorKind::WT(e) = &mut err {
+                    e.expected = Type::Ptr(Box::new(take(&mut e.expected)));
+                    e.found = Type::Ptr(Box::new(take(&mut e.found)));
+                };
+                err
             })?;
         Ok(Type::Ptr(expected))
     }
@@ -886,13 +888,15 @@ impl<'a> Analyse<'a> {
         location: Location<'a>,
         mut expected: Box<Type<'a>>,
         found: Type<'a>,
-    ) -> Result<Type<'a>, Box<WrongType<'a>>> {
+    ) -> Result<Type<'a>, CheckErrorKind<'a>> {
         *expected = self
             .try_unify(location, *expected, found)
-            .map_err(|mut e| {
-                e.expected = Type::Ref(Box::new(e.expected));
-                e.found = Type::Ref(Box::new(e.found));
-                e
+            .map_err(|mut err| {
+                if let CheckErrorKind::WT(e) = &mut err {
+                    e.expected = Type::Ref(Box::new(take(&mut e.expected)));
+                    e.found = Type::Ref(Box::new(take(&mut e.found)));
+                };
+                err
             })?;
         Ok(Type::Ref(expected))
     }
@@ -902,11 +906,11 @@ impl<'a> Analyse<'a> {
         location: Location<'a>,
         expected: Type<'a>,
         found: Type<'a>,
-    ) -> Result<Type<'a>, Box<WrongType<'a>>> {
+    ) -> Result<Type<'a>, CheckErrorKind<'a>> {
         match (expected, found) {
             (a, b) if a == b => Ok(a),
             (Type::Var(id), b) => {
-                let a = std::mem::take(&mut self.types[id]);
+                let a = self.types[id].clone();
                 self.types[id] = self.try_unify(location, a, b)?;
                 if DEBUG {
                     eprintln!("{id} = {}", self.types[id]);
@@ -914,7 +918,7 @@ impl<'a> Analyse<'a> {
                 Ok(Type::Var(id))
             }
             (a, Type::Var(id)) => {
-                let b = std::mem::take(&mut self.types[id]);
+                let b = self.types[id].clone();
                 self.types[id] = self.try_unify(location, a, b)?;
                 if DEBUG {
                     eprintln!("{id} = {}", self.types[id]);
@@ -930,15 +934,11 @@ impl<'a> Analyse<'a> {
             {
                 Ok(Type::Generic(b))
             }
-            (Type::Unknown(Some(name)), typ) => Ok(self.constrain(location, name, typ)),
+            (Type::Unknown(Some(name)), typ) => Ok(self.constrain(location, name, typ)?),
             (a, Type::Unreachable) => Ok(a),
             (Type::Unreachable, b) => Ok(b),
             (Type::Ptr(expected), Type::Ptr(found)) => self.unify_ptrs(location, expected, *found),
             (Type::Ref(expected), Type::Ref(found)) => self.unify_refs(location, expected, *found),
-            (Type::Ref(mut expected), found) => {
-                *expected = self.try_unify(location, *expected, found)?;
-                Ok(Type::Ref(expected))
-            }
             (Type::Fun(mut a), Type::Fun(mut b))
                 if a.params.len() == b.params.len() && a.generics.len() == b.generics.len() =>
             {
@@ -950,7 +950,7 @@ impl<'a> Analyse<'a> {
                         take(&mut b.params[i]),
                     ) {
                         Ok(typ) => typ,
-                        Err(mut err) => {
+                        Err(CheckErrorKind::WT(mut err)) => {
                             for j in 0..len {
                                 if j != i {
                                     a.params[j] = Type::Error;
@@ -961,20 +961,22 @@ impl<'a> Analyse<'a> {
                             b.params[i] = err.found;
                             err.expected = Type::Fun(a);
                             err.found = Type::Fun(b);
-                            return Err(err);
+                            return Err(CheckErrorKind::WT(err));
                         }
+                        Err(err) => return Err(err),
                     };
                 }
                 a.ret_type =
                     match self.try_unify(location, take(&mut a.ret_type), take(&mut b.ret_type)) {
                         Ok(typ) => typ,
-                        Err(mut e) => {
-                            a.ret_type = e.expected;
-                            b.ret_type = e.found;
-                            e.expected = Type::Fun(a);
-                            e.found = Type::Fun(b);
-                            return Err(e);
+                        Err(CheckErrorKind::WT(mut err)) => {
+                            a.ret_type = err.expected;
+                            b.ret_type = err.found;
+                            err.expected = Type::Fun(a);
+                            err.found = Type::Fun(b);
+                            return Err(CheckErrorKind::WT(err));
                         }
+                        Err(err) => return Err(err),
                     };
                 Ok(Type::Fun(a))
             }
@@ -983,7 +985,7 @@ impl<'a> Analyse<'a> {
                 for i in 0..len {
                     ga[i] = match self.try_unify(location, ga[i].clone(), gb[i].clone()) {
                         Ok(typ) => typ,
-                        Err(mut err) => {
+                        Err(CheckErrorKind::WT(mut err)) => {
                             for j in 0..len {
                                 if j != i {
                                     ga[j] = Type::Error;
@@ -994,8 +996,9 @@ impl<'a> Analyse<'a> {
                             gb[i] = err.found;
                             err.expected = Type::Name(a, ga);
                             err.found = Type::Name(b, gb);
-                            return Err(err);
+                            return Err(CheckErrorKind::WT(err));
                         }
+                        Err(err) => return Err(err),
                     };
                 }
                 Ok(Type::Name(a, ga))
@@ -1005,35 +1008,35 @@ impl<'a> Analyse<'a> {
             (mut expected, mut found) => {
                 self.reveal(&mut expected);
                 self.reveal(&mut found);
-                Err(Box::new(WrongType {
+                Err(WrongType {
                     location,
                     expected,
                     found,
-                }))
+                }
+                .into())
             }
         }
     }
 
-    fn constrain(&mut self, location: Location<'a>, name: &'a str, typ: Type<'a>) -> Type<'a> {
+    fn constrain(
+        &mut self,
+        location: Location<'a>,
+        name: &'a str,
+        typ: Type<'a>,
+    ) -> Result<Type<'a>, NotImpl<'a>> {
         let mut ttyp = typ.clone();
         self.reveal(&mut ttyp);
         for impl_typ in self.impls.get(name).cloned().into_iter().flatten() {
-            let needs_ref = self.is_ref(&impl_typ) && !self.is_ref(&ttyp);
             if self.try_unify(location, impl_typ, ttyp.clone()).is_ok() {
-                return if needs_ref {
-                    Type::Ref(Box::new(typ))
-                } else {
-                    typ
-                };
+                return Ok(typ);
             }
         }
-        self.fail(NotImpl {
+        Err(NotImpl {
             location,
             typ,
             name,
             types: self.impls.get(name).cloned().unwrap_or_default(),
-        });
-        Type::Error
+        })
     }
 
     fn reveal(&mut self, typ: &mut Type<'a>) {
@@ -1101,12 +1104,19 @@ impl<'a> Analyse<'a> {
     fn call(&mut self, call: Call<'a>) -> Typed<'a, asg::Expr<'a>> {
         let name = call.lame.name;
         let location = call.lame.location;
-        if let Some((enum_name, label, Some(typ))) = self.labels.get(name).cloned() {
+        if let Some((enum_name, label, Some(mut typ))) = self.labels.get(name).cloned() {
             let generics = self.enums[enum_name]
                 .clone()
                 .into_iter()
                 .map(|g| self.new_type_var(Type::Unknown(g.constraint)))
                 .collect();
+            self.type_context.new_layer();
+            for g in self.enums[enum_name].clone() {
+                let typ = self.new_type_var(Type::Unknown(g.constraint));
+                self.type_context.insert(g.name, typ);
+            }
+            self.specify(&mut typ);
+            self.type_context.pop_layer();
             let location = call.args[0].location();
             let (expr, expr_typ) = self.expr(call.args[0].clone()).into();
             let typ = self.unify(location, typ, expr_typ);
@@ -1145,24 +1155,29 @@ impl<'a> Analyse<'a> {
             .into_iter()
             .zip(typ.params)
             .map(|((location, expr), expected)| {
-                let was_ref = self.is_ref(&expr.typ);
-                let typ = self.unify(location, expected, expr.typ);
-                let needs_ref = self.is_ref(&typ) && !was_ref;
-                let asg_type = self.asg_type(&typ);
-                let expr = if needs_ref {
-                    asg::Ref {
-                        expr: expr.sup,
-                        expr_typ: match self.asg_type(&typ) {
-                            asg::Type::Cold(_) => unreachable!(),
-                            asg::Type::Ref(typ) => *typ,
-                            typ => typ,
-                        },
+                match self.try_unify(location, expected.clone(), expr.typ.clone()) {
+                    Ok(typ) => {
+                        let asg_type = self.asg_type(&typ);
+                        (asg_type, expr.sup)
                     }
-                    .into()
-                } else {
-                    expr.sup
-                };
-                (asg_type, expr)
+                    Err(err) => {
+                        let asg_type = self.asg_type(&expr.typ);
+                        if self
+                            .try_unify(location, expected, Type::Ref(Box::new(expr.typ)))
+                            .is_ok()
+                        {
+                            let expr_typ = asg_type.clone();
+                            let expr = expr.sup;
+                            (
+                                asg::Type::Ref(Box::new(asg_type)),
+                                asg::Expr::Ref(Box::new(asg::Ref { expr, expr_typ })),
+                            )
+                        } else {
+                            self.fail(err);
+                            (asg::Type::Unit, expr.sup)
+                        }
+                    }
+                }
             })
             .collect();
         let ret_type = self.asg_type(&typ.ret_type);
@@ -1609,12 +1624,13 @@ impl<'a> Analyse<'a> {
         };
         let (body, typ) = self.expr(fun.body).into();
         let is_unit = matches!(typ, Type::Prime(Prime::Unit));
-        let typ = self.unify(location, self.ret_type.clone(), typ);
-        if let Some(location) = last_semi_location
-            && matches!(typ, Type::Error)
-            && is_unit
-        {
-            self.errors.last_mut().unwrap().help = Some(SemicolonEndBlock { location }.into());
+        if let Err(err) = self.try_unify(location, self.ret_type.clone(), typ) {
+            self.fail(err);
+            if let Some(location) = last_semi_location
+                && is_unit
+            {
+                self.errors.last_mut().unwrap().help = Some(SemicolonEndBlock { location }.into());
+            }
         }
         self.context.pop_layer();
         self.type_context.pop_layer();

@@ -90,7 +90,7 @@ impl<'a> Parse<'a> {
 
     fn new_expr_(&mut self) -> Result<New<'a>> {
         let lame = self.lame(false)?;
-        self.expect(CurL)?;
+        self.expect_(CurL)?;
         let fields = self.sep(Self::new_field).collect();
         self.expect(CurR)?;
         Ok(New { lame, fields })

@@ -4,8 +4,46 @@ fn main(cargs) {
   if args.is_empty()
     do die(expected_path);
   let content = read_file(args.ptr[0]);
-  eprintln(content.buf)
+  content.buf.words().next().unwrap().eprintln()
 }
+
+struct words {str}
+
+fn words(str) words
+  do words {str}
+
+fn next(words) maybe<str> {
+  if words.str.size == 0
+    do return none;
+  let i = 0;
+  loop if i == words.str.size || words.str.ptr[i] == 32 {
+    let res = words.str.slice(0, i);
+    words.str.ptr += res.size;
+    if words.str.size != 0
+      do words.str.ptr += 1;
+    return some(res);
+  } else i += 1
+}
+
+fn slice(str, left: index, right: index) str {
+  left = left.min(str.size);
+  right = right.min(str.size);
+  str {
+    ptr: str.ptr + left,
+    size: right - left
+  }
+}
+
+enum maybe<t> {
+  some(t),
+  none
+}
+
+fn unwrap<t>(maybe<t>) t
+  do maybe.match {
+    some(t) => t,
+    none => die("! unwrapped none somewhere lol")
+  }
 
 fn c_die(cstr) {
   perror(cstr);
@@ -112,7 +150,7 @@ fn skip<t>(&[t], size) {
 fn is_empty<t>([t]) bool
   do arr.size == 0
 
-fn die<e: display>(e) { 
+fn die<e: display, t>(e) t { 
   eprintln(e);
   exit(1)
 }
@@ -120,7 +158,7 @@ fn die<e: display>(e) {
 fn eprintln<s: display>(s) 
   do stderr.wprintln(s)
 
-extern fn exit(i32);
+extern fn exit<t>(i32) t;
 
 let stderr: file = file {fd: 2};
 
