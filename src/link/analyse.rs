@@ -22,7 +22,7 @@ use crate::{
     },
 };
 
-pub const DEBUG: bool = false;
+pub const DEBUG: bool = true;
 
 #[derive(Clone, PartialEq, Debug)]
 struct FunType<'a> {
@@ -907,6 +907,9 @@ impl<'a> Analyse<'a> {
         expected: Type<'a>,
         found: Type<'a>,
     ) -> Result<Type<'a>, CheckErrorKind<'a>> {
+        if DEBUG {
+            eprintln!("> unify {expected} {found}");
+        }
         match (expected, found) {
             (a, b) if a == b => Ok(a),
             (Type::Var(id), b) => {
@@ -1427,7 +1430,7 @@ impl<'a> Analyse<'a> {
             }
             Literal::Str(s) => typed(
                 asg::Literal::Str(s),
-                Type::Ref(Box::new(Type::Name("arr", vec![Prime::U8.into()]))),
+                Type::Name("arr", vec![Prime::U8.into()]),
             ),
             Literal::Bool(b) => typed(
                 asg::Literal::Int(b as i64, asg::Type::U8),

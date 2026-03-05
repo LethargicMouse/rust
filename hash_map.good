@@ -189,7 +189,7 @@ extern fn write(fd, cstr, size);
 fn min(a: u64, b: u64) u64
   do if a < b do a else b
 
-let expected_path: &str = "! error reading args: expected path";
+let expected_path: str = "! error reading args: expected path";
 
 type args = [cstr];
 

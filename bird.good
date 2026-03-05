@@ -261,7 +261,7 @@ fn init() {
   seed = time(0) as u64;
   InitWindow(800, 600, "test window".ptr);
   -- ToggleBorderlessWindowed();
-  SetTargetFPS(60);
+  SetTargetFPS(240);
   reset();
 }
 

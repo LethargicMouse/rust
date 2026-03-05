@@ -40,6 +40,9 @@ impl<'a> Generate<'a> {
 
     fn run(mut self) -> IR {
         for (name, (typ, const_)) in self.asg.consts.iter() {
+            if DEBUG {
+                eprintln!("> const {name}")
+            }
             let id = self.eval_const(const_, typ);
             self.context.insert(name, (Value::Const(id), typ.clone()))
         }
@@ -110,6 +113,7 @@ impl<'a> Generate<'a> {
     fn unsigned(&self, typ: &Type<'a>) -> Unsigned {
         match typ {
             Type::U8 => Unsigned::Byte,
+            Type::Cold(id) => self.unsigned(&self.asg.info.types[*id]),
             _ => self.base(typ).into(),
         }
     }
@@ -153,8 +157,9 @@ impl<'a> Generate<'a> {
         match literal {
             Literal::Int(i, _) => contents.push((self.unsigned(typ), int_val(*i, typ))),
             Literal::Str(s) => {
-                let c = self.new_str(s);
-                contents.push((ir::Type::Long.into(), Value::Const(c)));
+                let cs = self.new_const(Const::String((*s).into()));
+                contents.push((ir::Type::Long.into(), Value::Const(cs)));
+                contents.push((ir::Type::Long.into(), Value::Int(strlen(s))));
             }
             Literal::SizeOf(_) => todo!(),
         }
