@@ -47,7 +47,7 @@ impl Display for NotStruct<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{Red}--! {Reset}`{}`{Red} is not struct or enum variant{Reset}",
+            "{}\n{Red}--! {Reset}`{}`{Red} is not a struct{Reset}",
             self.location, self.name
         )
     }
@@ -78,6 +78,7 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
+    CM(CantMatch<'a>),
     WC(WrongCount<'a>),
     R(Redeclared<'a>),
     Nil(NotInLoop<'a>),
@@ -93,6 +94,12 @@ pub enum CheckErrorKind<'a> {
     NIn(NoIndex<'a>),
     NCal(NoCall<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<CantMatch<'a>> for CheckErrorKind<'a> {
+    fn from(v: CantMatch<'a>) -> Self {
+        Self::CM(v)
+    }
 }
 
 impl<'a> From<WrongCount<'a>> for CheckErrorKind<'a> {
@@ -204,6 +211,7 @@ impl Display for CheckErrorKind<'_> {
             CheckErrorKind::Nil(not_in_loop) => write!(f, "{not_in_loop}"),
             CheckErrorKind::R(redeclared) => write!(f, "{redeclared}"),
             CheckErrorKind::WC(wrong_count) => write!(f, "{wrong_count}"),
+            CheckErrorKind::CM(cant_match) => write!(f, "{cant_match}"),
         }
     }
 }
@@ -458,6 +466,21 @@ impl Display for WrongCount<'_> {
             f,
             "{}\n{Red}--! expected {Reset}{} {Red}arguments, got {Reset}{}",
             self.location, self.expected, self.found
+        )
+    }
+}
+
+pub struct CantMatch<'a> {
+    pub location: Location<'a>,
+    pub typ: Type<'a>,
+}
+
+impl Display for CantMatch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! cannot match a value of type {Reset}{}",
+            self.location, self.typ
         )
     }
 }

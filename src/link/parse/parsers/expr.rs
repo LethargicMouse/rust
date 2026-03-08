@@ -2,8 +2,8 @@ use crate::{
     Location,
     link::{
         ast::{
-            Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, Get, If, Let,
-            Loop, Match, Negate, New, NewField, Pattern, PatternMatch, Postfix, Ref, Return,
+            Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, For, Get, If,
+            Let, Loop, Match, Negate, New, NewField, Pattern, PatternMatch, Postfix, Ref, Return,
         },
         lex::{Lexeme::*, helpers::op_assign},
         parse::{Parse, Result, error::Fail},
@@ -20,6 +20,7 @@ impl<'a> Parse<'a> {
             |p| Ok(p.if_expr_()?.into()),
             |p| Ok(p.let_expr_()?.into()),
             |p| Ok(p.loop_expr_()?.into()),
+            |p| Ok(p.for_expr_()?.into()),
             |p| Ok(p.ref_expr_()?.into()),
             |p| Ok(p.negate_()?.into()),
             |p| Ok(p.ret_()?.into()),
@@ -86,6 +87,21 @@ impl<'a> Parse<'a> {
         self.expect_(Name("loop"))?;
         let body = self.expr(0)?;
         Ok(Loop { body })
+    }
+
+    fn for_expr_(&mut self) -> Result<For<'a>> {
+        let location = self.here();
+        self.expect_(Name("for"))?;
+        let lame = self.lame(true)?;
+        self.expect(Name("in"))?;
+        let expr = self.expr(0)?;
+        let body = self.block_or_do()?;
+        Ok(For {
+            location,
+            lame,
+            expr,
+            body,
+        })
     }
 
     fn new_expr_(&mut self) -> Result<New<'a>> {

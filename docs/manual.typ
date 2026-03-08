@@ -319,7 +319,7 @@ the value of type `t` is stored.
 In C language such pointers are oftenly used to represent an array of values of type `t`.
 In order for such use case to be possible in Good programs, when adding a number to
 a pointer, the former is multiplied by the byte size of the `t` value
-(By the way, the size of a type can be aquired in the code with `@sizeof your_type`).
+(By the way, the size of a type can be aquired in the code with `@size your_type`).
 
 To point to an existing item, one can use the following syntax:
 ```
@@ -417,7 +417,7 @@ But what if one wants to make a function that works with values of generic types
 In order to do so, there are generic functions:
 ```
 fn byte_size<t>([t]) u64
-  do arr.size * @sizeof t
+  do arr.size * @size t
 
 fn first<t>([t]) t
   do *arr.ptr
@@ -578,7 +578,7 @@ That is a reference type. It is used to access the values without recieving the 
 
 ```
 fn byte_size<t>(&vec<t>) size
-  do vec.size * @sizeof t
+  do vec.size * @size t
 
 fn main() {
   let a = [123, 321] as vec;

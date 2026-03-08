@@ -1,24 +1,89 @@
 fn main(cargs) {
-  let args = args(cargs);
-  args.skip(1);
-  if args.is_empty()
-    do die(expected_path);
-  let content = read_file(args.ptr[0]);
-  content.buf.words().next().unwrap().eprintln()
+  let content = read_file("test.txt".ptr);
+  let freq = empty();
+  for word in content.buf.words()
+    do freq.add(word, 1);
 }
+
+fn add<t>(&counter<t>, t, i32) {
+  counter.get(t) += 1;
+}
+
+fn find(&counter<t>, t) &i32 {
+  for assoc in counter.vec.buf
+    do if assoc.key.eq(t)
+      do return assoc.val;
+  counter.vec.push(assoc { key: t, val: 1 });
+  counter.vec.buf.last().val
+}
+
+fn push<t>(&vec<t>, t) {
+  if vec.size == vec.buf.size
+    do vec.buf.grow();
+  vec.buf.ptr[vec.size] = t;
+  vec.size += 1;
+}
+
+fn grow<t>(&[t])
+  do if arr.size == 0 {
+    arr.size = 8;
+    arr.ptr = malloc(arr.size * @size t)
+  } else {
+    arr.size *= 2;
+    arr.ptr = realloc(arr.ptr, arr.size * @size t)
+  }
+
+extern fn realloc<t>(*t, size) *t;
+
+fn last([t]) &t
+  do arr.ptr[arr.size]
+
+trait collection {
+  fn empty() self;
+}
+
+impl<t> collection for counter<t> {
+  fn empty() self
+    do self { vec: empty() }
+}
+
+impl<t> collection for vec<t> {
+  fn empty() self
+    do self { buf: empty(), size: 0 }
+}
+
+struct counter<t> { vec<assoc<t, i32>> }
+
+impl<t> collection for [t] {
+  fn empty() self
+    do arr { ptr: 0, size: 0 }
+}
+
+struct assoc<a, b> {
+  key: a,
+  val: b
+}
+
+fn to_iter<t>(t) t
+  do t
 
 struct words {str}
 
 fn words(str) words
   do words {str}
 
-fn next(words) maybe<str> {
+trait iterator<item> {
+  fn next(&self) item;
+}
+
+fn next(&words) maybe<str> {
   if words.str.size == 0
     do return none;
   let i = 0;
   loop if i == words.str.size || words.str.ptr[i] == 32 {
     let res = words.str.slice(0, i);
     words.str.ptr += res.size;
+    words.str.size -= res.size;
     if words.str.size != 0
       do words.str.ptr += 1;
     return some(res);

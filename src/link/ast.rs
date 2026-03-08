@@ -22,6 +22,7 @@ pub struct Const<'a> {
 
 pub struct Impl<'a> {
     pub lame: Lame<'a>,
+    pub generics: Vec<Generic<'a>>,
     pub typ: Type<'a>,
     pub funs: Vec<Fun<'a>>,
 }
@@ -177,6 +178,7 @@ pub struct Lame<'a> {
 
 #[derive(Clone)]
 pub enum Expr<'a> {
+    For(Box<For<'a>>),
     Match(Box<Match<'a>>),
     Negate(Box<Negate<'a>>),
     Break(Box<Break<'a>>),
@@ -197,6 +199,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<For<'a>> for Expr<'a> {
+    fn from(v: For<'a>) -> Self {
+        Self::For(Box::new(v))
+    }
 }
 
 impl<'a> From<Match<'a>> for Expr<'a> {
@@ -312,6 +320,7 @@ impl<'a> Expr<'a> {
             Expr::Break(break_expr) => break_expr.location,
             Expr::Negate(negate) => negate.location,
             Expr::Match(match_expr) => match_expr.location,
+            Expr::For(for_expr) => for_expr.location,
         }
     }
 
@@ -343,6 +352,7 @@ impl<'a> Expr<'a> {
             Expr::Break(_) => true,
             Expr::Negate(_) => false,
             Expr::Match(_) => false,
+            Expr::For(for_expr) => for_expr.body.needs_semicolon(),
         }
     }
 }
@@ -679,4 +689,81 @@ pub struct Match<'a> {
 pub struct Variant<'a> {
     pub lame: Lame<'a>,
     pub value: Option<Type<'a>>,
+}
+
+#[derive(Clone)]
+pub struct For<'a> {
+    pub location: Location<'a>,
+    pub lame: Lame<'a>,
+    pub expr: Expr<'a>,
+    pub body: Expr<'a>,
+}
+
+impl<'a> For<'a> {
+    pub fn desugar(self) -> Block<'a> {
+        let stmts = [Let {
+            location: self.location,
+            lame: Lame {
+                name: "$iterable",
+                location: self.location,
+            },
+            typ: None,
+            expr: Call {
+                lame: Lame {
+                    name: "to_iter",
+                    location: self.location,
+                },
+                args: [self.expr].into(),
+            }
+            .into(),
+        }
+        .into()]
+        .into();
+        let ret = Loop {
+            body: Match {
+                expr: Call {
+                    lame: Lame {
+                        name: "next",
+                        location: self.location,
+                    },
+                    args: [Lame {
+                        name: "$iterable",
+                        location: self.location,
+                    }
+                    .into()]
+                    .into(),
+                }
+                .into(),
+                pattern_matches: [
+                    PatternMatch {
+                        pattern: Pattern {
+                            name: "some",
+                            value: Some(self.lame),
+                        },
+                        expr: self.body,
+                    },
+                    PatternMatch {
+                        pattern: Pattern {
+                            name: "none",
+                            value: None,
+                        },
+                        expr: Break {
+                            expr: Expr::ImplicitUnit(self.location),
+                            location: self.location,
+                        }
+                        .into(),
+                    },
+                ]
+                .into(),
+                location: self.location,
+            }
+            .into(),
+        }
+        .into();
+        Block {
+            stmts,
+            ret,
+            last_semi_location: None,
+        }
+    }
 }

@@ -56,13 +56,19 @@ impl<'a> Parse<'a> {
 
     fn impl_(&mut self) -> Result<Impl<'a>> {
         self.expect_(Name("impl"))?;
+        let generics = self.maybe(Self::generics).unwrap_or_default();
         let lame = self.lame(true)?;
         self.expect(Name("for"))?;
         let typ = self.typ()?;
         self.expect(CurL)?;
         let funs = self.many(Self::fun_);
         self.expect(CurR)?;
-        Ok(Impl { lame, typ, funs })
+        Ok(Impl {
+            lame,
+            generics,
+            typ,
+            funs,
+        })
     }
 
     fn trait_(&mut self) -> Result<(&'a str, Trait<'a>)> {

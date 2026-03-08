@@ -42,8 +42,8 @@ fn main() {
   loop {
     if should_close 
       do break;
-    draw();
     update();
+    draw();
   }
   deinit();
 }
