@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     Location,
     display::colors::{Blue, Red, Reset},
-    link::analyse::Type,
+    link::analyse::{Constraint, Type},
 };
 
 pub struct NotDeclared<'a> {
@@ -87,12 +87,11 @@ pub enum CheckErrorKind<'a> {
     NM(NoMethod<'a>),
     NA(NotAll<'a>),
     NS(NotStruct<'a>),
-    NCas(NoCast<'a>),
+    NC(NoCast<'a>),
     Snt(ShouldKnowType<'a>),
     ND(NotDeclared<'a>),
     NF(NoField<'a>),
-    NIn(NoIndex<'a>),
-    NCal(NoCall<'a>),
+    NO(NoOp<'a>),
     WT(WrongType<'a>),
 }
 
@@ -152,7 +151,7 @@ impl<'a> From<NotStruct<'a>> for CheckErrorKind<'a> {
 
 impl<'a> From<NoCast<'a>> for CheckErrorKind<'a> {
     fn from(v: NoCast<'a>) -> Self {
-        Self::NCas(v)
+        Self::NC(v)
     }
 }
 
@@ -168,15 +167,9 @@ impl<'a> From<WrongType<'a>> for CheckErrorKind<'a> {
     }
 }
 
-impl<'a> From<NoCall<'a>> for CheckErrorKind<'a> {
-    fn from(v: NoCall<'a>) -> Self {
-        Self::NCal(v)
-    }
-}
-
-impl<'a> From<NoIndex<'a>> for CheckErrorKind<'a> {
-    fn from(v: NoIndex<'a>) -> Self {
-        Self::NIn(v)
+impl<'a> From<NoOp<'a>> for CheckErrorKind<'a> {
+    fn from(v: NoOp<'a>) -> Self {
+        Self::NO(v)
     }
 }
 
@@ -198,11 +191,10 @@ impl Display for CheckErrorKind<'_> {
         match self {
             CheckErrorKind::ND(not_declared) => write!(f, "{not_declared}"),
             CheckErrorKind::NF(no_field) => write!(f, "{no_field}"),
-            CheckErrorKind::NIn(no_deref) => write!(f, "{no_deref}"),
-            CheckErrorKind::NCal(no_call) => write!(f, "{no_call}"),
+            CheckErrorKind::NO(no_call) => write!(f, "{no_call}"),
             CheckErrorKind::WT(wrong_type) => write!(f, "{wrong_type}"),
             CheckErrorKind::Snt(should_know_type) => write!(f, "{should_know_type}"),
-            CheckErrorKind::NCas(no_cast) => write!(f, "{no_cast}"),
+            CheckErrorKind::NC(no_cast) => write!(f, "{no_cast}"),
             CheckErrorKind::NS(not_struct) => write!(f, "{not_struct}"),
             CheckErrorKind::NA(not_all_fields) => write!(f, "{not_all_fields}"),
             CheckErrorKind::NM(no_method) => write!(f, "{no_method}"),
@@ -235,32 +227,18 @@ impl Display for Error<'_> {
     }
 }
 
-pub struct NoIndex<'a> {
+pub struct NoOp<'a> {
     pub location: Location<'a>,
     pub typ: Type<'a>,
+    pub op: &'a str,
 }
 
-impl Display for NoIndex<'_> {
+impl Display for NoOp<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{Red}--! cannot index a value of type {Reset}{}",
-            self.location, self.typ
-        )
-    }
-}
-
-pub struct NoCall<'a> {
-    pub location: Location<'a>,
-    pub typ: Type<'a>,
-}
-
-impl Display for NoCall<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}\n{Red}--! cannot invoke a value of type {Reset}{}",
-            self.location, self.typ
+            "{}\n{Red}--! cannot {} a value of type {Reset}{}",
+            self.location, self.op, self.typ
         )
     }
 }
@@ -293,7 +271,7 @@ impl Display for ShouldKnowType<'_> {
             "{}\n{Red}--! type should be known here{Reset}",
             self.location
         )?;
-        if matches!(self.typ, Type::Unknown(None)) {
+        if matches!(self.typ, Type::Unknown) {
             return Ok(());
         }
         write!(f, "\n{Blue}--@ inferred type is {Reset}{}", self.typ)
@@ -387,7 +365,7 @@ impl Display for NoMethod<'_> {
 pub struct NotImpl<'a> {
     pub location: Location<'a>,
     pub typ: Type<'a>,
-    pub name: &'a str,
+    pub constraint: Constraint<'a>,
     pub types: Vec<Type<'a>>,
 }
 
@@ -396,7 +374,7 @@ impl Display for NotImpl<'_> {
         write!(
             f,
             "{}\n{Red}--! type {Reset}{} {Red}does not implement trait {Reset}`{}`\n{Blue}--@ ",
-            self.location, self.typ, self.name
+            self.location, self.typ, self.constraint
         )?;
         if self.types.is_empty() {
             return write!(f, "no type implements this trait{Reset}",);

@@ -5,11 +5,11 @@ fn main(cargs) {
     do freq.add(word, 1);
 }
 
-fn add<t>(&counter<t>, t, i32) {
-  counter.get(t) += 1;
+fn add<t: eq>(&counter<t>, t, i32) {
+  *counter.find(t) += 1;
 }
 
-fn find(&counter<t>, t) &i32 {
+fn find<t: eq>(&counter<t>, t) &i32 {
   for assoc in counter.vec.buf
     do if assoc.key.eq(t)
       do return assoc.val;
@@ -35,7 +35,7 @@ fn grow<t>(&[t])
 
 extern fn realloc<t>(*t, size) *t;
 
-fn last([t]) &t
+fn last<t>([t]) &t
   do arr.ptr[arr.size]
 
 trait collection {
@@ -73,21 +73,38 @@ fn words(str) words
   do words {str}
 
 trait iterator<item> {
-  fn next(&self) item;
+  fn next(&self) maybe<item>;
 }
 
-fn next(&words) maybe<str> {
-  if words.str.size == 0
-    do return none;
-  let i = 0;
-  loop if i == words.str.size || words.str.ptr[i] == 32 {
-    let res = words.str.slice(0, i);
-    words.str.ptr += res.size;
-    words.str.size -= res.size;
-    if words.str.size != 0
-      do words.str.ptr += 1;
-    return some(res);
-  } else i += 1
+impl iterator<str> for words {
+  fn next(&words) maybe<str> {
+    if words.str.size == 0
+      do return none;
+    let i = 0;
+    loop if i == words.str.size || words.str.ptr[i] == 32 {
+      let res = words.str.slice(0, i);
+      words.str.ptr += res.size;
+      words.str.size -= res.size;
+      if words.str.size != 0
+        do words.str.ptr += 1;
+      return some(res);
+    } else i += 1
+  }
+}
+
+impl<t> iterator<t> for [t] {
+  fn next(&[t]) maybe<t> 
+    do if arr.size == 0
+      do none
+    else {
+      let res = *arr.ptr;
+      arr.ptr += 1;
+      some(res)
+    }
+}
+
+trait eq {
+  fn eq(self, self) bool;
 }
 
 fn slice(str, left: index, right: index) str {

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::{
     Location,
     link::{
-        ast::{Ast, Field, FunType, Generic, Item, Lame, Prime, Type},
+        ast::{Ast, Constraint, Field, FunType, Generic, Item, Lame, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse, Result},
     },
@@ -158,7 +158,16 @@ impl<'a> Parse<'a> {
         let name = self.name(true)?;
         let constraint = self.maybe(|p| {
             p.expect_(Colon)?;
-            p.name(true)
+            let name = p.name(true)?;
+            let generics = p
+                .maybe(|p| {
+                    p.expect(Less)?;
+                    let res = p.sep(Self::typ).collect();
+                    p.expect(More)?;
+                    Ok(res)
+                })
+                .unwrap_or_default();
+            Ok(Constraint { name, generics })
         });
         Ok(Generic { name, constraint })
     }

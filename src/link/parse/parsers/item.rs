@@ -58,6 +58,14 @@ impl<'a> Parse<'a> {
         self.expect_(Name("impl"))?;
         let generics = self.maybe(Self::generics).unwrap_or_default();
         let lame = self.lame(true)?;
+        let trait_generics = self
+            .maybe(|p| {
+                p.expect(Less)?;
+                let res = p.sep(Self::typ).collect();
+                p.expect(More)?;
+                Ok(res)
+            })
+            .unwrap_or_default();
         self.expect(Name("for"))?;
         let typ = self.typ()?;
         self.expect(CurL)?;
@@ -66,6 +74,7 @@ impl<'a> Parse<'a> {
         Ok(Impl {
             lame,
             generics,
+            trait_generics,
             typ,
             funs,
         })
@@ -74,6 +83,7 @@ impl<'a> Parse<'a> {
     fn trait_(&mut self) -> Result<(&'a str, Trait<'a>)> {
         self.expect_(Name("trait"))?;
         let name = self.name(true)?;
+        let generics = self.maybe(Self::generics).unwrap_or_default();
         self.expect(CurL)?;
         let headers = self.many(|p| {
             let res = p.header_()?;
@@ -81,7 +91,7 @@ impl<'a> Parse<'a> {
             Ok(res)
         });
         self.expect(CurR)?;
-        Ok((name, Trait { headers }))
+        Ok((name, Trait { generics, headers }))
     }
 
     fn type_alias_(&mut self) -> Result<TypeAlias<'a>> {

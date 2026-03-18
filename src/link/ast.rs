@@ -23,6 +23,7 @@ pub struct Const<'a> {
 pub struct Impl<'a> {
     pub lame: Lame<'a>,
     pub generics: Vec<Generic<'a>>,
+    pub trait_generics: Vec<Type<'a>>,
     pub typ: Type<'a>,
     pub funs: Vec<Fun<'a>>,
 }
@@ -178,6 +179,7 @@ pub struct Lame<'a> {
 
 #[derive(Clone)]
 pub enum Expr<'a> {
+    Deref(Box<Deref<'a>>),
     For(Box<For<'a>>),
     Match(Box<Match<'a>>),
     Negate(Box<Negate<'a>>),
@@ -199,6 +201,12 @@ pub enum Expr<'a> {
     Var(Lame<'a>),
     Get(Box<Get<'a>>),
     Block(Box<Block<'a>>),
+}
+
+impl<'a> From<Deref<'a>> for Expr<'a> {
+    fn from(v: Deref<'a>) -> Self {
+        Self::Deref(Box::new(v))
+    }
 }
 
 impl<'a> From<For<'a>> for Expr<'a> {
@@ -321,14 +329,12 @@ impl<'a> Expr<'a> {
             Expr::Negate(negate) => negate.location,
             Expr::Match(match_expr) => match_expr.location,
             Expr::For(for_expr) => for_expr.location,
+            Expr::Deref(deref) => deref.location,
         }
     }
 
     pub fn needs_semicolon(&self) -> bool {
         match self {
-            Expr::Call(_) => true,
-            Expr::Binary(_) => true,
-            Expr::Literal(_, _) => true,
             Expr::If(if_expr) => {
                 if matches!(if_expr.else_expr, Expr::ImplicitUnit(_)) {
                     if_expr.then_expr.needs_semicolon()
@@ -336,23 +342,12 @@ impl<'a> Expr<'a> {
                     if_expr.else_expr.needs_semicolon()
                 }
             }
-            Expr::Var(_) => true,
-            Expr::Get(_) => true,
-            Expr::Block(_) => false,
-            Expr::Let(_) => true,
-            Expr::Field(_) => true,
-            Expr::Assign(_) => true,
-            Expr::New(_) => true,
             Expr::Loop(loop_expr) => loop_expr.body.needs_semicolon(),
-            Expr::Ref(_) => true,
-            Expr::Return(_) => true,
-            Expr::Cast(_) => true,
-            Expr::Array(_) => true,
-            Expr::ImplicitUnit(_) => true,
-            Expr::Break(_) => true,
+            Expr::For(for_expr) => for_expr.body.needs_semicolon(),
+            Expr::Block(_) => false,
             Expr::Negate(_) => false,
             Expr::Match(_) => false,
-            Expr::For(for_expr) => for_expr.body.needs_semicolon(),
+            _ => true,
         }
     }
 }
@@ -434,8 +429,6 @@ pub struct Pattern<'a> {
 
 pub enum Postfix<'a> {
     Match(Location<'a>, Vec<PatternMatch<'a>>),
-    Assign(Expr<'a>),
-    OpAssign(BinOp, Expr<'a>),
     Get(Expr<'a>),
     Call(Call<'a>),
     Field(&'a str, Location<'a>),
@@ -497,7 +490,7 @@ impl<'a> Type<'a> {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Prime {
     Unit,
     Bool,
@@ -649,21 +642,21 @@ pub struct TypeAlias<'a> {
 }
 
 pub struct Trait<'a> {
+    pub generics: Vec<Generic<'a>>,
     pub headers: Vec<Header<'a>>,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone)]
 pub struct Generic<'a> {
     pub name: &'a str,
-    pub constraint: Option<&'a str>,
+    pub constraint: Option<Constraint<'a>>,
 }
 
-impl Display for Generic<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)?;
-        match self.constraint {
-            Some(constraint) => write!(f, ": {constraint}"),
-            None => Ok(()),
+impl<'a> From<&'a str> for Generic<'a> {
+    fn from(name: &'a str) -> Self {
+        Self {
+            name,
+            constraint: None,
         }
     }
 }
@@ -701,6 +694,7 @@ pub struct For<'a> {
 
 impl<'a> For<'a> {
     pub fn desugar(self) -> Block<'a> {
+        let expr_location = self.expr.location();
         let stmts = [Let {
             location: self.location,
             lame: Lame {
@@ -728,7 +722,7 @@ impl<'a> For<'a> {
                     },
                     args: [Lame {
                         name: "$iterable",
-                        location: self.location,
+                        location: expr_location,
                     }
                     .into()]
                     .into(),
@@ -766,4 +760,16 @@ impl<'a> For<'a> {
             last_semi_location: None,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct Deref<'a> {
+    pub expr: Expr<'a>,
+    pub location: Location<'a>,
+}
+
+#[derive(Clone)]
+pub struct Constraint<'a> {
+    pub name: &'a str,
+    pub generics: Vec<Type<'a>>,
 }

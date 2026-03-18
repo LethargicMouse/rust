@@ -872,6 +872,10 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn fun_ref(&mut self, fun_ref: &FunRef<'a>) -> Tmp {
+        if DEBUG {
+            eprintln!("> fun ref {}", fun_ref.name);
+            eprintln!("> generics");
+        }
         let (g_names, generics): (Vec<_>, Vec<_>) = fun_ref
             .generics
             .iter()
@@ -893,6 +897,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
                 .flat_map(|v| v.iter())
             {
                 let mut buf = String::new();
+                eprintln!("> candidate self");
                 self.sup.add_to_name(&mut buf, &self.heat_up(typ));
                 if first_g_name == buf {
                     return Some(fun);
@@ -908,6 +913,9 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             }
         } else {
             name = fun_ref.name.into();
+        }
+        if DEBUG {
+            eprintln!("> got name {name}");
         }
         let name = Value::Fun(name);
         let name_tmp = self.new_tmp();

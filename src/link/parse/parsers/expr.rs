@@ -2,8 +2,9 @@ use crate::{
     Location,
     link::{
         ast::{
-            Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Expr, FieldExpr, For, Get, If,
-            Let, Loop, Match, Negate, New, NewField, Pattern, PatternMatch, Postfix, Ref, Return,
+            Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Deref, Expr, FieldExpr, For,
+            Get, If, Let, Loop, Match, Negate, New, NewField, Pattern, PatternMatch, Postfix, Ref,
+            Return,
         },
         lex::{Lexeme::*, helpers::op_assign},
         parse::{Parse, Result, error::Fail},
@@ -22,6 +23,7 @@ impl<'a> Parse<'a> {
             |p| Ok(p.loop_expr_()?.into()),
             |p| Ok(p.for_expr_()?.into()),
             |p| Ok(p.ref_expr_()?.into()),
+            |p| Ok(p.deref_expr_()?.into()),
             |p| Ok(p.negate_()?.into()),
             |p| Ok(p.ret_()?.into()),
             |p| Ok(p.break_()?.into()),
@@ -74,6 +76,13 @@ impl<'a> Parse<'a> {
         self.expect_(Ampersand)?;
         let expr = self.expr_1()?;
         Ok(Ref { expr, location })
+    }
+
+    fn deref_expr_(&mut self) -> Result<Deref<'a>> {
+        let location = self.here();
+        self.expect_(Star)?;
+        let expr = self.expr_1()?;
+        Ok(Deref { expr, location })
     }
 
     fn negate_(&mut self) -> Result<Negate<'a>> {
@@ -170,14 +179,6 @@ impl<'a> Parse<'a> {
                     }
                     .into()
                 }
-                Postfix::Assign(expr) => {
-                    res = Assign {
-                        location: res.location().combine(expr.location()),
-                        expr,
-                        to: res,
-                    }
-                    .into()
-                }
                 Postfix::Cast(typ) => {
                     res = Cast {
                         location: res.location().combine(typ.location()),
@@ -185,10 +186,6 @@ impl<'a> Parse<'a> {
                         typ,
                     }
                     .into()
-                }
-                Postfix::OpAssign(op, expr) => {
-                    let location = res.location().combine(expr.location());
-                    res = op_assign(location, res, op, expr)
                 }
                 Postfix::Match(location, pattern_matches) => {
                     res = Match {
@@ -210,22 +207,6 @@ impl<'a> Parse<'a> {
                 let expr = p.expr(0)?;
                 p.expect(BraR)?;
                 Ok(Postfix::Get(expr))
-            },
-            |p| {
-                p.expect_(Equal)?;
-                Ok(Postfix::Assign(p.expr(0)?))
-            },
-            |p| {
-                p.expect_(PlusEqual)?;
-                Ok(Postfix::OpAssign(BinOp::Add, p.expr(0)?))
-            },
-            |p| {
-                p.expect_(StarEqual)?;
-                Ok(Postfix::OpAssign(BinOp::Multiply, p.expr(0)?))
-            },
-            |p| {
-                p.expect_(MinusEqual)?;
-                Ok(Postfix::OpAssign(BinOp::Subtract, p.expr(0)?))
             },
             |p| {
                 p.expect_(Name("as"))?;
@@ -338,17 +319,51 @@ impl<'a> Parse<'a> {
     }
 
     pub fn expr(&mut self, min_priority: u8) -> Result<Expr<'a>> {
-        let mut expr = self.expr_1()?;
+        let mut res = self.expr_1()?;
+        if let Some(expr) = self.maybe(Self::assign_) {
+            return Ok(Assign {
+                location: res.location().combine(expr.location()),
+                expr,
+                to: res,
+            }
+            .into());
+        }
+        if let Some((op, expr)) = self.maybe(Self::op_assign_) {
+            let location = res.location().combine(expr.location());
+            return Ok(op_assign(location, res, op, expr));
+        }
         while let Some((op, right)) = self.maybe(|p| p.bin_postfix_(min_priority)) {
-            expr = Binary {
-                location: expr.location().combine(right.location()),
-                left: expr,
+            res = Binary {
+                location: res.location().combine(right.location()),
+                left: res,
                 op,
                 right,
             }
             .into()
         }
-        Ok(expr)
+        Ok(res)
+    }
+
+    fn op_assign_(&mut self) -> Result<(BinOp, Expr<'a>)> {
+        self.either(&[
+            |p| {
+                p.expect_(PlusEqual)?;
+                Ok((BinOp::Add, p.expr(0)?))
+            },
+            |p| {
+                p.expect_(StarEqual)?;
+                Ok((BinOp::Multiply, p.expr(0)?))
+            },
+            |p| {
+                p.expect_(MinusEqual)?;
+                Ok((BinOp::Subtract, p.expr(0)?))
+            },
+        ])
+    }
+
+    fn assign_(&mut self) -> Result<Expr<'a>> {
+        self.expect_(Equal)?;
+        self.expr(0)
     }
 
     fn bin_postfix_(&mut self, min_priority: u8) -> Result<(BinOp, Expr<'a>)> {
