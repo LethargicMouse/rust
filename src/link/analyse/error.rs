@@ -30,13 +30,13 @@ pub struct NoField<'a> {
 
 impl Display for NoField<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if matches!(self.typ, Type::Unknown) {
-            return write!(
-                f,
-                "{}\n{Red}--! type should be known here{Reset}",
-                self.location
-            );
-        }
+        // if matches!(self.typ, Type::Unknown) {
+        //     return write!(
+        //         f,
+        //         "{}\n{Red}--! type should be known for this field{Reset}",
+        //         self.location
+        //     );
+        // }
         write!(
             f,
             "{}\n{Red}--! field {Reset}`{}`{Red} not found for type {Reset}{}",

@@ -126,7 +126,7 @@ impl Display for Type<'_> {
                 }
                 write!(f, ">")
             }
-            Type::Error => write!(f, "_"),
+            Type::Error => write!(f, "<error>"),
             Type::Fun(fun_type) => write!(f, "{fun_type}"),
             Type::Prime(prime) => write!(f, "{prime}"),
             Type::Number => write!(f, "<number>"),
@@ -894,7 +894,7 @@ impl<'a> Analyse<'a> {
         exprs.resize_with(new.fields.len(), Default::default);
         for field in new.fields {
             if DEBUG {
-                eprintln!("> field {}", field.lame.name);
+                eprintln!("> new field {}", field.lame.name);
             }
             let location = field.expr.location();
             let (expr, typ) = if is_const {
@@ -957,6 +957,9 @@ impl<'a> Analyse<'a> {
     fn field(&mut self, field_expr: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
         let location = field_expr.expr.location();
         let (expr, mut typ) = self.expr(field_expr.expr).into();
+        if DEBUG {
+            eprintln!("> field {} of {typ}", field_expr.lame.name)
+        }
         let is_ref = self.is_ref(&typ);
         let (name, generics) = match self.type_name(typ.clone()).ok_or_else(|| {
             self.reveal(&mut typ);
@@ -1052,7 +1055,11 @@ impl<'a> Analyse<'a> {
     }
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
-        self.errors.push(error.into());
+        let error = error.into();
+        if DEBUG {
+            eprintln!("> new fail {error}");
+        }
+        self.errors.push(error);
         Fail
     }
 
