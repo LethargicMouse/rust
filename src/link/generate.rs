@@ -422,7 +422,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             .map(|(typ, _)| self.size(&self.heat_up(typ)).max(align))
             .sum();
         self.stmts.push(Stmt::Comment("tuple".into()));
-        self.stmts.push(Stmt::Alloc(tmp, align, size));
+        self.alloc(tmp, align, size);
         let mut offset = 0;
         for (typ, expr) in &tuple.exprs {
             let expr = self.expr(expr);
@@ -445,6 +445,14 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             offset += self.size(&typ).max(align);
         }
         tmp
+    }
+
+    fn alloc(&mut self, tmp: u32, align: u32, size: u32) {
+        self.stmts.push(if size == 0 {
+            Stmt::Copy(tmp, ir::Type::Long, ir::Value::Int(0))
+        } else {
+            Stmt::Alloc(tmp, align, size)
+        });
     }
 
     fn assign(&mut self, assign: &Assign<'a>) -> Tmp {
@@ -531,8 +539,12 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             let mut offset = 0;
             for field in variant_fields {
                 let field = &self.heat_up(field);
+                let size = self.size(field);
                 variant_offsets.push(offset);
-                offset += self.size(field).max(align);
+                if size == 0 {
+                    continue;
+                }
+                offset += size.max(align);
                 fields.push(self.sup.data_type(field));
             }
             variants.push(fields);
@@ -555,12 +567,19 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn put(&mut self, to: Tmp, from: Tmp, typ: &Type<'a>) {
-        let stmt = if matches!(typ, Type::Name(_, _)) {
-            Stmt::Blit(to, from, self.size(typ))
+        if matches!(typ, Type::Name(_, _)) {
+            let size = self.size(typ);
+            self.blit(to, from, size)
         } else {
-            Stmt::Store(self.sup.unsigned(typ), from, to)
-        };
-        self.stmts.push(stmt);
+            self.stmts
+                .push(Stmt::Store(self.sup.unsigned(typ), from, to))
+        }
+    }
+
+    fn blit(&mut self, to: Tmp, from: Tmp, size: u32) {
+        if size != 0 {
+            self.stmts.push(Stmt::Blit(to, from, size))
+        }
     }
 
     fn expr_ref(&mut self, expr: &Expr<'a>, typ: &Type<'a>) -> Tmp {
@@ -629,7 +648,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
         let res = self.new_tmp();
         let size = self.size(typ);
-        self.stmts.push(Stmt::Alloc(res, size, size));
+        self.alloc(res, size, size);
         self.stmts
             .push(Stmt::Store(self.sup.unsigned(typ), tmp, res));
         res
@@ -639,7 +658,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let res = self.new_tmp();
         let align = self.align(typ);
         let size = self.size(typ);
-        self.stmts.push(Stmt::Alloc(res, align, size));
+        self.alloc(res, align, size);
         self.put(res, tmp, typ);
         res
     }

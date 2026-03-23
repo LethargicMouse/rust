@@ -13,9 +13,9 @@ use crate::{
     link::{
         Asg, Context,
         analyse::error::{
-            CantMatch, CheckError, CheckErrorKind, Fail, NoCast, NoField, NoMethod, NoOp, NotAll,
-            NotCompTime, NotDeclared, NotImpl, NotInLoop, NotStruct, Redeclared, SemicolonEndBlock,
-            ShouldKnowType, WrongCount, WrongType,
+            CantMatch, CheckError, CheckErrorKind, Fail, MultImpls, NoCast, NoField, NoMethod,
+            NoOp, NotAll, NotCompTime, NotDeclared, NotImpl, NotInLoop, NotStruct, Redeclared,
+            SemicolonEndBlock, ShouldKnowType, WrongCount, WrongType,
         },
         asg::{self},
         ast::{self, *},
@@ -208,6 +208,7 @@ pub struct Info<'a> {
 #[derive(Clone)]
 #[allow(dead_code)]
 struct Impl<'a> {
+    location: Location<'a>,
     generics: Vec<Generic<'a>>,
     trait_generics: Vec<Type<'a>>,
     typ: Type<'a>,
@@ -378,6 +379,7 @@ impl<'a> Analyse<'a> {
             }
             let generics = impl_.generics.iter().map(|g| self.generic(g)).collect();
             self.impls.get_mut(impl_.lame.name).unwrap().push(Impl {
+                location: impl_.lame.location,
                 generics,
                 trait_generics,
                 typ,
@@ -531,6 +533,9 @@ impl<'a> Analyse<'a> {
         }
         let mut ttyp = typ.clone();
         self.reveal(&mut ttyp);
+        if matches!(ttyp, Type::Error) {
+            return;
+        }
         if let Type::Generic(name) = &ttyp
             && let Some(c) = self.g_constraints.get(name)
             && &constraint == c
@@ -540,8 +545,13 @@ impl<'a> Analyse<'a> {
         let mut c_generics = constraint.generics.clone();
         for typ in &mut c_generics {
             self.reveal(typ);
+            if matches!(typ, Type::Error) {
+                return;
+            }
         }
         self.impls.entry(constraint.name).or_default();
+        let mut res = None;
+        let mut defs = Vec::new();
         for mut impl_ in self.impls[constraint.name].clone() {
             if DEBUG {
                 eprintln!("> candidate {}", impl_.typ);
@@ -573,12 +583,27 @@ impl<'a> Analyse<'a> {
             }
             self.type_context.pop_layer();
             if f {
-                self.unify(location, impl_.typ, typ);
-                for (typ, ctyp) in impl_.trait_generics.into_iter().zip(constraint.generics) {
-                    self.unify(location, typ, ctyp);
-                }
-                return;
+                defs.push(impl_.location);
+                res = Some((impl_.typ, impl_.trait_generics));
             }
+        }
+        if defs.len() > 1 {
+            let typ = ttyp;
+            constraint.generics = c_generics;
+            self.fail(MultImpls {
+                location,
+                constraint,
+                typ,
+                defs,
+            });
+            return;
+        }
+        if let Some((impl_typ, trait_generics)) = res {
+            self.unify(location, impl_typ, typ);
+            for (typ, ctyp) in trait_generics.into_iter().zip(constraint.generics) {
+                self.unify(location, typ, ctyp);
+            }
+            return;
         }
         let typ = ttyp;
         constraint.generics = c_generics;

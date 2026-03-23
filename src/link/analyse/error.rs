@@ -85,6 +85,7 @@ impl<'a, T: Into<CheckErrorKind<'a>>> From<T> for CheckError<'a> {
 }
 
 pub enum CheckErrorKind<'a> {
+    MI(MultImpls<'a>),
     CM(CantMatch<'a>),
     WC(WrongCount<'a>),
     R(Redeclared<'a>),
@@ -100,6 +101,12 @@ pub enum CheckErrorKind<'a> {
     NF(NoField<'a>),
     NO(NoOp<'a>),
     WT(WrongType<'a>),
+}
+
+impl<'a> From<MultImpls<'a>> for CheckErrorKind<'a> {
+    fn from(v: MultImpls<'a>) -> Self {
+        Self::MI(v)
+    }
 }
 
 impl<'a> From<CantMatch<'a>> for CheckErrorKind<'a> {
@@ -211,6 +218,7 @@ impl Display for CheckErrorKind<'_> {
             CheckErrorKind::R(redeclared) => write!(f, "{redeclared}"),
             CheckErrorKind::WC(wrong_count) => write!(f, "{wrong_count}"),
             CheckErrorKind::CM(cant_match) => write!(f, "{cant_match}"),
+            CheckErrorKind::MI(mult_impls) => write!(f, "{mult_impls}"),
         }
     }
 }
@@ -379,7 +387,7 @@ impl Display for NotImpl<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{Red}--! type {Reset}{} {Red}does not implement trait {Reset}`{}`\n{Blue}--@ ",
+            "{}\n{Red}--! type {Reset}{} {Red}does not implement trait {Reset}{}",
             self.location, self.typ, self.constraint
         )
     }
@@ -458,5 +466,26 @@ impl Display for CantMatch<'_> {
             "{}\n{Red}--! cannot match a value of type {Reset}{}",
             self.location, self.typ
         )
+    }
+}
+
+pub struct MultImpls<'a> {
+    pub location: Location<'a>,
+    pub constraint: Constraint<'a>,
+    pub typ: Type<'a>,
+    pub defs: Vec<Location<'a>>,
+}
+
+impl Display for MultImpls<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{Red}--! multiple impls of trait {Reset}{} {Red}match type {Reset}{}{Red}:",
+            self.location, self.constraint, self.typ
+        )?;
+        for impl_ in &self.defs {
+            write!(f, "\n    {Reset}- {Blue}in {impl_}")?;
+        }
+        Ok(())
     }
 }

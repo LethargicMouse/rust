@@ -1,0 +1,36 @@
+type :cargs = {
+  {l,l, }
+}
+
+type :slice$$ptr$$ub = {
+  {l,l, }
+}
+
+type :command = {
+  {b, }
+}
+
+type :options = {
+  { }
+}
+
+type :goodc_args = {
+  {:command,:options, }
+}
+
+export
+function w $main(:cargs %t1,) {
+@start
+  %t2 =l copy $better$cargs$slice$$ptr$$ub
+  # ref var cargs
+#%t4 =l alloc8 16
+#blit %t1, %t4, 16
+#  %t3 =:slice$$ptr$$ub call %t2(:cargs %t4,)
+  %t5 =l copy $parse_args
+#  # ref var args
+#  %t7 =l alloc8 16
+#  blit %t3, %t7, 16
+  %t6 =:goodc_args call %t5(:slice$$ptr$$ub %t1,)
+  %t8 =w copy 0
+  ret %t8
+}

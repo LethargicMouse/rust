@@ -1,3 +1,3 @@
 #include <fcntl.h>
 
-int main() { write() }
+int main() {}
