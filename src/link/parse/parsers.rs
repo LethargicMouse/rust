@@ -111,7 +111,7 @@ impl<'a> Parse<'a> {
                 p.expect(BraR)?;
                 Ok(Type::Name(
                     Lame {
-                        name: "arr",
+                        name: "slice",
                         location: start.combine(end),
                     },
                     [typ].into(),
@@ -158,7 +158,7 @@ impl<'a> Parse<'a> {
         let name = self.name(true)?;
         let constraint = self.maybe(|p| {
             p.expect_(Colon)?;
-            let name = p.name(true)?;
+            let lame = p.lame(true)?;
             let generics = p
                 .maybe(|p| {
                     p.expect(Less)?;
@@ -167,7 +167,7 @@ impl<'a> Parse<'a> {
                     Ok(res)
                 })
                 .unwrap_or_default();
-            Ok(Constraint { name, generics })
+            Ok(Constraint { lame, generics })
         });
         Ok(Generic { name, constraint })
     }

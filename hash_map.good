@@ -1,46 +1,64 @@
-fn main(cargs) {
-  let content = read_file("test.txt".ptr);
-  let freq = empty();
-  for word in content.buf.words()
+fn main() {
+  let content = read_file("test.txt".ptr).as_slice();
+  let freq: counter = empty();
+  for word in content.slice(0, content.size - 1).words()
     do freq.add(word, 1);
+  for assoc in freq.vec.as_slice() {
+    print(assoc.key);
+    printf(": %d\n".ptr, assoc.val);
+  }
 }
+
+fn as_slice<t>(vec<t>) [t]
+  do slice {
+    ptr: vec.ptr,
+    size: vec.size
+  }
+
+impl eq for [u8] {
+  fn eq(self, other: self) bool {
+    if self.size != other.size
+      do return false;
+    if self.size == 0
+      do return true;
+    strcmp(self.ptr, other.ptr) == 0
+  }
+}
+
+extern fn strcmp(*u8, *u8) i32;
 
 fn add<t: eq>(&counter<t>, t, i32) {
   *counter.find(t) += 1;
 }
 
 fn find<t: eq>(&counter<t>, t) &i32 {
-  for assoc in counter.vec.buf
+  for assoc: assoc in counter.vec.as_slice()
     do if assoc.key.eq(t)
-      do return assoc.val;
+      do return &assoc.val;
   counter.vec.push(assoc { key: t, val: 1 });
-  counter.vec.buf.last().val
+  counter.vec.as_slice().last().val
 }
 
 fn push<t>(&vec<t>, t) {
-  if vec.size == vec.buf.size
-    do vec.buf.grow();
-  vec.buf.ptr[vec.size] = t;
+  if vec.size == vec.cap
+    do vec.grow();
+  vec.ptr[vec.size] = t;
   vec.size += 1;
 }
 
-fn grow<t>(&[t])
-  do if arr.size == 0 {
-    arr.size = 8;
-    arr.ptr = malloc(arr.size * @size t)
+fn grow<t>(&vec<t>)
+  do if vec.cap == 0 {
+    vec.cap = 8;
+    vec.ptr = malloc(vec.cap * @size t)
   } else {
-    arr.size *= 2;
-    arr.ptr = realloc(arr.ptr, arr.size * @size t)
+    vec.cap *= 2;
+    vec.ptr = realloc(vec.ptr, vec.cap * @size t)
   }
 
 extern fn realloc<t>(*t, size) *t;
 
 fn last<t>([t]) &t
-  do arr.ptr[arr.size]
-
-trait collection {
-  fn empty() self;
-}
+  do slice.ptr[slice.size]
 
 impl<t> collection for counter<t> {
   fn empty() self
@@ -49,14 +67,14 @@ impl<t> collection for counter<t> {
 
 impl<t> collection for vec<t> {
   fn empty() self
-    do self { buf: empty(), size: 0 }
+    do self { ptr: 0, cap: 0, size: 0 }
 }
 
 struct counter<t> { vec<assoc<t, i32>> }
 
 impl<t> collection for [t] {
   fn empty() self
-    do arr { ptr: 0, size: 0 }
+    do slice { ptr: 0, size: 0 }
 }
 
 struct assoc<a, b> {
@@ -76,6 +94,17 @@ trait iterator<item> {
   fn next(&self) maybe<item>;
 }
 
+impl<t> iterator<t> for [t] {
+  fn next(&[t]) maybe<t> 
+    do if slice.size == 0
+      do none
+    else {
+      let res = *slice.ptr;
+      slice.drop(1);
+      some(res)
+    }
+}
+
 impl iterator<str> for words {
   fn next(&words) maybe<str> {
     if words.str.size == 0
@@ -83,28 +112,21 @@ impl iterator<str> for words {
     let i = 0;
     loop if i == words.str.size || words.str.ptr[i] == 32 {
       let res = words.str.slice(0, i);
-      words.str.ptr += res.size;
-      words.str.size -= res.size;
+      words.str.drop(res.size);
       if words.str.size != 0
-        do words.str.ptr += 1;
+        do words.str.drop(1);
       return some(res);
     } else i += 1
   }
 }
 
-impl<t> iterator<t> for [t] {
-  fn next(&[t]) maybe<t> 
-    do if arr.size == 0
-      do none
-    else {
-      let res = *arr.ptr;
-      arr.ptr += 1;
-      some(res)
-    }
+fn drop<t>(&[t], u64) {
+  slice.ptr += u64;
+  slice.size -= u64;
 }
 
 trait eq {
-  fn eq(self, self) bool;
+  fn eq(self, other: self) bool;
 }
 
 fn slice(str, left: index, right: index) str {
@@ -143,7 +165,7 @@ extern fn strcpy(cstr, cstr);
 
 extern fn free<t>(*t);
 
-extern fn printf(cstr, size);
+extern fn printf(cstr, i32);
 
 fn read_file(path) string {
   let file = open_file(path);
@@ -157,17 +179,11 @@ fn fread(file) string {
   let ptr = malloc(size);
   read(file.fd, ptr, size);
   string {
-    buf: str { ptr, size },
+    ptr,
+    cap: size,
     size
   }
 }
-
-// requires str to be heap allocated
-fn to_string(str) string
-  do string {
-    buf: str,
-    size: str.size
-  }
 
 fn fsize(file) size {
   let res = lseek(file.fd, 0, seek_end) as size;
@@ -196,7 +212,8 @@ type path = cstr;
 type string = vec<u8>;
 
 struct vec<t> {
-  buf: [t],
+  *t,
+  cap: size,
   size
 }
 
@@ -224,13 +241,12 @@ fn to_str(cstr) str
 extern fn strlen(cstr) size;
 
 fn skip<t>(&[t], size) {
-  size = size.min(arr.size);
-  arr.ptr += size;
-  arr.size -= size;
+  size = size.min(slice.size);
+  slice.drop(size);
 }
 
 fn is_empty<t>([t]) bool
-  do arr.size == 0
+  do slice.size == 0
 
 fn die<e: display, t>(e) t { 
   eprintln(e);
@@ -240,9 +256,16 @@ fn die<e: display, t>(e) t {
 fn eprintln<s: display>(s) 
   do stderr.wprintln(s)
 
+fn println<s: display>(s)
+  do stdout.wprintln(s)
+
+fn print<s: display>(s)
+  do stdout.wprint(s)
+
 extern fn exit<t>(i32) t;
 
 let stderr: file = file {fd: 2};
+let stdout: file = file {fd: 1};
 
 struct file { fd }
 
@@ -260,7 +283,7 @@ trait display {
 fn wwrite(file, &str)
   do write(file.fd, str.ptr, str.size)
 
-impl display for &[u8] {
+impl display for [u8] {
   fn wprint(file, self) {
     file.wwrite(self);
   }
@@ -280,3 +303,7 @@ type size = u64;
 type index = size;
 
 type str = [u8];
+
+trait collection {
+  fn empty() self;
+}

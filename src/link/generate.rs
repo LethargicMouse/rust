@@ -97,6 +97,7 @@ impl<'a> Generate<'a> {
                     self.add_to_name(full_name, typ);
                 }
             }
+            Type::Unknown => *full_name += "$$unit",
         }
     }
 
@@ -134,6 +135,7 @@ impl<'a> Generate<'a> {
             Type::Ref(_) => ir::Type::Long,
             Type::Ptr(_) => ir::Type::Long,
             Type::FunPtr(_) => ir::Type::Long,
+            Type::Unknown => ir::Type::Word,
         }
     }
 
@@ -206,7 +208,7 @@ struct GenFun<'a, 'b, 'c> {
     label: u16,
     loop_ends: Vec<u16>,
     generics: &'c HashMap<&'a str, Type<'a>>,
-    typ_generics: HashMap<&'a str, Type<'a>>,
+    typ_generics: Vec<HashMap<&'a str, Type<'a>>>,
 }
 
 impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
@@ -218,7 +220,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             label: 0,
             generics,
             sup,
-            typ_generics: HashMap::new(),
+            typ_generics: Vec::new(),
         }
     }
 
@@ -404,17 +406,20 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn tuple(&mut self, tuple: &Tuple<'a>) -> Tmp {
+        if DEBUG {
+            eprintln!("> tuple")
+        }
         let tmp = self.new_tmp();
         let align = tuple
             .exprs
             .iter()
-            .map(|(typ, _)| self.align(typ))
+            .map(|(typ, _)| self.align(&self.heat_up(typ)))
             .max()
             .unwrap_or(1);
         let size = tuple
             .exprs
             .iter()
-            .map(|(typ, _)| self.size(typ).max(align))
+            .map(|(typ, _)| self.size(&self.heat_up(typ)).max(align))
             .sum();
         self.stmts.push(Stmt::Comment("tuple".into()));
         self.stmts.push(Stmt::Alloc(tmp, align, size));
@@ -473,6 +478,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             Type::Ref(_) => 8,
             Type::Ptr(_) => 8,
             Type::FunPtr(_) => 8,
+            Type::Unknown => 0,
         }
     }
 
@@ -494,19 +500,21 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
 
     fn typ(&mut self, name: &str, generics: &[Type<'a>]) {
         let full_name = self.sup.make_name(name, generics);
-        if DEBUG {
-            eprintln!("> making typ {full_name}");
-        }
         if self.sup.type_infos.contains_key(&full_name) {
             return;
         }
+        if DEBUG {
+            eprintln!("> making typ {full_name}");
+        }
         let struct_ = &self.sup.asg.structs[name];
-        self.typ_generics = struct_
-            .generics
-            .iter()
-            .zip(generics)
-            .map(|(n, t)| (*n, t.clone()))
-            .collect();
+        self.typ_generics.push(
+            struct_
+                .generics
+                .iter()
+                .zip(generics)
+                .map(|(n, t)| (*n, self.heat_up(t)))
+                .collect(),
+        );
         let mut variants = Vec::with_capacity(struct_.variants.len());
         let mut offsets = Vec::with_capacity(struct_.variants.len());
         let mut size = 0;
@@ -531,6 +539,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             offsets.push(variant_offsets);
             size = size.max(offset);
         }
+        self.typ_generics.pop();
         self.sup.types.push(ir::TypeDecl {
             name: full_name.clone(),
             variants,
@@ -744,9 +753,11 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         match typ {
             Type::Cold(id) => self.heat_up(&self.sup.asg.info.types[*id]),
             Type::Generic(g) => self.heat_up(
-                self.generics
+                self.typ_generics
+                    .last()
+                    .unwrap_or(&HashMap::new())
                     .get(g)
-                    .unwrap_or_else(|| &self.typ_generics[g]),
+                    .unwrap_or_else(|| &self.generics[g]),
             ),
             Type::Name(name, generics) => {
                 let generics = generics.iter().map(|typ| self.heat_up(typ)).collect();
@@ -871,37 +882,71 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
     }
 
+    fn unify(&mut self, a: &Type<'a>, b: &Type<'a>) -> bool {
+        if DEBUG {
+            eprintln!("> unify {a:?} {b:?}")
+        }
+        match (a, b) {
+            (Type::Cold(id), t) => self.unify(&self.sup.asg.info.types[*id], t),
+            (Type::Generic(g), t) => {
+                if self.unify(
+                    &self.typ_generics.last().unwrap_or(&HashMap::new())[g].clone(),
+                    t,
+                ) {
+                    *self
+                        .typ_generics
+                        .last_mut()
+                        .unwrap_or(&mut HashMap::new())
+                        .get_mut(g)
+                        .unwrap() = t.clone();
+                    true
+                } else {
+                    false
+                }
+            }
+            (Type::Unknown, _) => true,
+            (_, Type::Unknown) => true,
+            (Type::Name(a, ga), Type::Name(b, gb)) if a == b => {
+                ga.iter().zip(gb).all(|(a, b)| self.unify(a, b))
+            }
+            (a, b) if a == b => true,
+            _ => false,
+        }
+    }
+
     fn fun_ref(&mut self, fun_ref: &FunRef<'a>) -> Tmp {
         if DEBUG {
             eprintln!("> fun ref {}", fun_ref.name);
             eprintln!("> generics");
         }
-        let (g_names, generics): (Vec<_>, Vec<_>) = fun_ref
+        let (mut g_names, mut generics): (Vec<_>, Vec<_>) = fun_ref
             .generics
             .iter()
             .map(|(name, typ)| (name, self.heat_up(typ)))
             .unzip();
-        let mut first_g_name = String::new();
-        self.sup.add_to_name(
-            &mut first_g_name,
-            &generics.first().cloned().unwrap_or_default().clone(),
-        );
         let mut name: String = self.sup.make_name(fun_ref.name, &generics);
         if let Some(fun) = self.sup.asg.funs.get(fun_ref.name).or_else(|| {
-            for (typ, fun) in self
-                .sup
-                .asg
-                .trait_funs
-                .get(fun_ref.name)
-                .into_iter()
-                .flat_map(|v| v.iter())
-            {
-                let mut buf = String::new();
-                eprintln!("> candidate self");
-                self.sup.add_to_name(&mut buf, &self.heat_up(typ));
-                if first_g_name == buf {
-                    return Some(fun);
+            let (gc, impls) = self.sup.asg.trait_funs.get(fun_ref.name)?;
+            for impl_ in impls {
+                // FIXME this does not work and will never work because all the codebase is cursed!!!
+                self.typ_generics
+                    .push(impl_.generics.iter().map(|n| (*n, Type::Unknown)).collect());
+                if DEBUG {
+                    eprintln!("> candidate self");
                 }
+                if self.unify(&impl_.typ, &generics[*gc])
+                    && generics[0..*gc]
+                        .iter()
+                        .zip(&impl_.trait_generics)
+                        .all(|(f, e)| self.unify(e, f))
+                {
+                    for g in self.typ_generics.pop().unwrap() {
+                        g_names.push(g.0);
+                        generics.push(g.1);
+                    }
+                    return Some(&impl_.fun);
+                }
+                self.typ_generics.pop();
             }
             None
         }) {

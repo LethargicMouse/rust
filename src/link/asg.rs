@@ -13,9 +13,16 @@ pub struct Struct<'a> {
     pub variants: Vec<Vec<Type<'a>>>,
 }
 
+pub struct Impl<'a> {
+    pub generics: Vec<&'a str>,
+    pub trait_generics: Vec<Type<'a>>,
+    pub typ: Type<'a>,
+    pub fun: Fun<'a>,
+}
+
 pub struct Asg<'a> {
     pub funs: HashMap<&'a str, Fun<'a>>,
-    pub trait_funs: HashMap<&'a str, Vec<(Type<'a>, Fun<'a>)>>,
+    pub trait_funs: HashMap<&'a str, (usize, Vec<Impl<'a>>)>,
     pub structs: HashMap<&'a str, Struct<'a>>,
     pub info: Info<'a>,
     pub consts: HashMap<&'a str, (Type<'a>, Expr<'a>)>,
@@ -270,7 +277,7 @@ pub struct Deref<'a> {
     pub typ: Type<'a>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum Type<'a> {
     Name(&'a str, Vec<Type<'a>>),
     Ref(Box<Type<'a>>),
@@ -281,6 +288,7 @@ pub enum Type<'a> {
     U8,
     U64,
     #[default]
+    Unknown,
     Unit,
     I32,
     I64,

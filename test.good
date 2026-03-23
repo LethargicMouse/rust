@@ -1,29 +1,14 @@
-struct cat {
-  name: str
-}
-
-struct human {
-  name: str
-}
-
-impl display for human {
-  fn to_string(human) str
-    do human.name
-}
-
-struct arr<t> { *t, size }
-
-type size = u64;
-type str = arr<u8>;
-
-trait display {
-  fn to_string(self) str;
-}
-
-fn println<t: display>(t) {}
-
 fn main() {
-  reallok()
+  printf("%zu".ptr, from(123));
 }
 
-extern fn reallok();
+extern fn printf(*u8, u64);
+
+trait from<t> {
+  fn from(self) t;
+}
+
+impl from<u64> for u64 {
+  fn from(u64) u64
+    do u64
+}

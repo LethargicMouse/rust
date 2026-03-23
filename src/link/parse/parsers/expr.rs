@@ -102,12 +102,17 @@ impl<'a> Parse<'a> {
         let location = self.here();
         self.expect_(Name("for"))?;
         let lame = self.lame(true)?;
+        let typ = self.maybe(|p| {
+            p.expect(Colon)?;
+            p.typ()
+        });
         self.expect(Name("in"))?;
         let expr = self.expr(0)?;
         let body = self.block_or_do()?;
         Ok(For {
             location,
             lame,
+            typ,
             expr,
             body,
         })
@@ -171,14 +176,7 @@ impl<'a> Parse<'a> {
                     call.args.insert(0, res);
                     res = Expr::Call(call);
                 }
-                Postfix::Field(name, name_location) => {
-                    res = FieldExpr {
-                        expr: res,
-                        name,
-                        name_location,
-                    }
-                    .into()
-                }
+                Postfix::Field(lame) => res = FieldExpr { expr: res, lame }.into(),
                 Postfix::Cast(typ) => {
                     res = Cast {
                         location: res.location().combine(typ.location()),
@@ -227,9 +225,8 @@ impl<'a> Parse<'a> {
             },
             |p| {
                 p.expect_(Dot)?;
-                let location = p.here();
-                let name = p.name(true)?;
-                Ok(Postfix::Field(name, location))
+                let lame = p.lame(true)?;
+                Ok(Postfix::Field(lame))
             },
         ])
     }
@@ -246,8 +243,12 @@ impl<'a> Parse<'a> {
         let value = self.maybe(|p| {
             p.expect(ParL)?;
             let lame = p.lame(true)?;
+            let typ = p.maybe(|p| {
+                p.expect(Colon)?;
+                p.typ()
+            });
             p.expect(ParR)?;
-            Ok(lame)
+            Ok((lame, typ))
         });
         Ok(Pattern { name, value })
     }

@@ -167,8 +167,7 @@ pub struct Let<'a> {
 #[derive(Clone)]
 pub struct FieldExpr<'a> {
     pub expr: Expr<'a>,
-    pub name: &'a str,
-    pub name_location: Location<'a>,
+    pub lame: Lame<'a>,
 }
 
 #[derive(Clone, Copy)]
@@ -308,7 +307,7 @@ impl<'a> From<Block<'a>> for Expr<'a> {
 impl<'a> Expr<'a> {
     pub fn location(&self) -> Location<'a> {
         match self {
-            Expr::Field(field) => field.name_location,
+            Expr::Field(field) => field.lame.location,
             Expr::Let(let_expr) => let_expr.location,
             Expr::Call(call) => call.lame.location,
             Expr::Binary(binary) => binary.location,
@@ -424,14 +423,14 @@ pub struct PatternMatch<'a> {
 #[derive(Clone)]
 pub struct Pattern<'a> {
     pub name: &'a str,
-    pub value: Option<Lame<'a>>,
+    pub value: Option<(Lame<'a>, Option<Type<'a>>)>,
 }
 
 pub enum Postfix<'a> {
     Match(Location<'a>, Vec<PatternMatch<'a>>),
     Get(Expr<'a>),
     Call(Call<'a>),
-    Field(&'a str, Location<'a>),
+    Field(Lame<'a>),
     Cast(Type<'a>),
 }
 
@@ -688,6 +687,7 @@ pub struct Variant<'a> {
 pub struct For<'a> {
     pub location: Location<'a>,
     pub lame: Lame<'a>,
+    pub typ: Option<Type<'a>>,
     pub expr: Expr<'a>,
     pub body: Expr<'a>,
 }
@@ -732,7 +732,7 @@ impl<'a> For<'a> {
                     PatternMatch {
                         pattern: Pattern {
                             name: "some",
-                            value: Some(self.lame),
+                            value: Some((self.lame, self.typ)),
                         },
                         expr: self.body,
                     },
@@ -770,6 +770,6 @@ pub struct Deref<'a> {
 
 #[derive(Clone)]
 pub struct Constraint<'a> {
-    pub name: &'a str,
+    pub lame: Lame<'a>,
     pub generics: Vec<Type<'a>>,
 }

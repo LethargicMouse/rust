@@ -30,6 +30,13 @@ pub struct NoField<'a> {
 
 impl Display for NoField<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if matches!(self.typ, Type::Unknown) {
+            return write!(
+                f,
+                "{}\n{Red}--! type should be known here{Reset}",
+                self.location
+            );
+        }
         write!(
             f,
             "{}\n{Red}--! field {Reset}`{}`{Red} not found for type {Reset}{}",
@@ -366,7 +373,6 @@ pub struct NotImpl<'a> {
     pub location: Location<'a>,
     pub typ: Type<'a>,
     pub constraint: Constraint<'a>,
-    pub types: Vec<Type<'a>>,
 }
 
 impl Display for NotImpl<'_> {
@@ -375,15 +381,7 @@ impl Display for NotImpl<'_> {
             f,
             "{}\n{Red}--! type {Reset}{} {Red}does not implement trait {Reset}`{}`\n{Blue}--@ ",
             self.location, self.typ, self.constraint
-        )?;
-        if self.types.is_empty() {
-            return write!(f, "no type implements this trait{Reset}",);
-        }
-        write!(f, "the trait is implemented by:")?;
-        for typ in &self.types {
-            write!(f, "\n    {Blue}- {Reset}{typ}")?;
-        }
-        Ok(())
+        )
     }
 }
 
