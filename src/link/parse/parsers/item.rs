@@ -125,6 +125,9 @@ impl<'a> Parse<'a> {
     fn fun_(&mut self) -> Result<ast::Fun<'a>> {
         let header = self.header_()?;
         let body = self.block_or_do()?;
+        if body.needs_semicolon() {
+            self.expect(Semicolon)?;
+        }
         Ok(ast::Fun { header, body })
     }
 
@@ -147,15 +150,16 @@ impl<'a> Parse<'a> {
             type_params.push(param.typ);
         }
         self.expect(ParR)?;
+        let ret = self
+            .maybe(Self::typ)
+            .unwrap_or_else(|| Type::Prime(Prime::Unit, self.here()));
         Ok(Header {
             lame,
             params,
             typ: FunType {
                 generics,
                 params: type_params,
-                ret: self
-                    .maybe(Self::typ)
-                    .unwrap_or_else(|| Type::Prime(Prime::Unit, self.here())),
+                ret,
                 location,
             },
         })

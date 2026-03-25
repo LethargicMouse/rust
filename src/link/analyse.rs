@@ -514,6 +514,9 @@ impl<'a> Analyse<'a> {
 
             self.type_context.pop_layer();
         }
+        if !self.errors.is_empty() {
+            die(Error(take(&mut self.errors)))
+        }
         let info = self.info();
         if !self.errors.is_empty() {
             die(Error(self.errors))

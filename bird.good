@@ -23,8 +23,6 @@ extern fn GetScreenWidth() i32;
 extern fn GetScreenHeight() i32;
 extern fn printf(cstr, f64);
 
-struct arr<t> { *t, size }
-
 type size = u64;
 
 type cstr = *u8;
@@ -52,7 +50,7 @@ impl display for bool {
   fn wprint<w: writer>(w, self)
     do if self
       do w.wprint("true")
-    else w.wprint("false")
+    else w.wprint("false");
 }
 
 let should_close: bool = false;
@@ -83,7 +81,7 @@ fn update_game() {
 
 fn update_death() 
   do if IsKeyPressed('R')
-    do reset()
+    do reset();
 
 fn reset() {
   state = game;
@@ -93,15 +91,15 @@ fn reset() {
 }
 
 fn clear<t>(&vec<t>)
-  do vec.size = 0
+  do vec.size = 0;
 
 let pipe_period: f32 = 1;
 
 fn update_pipes() {
     let i = 0;
     loop if i == pipes.size do break else {
-      update_pipe(pipes.buf.ptr[i]);
-      if pipes.buf.ptr[i].x + pipe_width < 0
+      update_pipe(pipes.ptr[i]);
+      if pipes.ptr[i].x + pipe_width < 0
         do pipes.swap_pop(i) as ()
       else i += 1;
     }
@@ -111,7 +109,7 @@ fn update_pipes() {
 let speed: f32 = 300;
 
 fn update_pipe(&pipe) 
-  do pipe.x -= (speed * GetFrameTime()) as i32
+  do pipe.x -= (speed * GetFrameTime()) as i32;
 
 fn swap_pop<t>(&vec<t>, index) t {
   vec.swap(index, vec.size - 1);
@@ -121,14 +119,14 @@ fn swap_pop<t>(&vec<t>, index) t {
 type index = size;
 
 fn swap<t>(&vec<t>, a: index, b: index) {
-  let c = vec.buf.ptr[a];
-  vec.buf.ptr[a] = vec.buf.ptr[b];
-  vec.buf.ptr[b] = c;
+  let c = vec.ptr[a];
+  vec.ptr[a] = vec.ptr[b];
+  vec.ptr[b] = c;
 }
 
 fn pop<t>(&vec<t>) t {
   vec.size -= 1;    
-  vec.buf.ptr[vec.size]
+  vec.ptr[vec.size]
 }
 
 fn spawn_pipe() {
@@ -148,22 +146,22 @@ fn spawn_pipe() {
 }
 
 fn random(min: u64, max: u64) u64
-  do min + (max - min) * rand() / rand_mod
+  do min + (max - min) * rand() / rand_mod;
 
 fn push<t>(&vec<t>, t) {
-  if (vec.size == vec.buf.size)
-    do vec.buf.grow();
-  vec.buf.ptr[vec.size] = t;
+  if (vec.size == vec.size)
+    do vec.grow();
+  vec.ptr[vec.size] = t;
   vec.size += 1;
 }
 
-fn grow<t>(&arr<t>)
-  do if arr.size == 0 {
-    arr.size = 8;
-    arr.ptr = malloc(arr.size * @size t);
+fn grow<t>(&vec<t>)
+  do if vec.cap == 0 {
+    vec.cap = 8;
+    vec.ptr = malloc(vec.cap * @size t);
   } else {
-    arr.size *= 2;
-    arr.ptr = realloc(arr.ptr, arr.size * @size t);
+    vec.cap *= 2;
+    vec.ptr = realloc(vec.ptr, vec.cap * @size t);
   }
 
 let jump_speed: f32 = 450;
@@ -181,20 +179,20 @@ fn update_bird() {
 
 impl display for u8 {
   fn wprint<w: writer>(w, self)
-    do w.wprint(self as i64)
+    do w.wprint(self as i64);
 }
 
 impl display for i64 {
   fn wprint<w: writer>(w, self)
     do if self == 0
       do w.wprint("0")
-    else w.wprint(non_null {i64: self})
+    else w.wprint(non_null {i64: self});
 }
 
 struct non_null {i64}
 
 fn non_null(i64) non_null
-  do non_null {i64}
+  do non_null {i64};
 
 impl display for non_null {
   fn wprint<w: writer>(w, self) {
@@ -210,10 +208,10 @@ fn c2str(&u8) str
   do str {
     ptr: u8 as *u8,
     size: 1
-  }
+  };
 
 fn eprint<s: display>(s) 
-  do stderr.wprint(s)
+  do stderr.wprint(s);
 
 let stderr: file = file {fd: 2};
 
@@ -229,11 +227,11 @@ trait writer {
   fn wwrite(self, str);
 }
 
-type str = arr<u8>;
+type str = [u8];
 
 impl writer for file {
   fn wwrite(self, str)
-    do write(self.fd, str.ptr, str.size)
+    do write(self.fd, str.ptr, str.size);
 }
 
 fn eprintln<s: display>(s) {
@@ -243,7 +241,7 @@ fn eprintln<s: display>(s) {
 
 impl display for str {
   fn wprint<w: writer>(w, self)
-    do w.wwrite(self)
+    do w.wwrite(self);
 }
 
 fn check_if_should_close() bool { 
@@ -252,10 +250,10 @@ fn check_if_should_close() bool {
 }
 
 fn width() i32
-  do GetScreenWidth()
+  do GetScreenWidth();
 
 fn height() i32
-  do GetScreenHeight()
+  do GetScreenHeight();
 
 fn init() {
   seed = time(0) as u64;
@@ -269,15 +267,9 @@ fn deinit() {
   CloseWindow();
 }
 
-let pipes: vec<pipe> = vec {
-  buf: arr {ptr: 0, size: 0},
-  size: 0
-};
+let pipes: vec<pipe> = vec { ptr: 0, cap: 0, size: 0 };
 
-struct vec<t> {
-  buf: arr<t>,
-  size
-}
+struct vec<t> { *t, cap: size, size }
 
 fn draw() {
   BeginDrawing();
@@ -290,7 +282,7 @@ fn draw() {
 fn draw_pipes() {
   let i = 0;
   loop if i == pipes.size do break else {
-    draw_pipe(pipes.buf.ptr[i]);
+    draw_pipe(pipes.ptr[i]);
     i += 1;
   }
 }
@@ -313,7 +305,7 @@ fn rand() u64 {
 }
 
 fn vec2(x: f32, y: f32) vec2
-  do vec2 {x, y}
+  do vec2 {x, y};
 
 struct pipe {
   x: i32,
@@ -324,7 +316,7 @@ struct pipe {
 let bird_r: f32 = 15;
 
 fn draw_bird()
-  do DrawCircle(width() / 6, y as i32, bird_r, yellow)
+  do DrawCircle(width() / 6, y as i32, bird_r, yellow);
 
 struct vec2 {
   x: f32,
@@ -337,7 +329,13 @@ enum maybe<t> {
 }
 
 fn bird_in_pipes() bool
-  do pipes.slice(0, 1).any(bird_in_pipe)
+  do pipes.as_slice().slice(0, 1).any(bird_in_pipe);
+
+fn as_slice<t>(vec<t>) [t]
+  do slice {
+    ptr: vec.ptr,
+    size: vec.size
+  };
 
 fn is_some_and<t>(maybe<t>, fn(t) bool) bool
   do maybe.match {
@@ -346,8 +344,8 @@ fn is_some_and<t>(maybe<t>, fn(t) bool) bool
 
 fn get<t>(vec<t>, index) maybe<t>
   do if index < vec.size
-    do some(vec.buf.ptr[index])
-  else none
+    do some(vec.ptr[index])
+  else none;
 
 fn bird_in_pipe(pipe) bool
   do [
@@ -355,19 +353,19 @@ fn bird_in_pipe(pipe) bool
     vec2i(pipe.x + pipe_width, pipe.height), 
     vec2i(pipe.x, pipe.height + pipe.gap), 
     vec2i(pipe.x + pipe_width, pipe.height + pipe.gap)
-  ].any(in_bird)
+  ].any(in_bird);
 
 fn bird_x() f32
-  do width() as f32 / 6
+  do width() as f32 / 6;
 
 fn vec2i(a: i32, b: i32) vec2
-  do vec2(a as f32, b as f32)
+  do vec2(a as f32, b as f32);
 
 fn in_bird(vec2) bool { 
   let distx = vec2.x - bird_x();
   let disty = vec2.y - y;
   let dist = distx.pow(2) + disty.pow(2);
-  -- printf("%f\n".ptr, disty as f64);
+  // printf("%f\n".ptr, dist as f64);
   dist < bird_r.pow(2) 
 }
 
@@ -384,11 +382,11 @@ fn pow(f32, u64) f32
     x
   }
 
-fn slice<t>(vec<t>, from: index, to: index) arr<t> {
-  from = from.min(vec.size);
-  to = to.min(vec.size);
-  arr {
-    ptr: vec.buf.ptr + from,
+fn slice<t>([t], from: index, to: index) [t] {
+  from = from.min(slice.size);
+  to = to.min(slice.size);
+  slice {
+    ptr: slice.ptr + from,
     size: to - from
   }
 }
@@ -396,19 +394,25 @@ fn slice<t>(vec<t>, from: index, to: index) arr<t> {
 fn min(a: u64, b: u64) u64
   do if a < b
     do a
-  else b
+  else b;
 
-fn any<t>(arr<t>, fn(t) bool) bool
-  do loop arr.next().match {
+fn any<t>([t], fn(t) bool) bool
+  do loop slice.next().match {
     some(t) => if fn(t) 
       do return true,
     none => return false
   }
 
-fn next<t>(&arr<t>) maybe<t>
-  do if arr.size == 0
+fn next<t>(&[t]) maybe<t>
+  do if slice.size == 0
     do none
   else {
-    arr.size -= 1;
-    some(arr.ptr[arr.size])
+    let res = *slice.ptr;
+    slice.drop(1);
+    some(res)
   }
+
+fn drop<t>(&[t], size) {
+  slice.ptr += size;
+  slice.size -= size;
+}

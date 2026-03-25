@@ -2,12 +2,57 @@ fn main(cargs) {
   let args: args = better(cargs);
   let args = parse_args(args);
   args.command.match {
-    clean_command => clean()
+    clean_command => clean(),
+    run_command(path) => run(path),
   }
 }
 
 fn clean()
-  do system("rm out.qbe out.s out".ptr).drop()
+  do system("rm out.qbe out.s out".ptr).void();
+
+fn run(path) {
+  compile(path);
+  run_qbe();
+  run_cc();
+  run_out();
+}
+
+fn compile(path) 
+  do source_from(path)
+    .lex()
+    .parse()
+    .analyse()
+    .gen();
+
+
+---- goodc analyse ---------------------
+
+fn analyse(ast) cast
+  do todo("analyse");
+
+struct cast {}
+
+
+---- goodc parse -----------------------
+
+fn parse(vec<token>) ast 
+  do todo("parse");
+
+struct ast {}
+
+
+---- lex -------------------------------
+
+fn lex(source) vec<token>
+  do todo("lex");
+
+struct token {}
+
+
+---- source ----------------------------
+
+fn source_from(path) source
+  do todo("source_from");
 
 
 ---- goodc args ------------------------
@@ -15,8 +60,8 @@ fn clean()
 struct goodc_args { command, options }
 
 enum command {
-  clean_command
-  // run_command(path)
+  clean_command,
+  run_command(path),
 }
 
 struct options {}
@@ -25,7 +70,7 @@ fn parse_args(args) goodc_args
   do goodc_args {
     command: parse_command(args),
     options: parse_options(args)
-  }
+  };
 
 fn parse_command(&args) command
   do args.next().match {
@@ -38,10 +83,26 @@ fn parse_command(&args) command
     none => die(expected_command) 
   }
 
+fn parse_options(args) options {
+  let options = default_options();
+  loop args.next().match {
+    none => break,
+    some(arg) => unexpected_arg(arg).die()
+    // `arg` will be parsed to modify `options` but I'm lazy rn so options are empty
+  }
+  options
+}
+
+fn default_options() options
+  do options {};
+
+
+---- goodc args error ------------------
+
 struct unexpected_command { cstr }
 
 fn unexpected_command(cstr) unexpected_command
-  do unexpected_command { cstr }
+  do unexpected_command { cstr };
 
 impl display for unexpected_command {
   fn wprint<w: writer>(w, self) {
@@ -67,7 +128,7 @@ impl display for expected_command {
 struct unexpected_arg { cstr }
 
 fn unexpected_arg(cstr) unexpected_arg
-  do unexpected_arg { cstr }
+  do unexpected_arg { cstr };
 
 impl display for unexpected_arg {
   fn wprint<w: writer>(w, self) {
@@ -76,19 +137,6 @@ impl display for unexpected_arg {
     w.wprint(self.cstr) 
   }
 }
-
-fn parse_options(args) options {
-  let options = default_options();
-  loop args.next().match {
-    none => break,
-    some(arg) => unexpected_arg(arg).die()
-    // `arg` will be parsed to modify `options` but I'm lazy rn so options are empty
-  }
-  options
-}
-
-fn default_options() options
-  do options {}
 
 
 ---- args ------------------------------
@@ -102,7 +150,7 @@ impl better<cargs> for args {
     do args {
       ptr: cargs.ptr + 1,
       size: cargs.size - 1
-    } -- skip exec name
+    }; -- skip exec name
 }
 
 
@@ -114,7 +162,7 @@ struct file { fd }
 
 impl writer for file {
   fn wwrite(self, str)
-    do write(self.fd, str.ptr, str.size)
+    do write(self.fd, str.ptr, str.size);
 }
 
 type fd = i32;
@@ -130,7 +178,7 @@ type cstr = *u8;
 
 impl eq for cstr {
   fn eq(self, other: self) bool
-    do strcmp(self, other) == 0
+    do strcmp(self, other) == 0;
 }
 
 type str = [u8];
@@ -140,23 +188,23 @@ impl better<cstr> for str {
     do str {
       ptr: cstr,
       size: strlen(cstr)
-    }
+    };
 }
 
 impl display for str {
   fn wprint<w: writer>(w, self)
-    do w.wwrite(self)
+    do w.wwrite(self);
 }
 
 impl display for cstr {
   fn wprint<w: writer>(w, self)
-    do w.wwrite(better(self))
+    do w.wwrite(better(self));
 }
 
 
 ---- slice -----------------------------
 
-fn drop_first<t>(&[t], size) {
+fn drop<t>(&[t], size) {
   slice.ptr += 1;
   slice.size -= 1;
 }
@@ -167,7 +215,7 @@ impl<t> iterator<t> for [t] {
       do none
     else {
       let res = *self.ptr;
-      self.drop_first(1);
+      self.drop(1);
       some(res)
     }
 }
@@ -191,7 +239,7 @@ fn wprintln<w: writer, s: display>(w, s) {
 }
 
 fn println<s: display>(s)
-  do stdout.wprintln(s)
+  do stdout.wprintln(s);
 
 
 ---- writer ----------------------------
@@ -221,7 +269,7 @@ trait iterator<item> {
 
 // placeholders yay
 fn to_iter<t>(t) t
-  do t
+  do t;
 
 
 ---- maybe -----------------------------
@@ -254,9 +302,29 @@ fn die<e: display, t>(e) t {
 }
 
 fn eprintln<e: display>(e)
-  do stderr.wprintln(e)
+  do stderr.wprintln(e);
+
+fn todo<t>(str) t
+  do die(not_implemented(str));
+
+struct not_implemented { str }
+
+fn not_implemented(str) not_implemented
+  do not_implemented { str };
+
+impl display for not_implemented {
+  fn wprint<w: writer>(w, self) {
+    w.wprint("! not yet implemented: ");
+    w.wprint(self);
+  }
+}
 
 
 ---- util ------------------------------
 
-fn drop<t>(t) {}
+fn void<t>(t) {}
+
+
+---- vec -------------------------------
+
+struct vec<t> { *t, cap: size, size }

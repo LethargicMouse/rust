@@ -3,7 +3,7 @@ fn main() {
   let freq: counter = empty();
   for word in content.slice(0, content.size - 1).words()
     do freq.add(word, 1);
-  for assoc in freq.vec.as_slice() {
+  for assoc: assoc<str, i32> in freq.vec.as_slice() {
     print(assoc.key);
     printf(": %d\n".ptr, assoc.val);
   }
@@ -13,7 +13,7 @@ fn as_slice<t>(vec<t>) [t]
   do slice {
     ptr: vec.ptr,
     size: vec.size
-  }
+  };
 
 impl eq for [u8] {
   fn eq(self, other: self) bool {
@@ -58,23 +58,23 @@ fn grow<t>(&vec<t>)
 extern fn realloc<t>(*t, size) *t;
 
 fn last<t>([t]) &t
-  do slice.ptr[slice.size]
+  do slice.ptr[slice.size];
 
 impl<t> collection for counter<t> {
   fn empty() self
-    do self { vec: empty() }
+    do self { vec: empty() };
 }
 
 impl<t> collection for vec<t> {
   fn empty() self
-    do self { ptr: 0, cap: 0, size: 0 }
+    do self { ptr: 0, cap: 0, size: 0 };
 }
 
 struct counter<t> { vec<assoc<t, i32>> }
 
 impl<t> collection for [t] {
   fn empty() self
-    do slice { ptr: 0, size: 0 }
+    do slice { ptr: 0, size: 0 };
 }
 
 struct assoc<a, b> {
@@ -83,12 +83,12 @@ struct assoc<a, b> {
 }
 
 fn to_iter<t>(t) t
-  do t
+  do t;
 
 struct words {str}
 
 fn words(str) words
-  do words {str}
+  do words {str};
 
 trait iterator<item> {
   fn next(&self) maybe<item>;
@@ -223,7 +223,7 @@ fn args(cargs) args
   do args {
     ptr: cargs.ptr,
     size: cargs.size
-  }
+  };
 
 impl display for cstr {
   fn wprint(file, self) {
@@ -236,7 +236,7 @@ fn to_str(cstr) str
   do str {
     ptr: cstr,
     size: strlen(cstr)
-  }
+  };
 
 extern fn strlen(cstr) size;
 
@@ -246,7 +246,7 @@ fn skip<t>(&[t], size) {
 }
 
 fn is_empty<t>([t]) bool
-  do slice.size == 0
+  do slice.size == 0;
 
 fn die<e: display, t>(e) t { 
   eprintln(e);
@@ -254,13 +254,13 @@ fn die<e: display, t>(e) t {
 }
 
 fn eprintln<s: display>(s) 
-  do stderr.wprintln(s)
+  do stderr.wprintln(s);
 
 fn println<s: display>(s)
-  do stdout.wprintln(s)
+  do stdout.wprintln(s);
 
 fn print<s: display>(s)
-  do stdout.wprint(s)
+  do stdout.wprint(s);
 
 extern fn exit<t>(i32) t;
 
@@ -281,7 +281,7 @@ trait display {
 }
 
 fn wwrite(file, &str)
-  do write(file.fd, str.ptr, str.size)
+  do write(file.fd, str.ptr, str.size);
 
 impl display for [u8] {
   fn wprint(file, self) {
@@ -292,7 +292,7 @@ impl display for [u8] {
 extern fn write(fd, cstr, size);
 
 fn min(a: u64, b: u64) u64
-  do if a < b do a else b
+  do if a < b do a else b;
 
 let expected_path: str = "! error reading args: expected path";
 
