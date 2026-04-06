@@ -1,3 +1,3 @@
 #include <fcntl.h>
 
-int main() {}
+int main() { open("path", O_WRONLY); }

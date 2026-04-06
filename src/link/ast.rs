@@ -346,6 +346,7 @@ impl<'a> Expr<'a> {
             Expr::Block(_) => false,
             Expr::Negate(_) => false,
             Expr::Match(_) => false,
+            Expr::New(_) => false,
             _ => true,
         }
     }

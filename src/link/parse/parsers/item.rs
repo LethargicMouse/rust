@@ -36,7 +36,11 @@ impl<'a> Parse<'a> {
         let lame = self.lame(true)?;
         let value = self.maybe(|p| {
             p.expect(ParL)?;
-            let typ = p.typ()?;
+            let typ = p
+                .maybe(|p| p.expect(Minus))
+                .map(|_| Type::from(lame))
+                .ok_or(Fail)
+                .or_else(|_| p.typ())?;
             p.expect(ParR)?;
             Ok(typ)
         });

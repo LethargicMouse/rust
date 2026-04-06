@@ -787,7 +787,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn array(&mut self, array: Array<'a>) -> Typed<'a, asg::Tuple<'a>> {
-        let mut typ = Type::Unknown;
+        let mut typ = self.new_type_var(Type::Unknown);
         let exprs: Vec<_> = array
             .elems
             .into_iter()
@@ -940,9 +940,9 @@ impl<'a> Analyse<'a> {
                     self.fail(NoField {
                         location: field.lame.location,
                         name: field.lame.name,
-                        typ: Type::Name(name, generics),
+                        typ: Type::Name(name, generics.clone()),
                     });
-                    return self.fake_expr();
+                    continue;
                 }
             };
             self.specify(&mut field_typ);

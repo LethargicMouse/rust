@@ -245,7 +245,7 @@ impl display for str {
 }
 
 fn check_if_should_close() bool { 
-  should_close = WindowShouldClose() | IsKeyPressed('Q');
+  should_close = WindowShouldClose() || IsKeyPressed('Q');
   should_close
 }
 
