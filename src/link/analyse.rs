@@ -871,10 +871,11 @@ impl<'a> Analyse<'a> {
                 Type::Error
             }
         };
+        let asg_typ = self.asg_type(location, &expr_typ);
         if !matches!(typ, Type::Error) {
             *self.break_types.last_mut().unwrap() = self.unify(location, typ, expr_typ);
         }
-        typed(asg::Break { expr }, Type::Unreachable)
+        typed(asg::Break { expr, typ: asg_typ }, Type::Unreachable)
     }
 
     fn ref_expr(&mut self, ref_expr: Ref<'a>) -> Typed<'a, asg::Ref<'a>> {

@@ -207,6 +207,7 @@ struct GenFun<'a, 'b, 'c> {
     tmp: Tmp,
     label: u16,
     loop_ends: Vec<u16>,
+    loop_ress: Vec<Tmp>,
     generics: &'c HashMap<&'a str, Type<'a>>,
     typ_generics: Vec<HashMap<&'a str, Type<'a>>>,
 }
@@ -221,6 +222,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             generics,
             sup,
             typ_generics: Vec::new(),
+            loop_ress: Vec::new(),
         }
     }
 
@@ -375,6 +377,10 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
 
     fn break_expr(&mut self, break_expr: &Break<'a>) -> Tmp {
         let expr = self.expr(&break_expr.expr);
+        let res = *self.loop_ress.last().unwrap();
+        let typ = self.heat_up(&break_expr.typ);
+        let typ = self.sup.base(&typ);
+        self.stmts.push(Stmt::Copy(res, typ, Value::Tmp(expr)));
         self.stmts.push(Stmt::Jump(*self.loop_ends.last().unwrap()));
         let label = self.new_label();
         self.stmts.push(Stmt::Label(label));
@@ -397,12 +403,14 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     fn loop_expr(&mut self, loop_expr: &Loop<'a>) -> Tmp {
         let start = self.new_label();
         let end = self.new_label();
+        let res = self.new_tmp();
         self.loop_ends.push(end);
+        self.loop_ress.push(res);
         self.stmts.push(Stmt::Label(start));
         self.block(&loop_expr.body);
         self.stmts.push(Stmt::Jump(start));
         self.stmts.push(Stmt::Label(end));
-        self.int(0, &Type::U64)
+        res
     }
 
     fn tuple(&mut self, tuple: &Tuple<'a>) -> Tmp {

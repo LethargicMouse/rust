@@ -269,6 +269,7 @@ pub struct Return<'a> {
 #[derive(Debug)]
 pub struct Break<'a> {
     pub expr: Expr<'a>,
+    pub typ: Type<'a>,
 }
 
 #[derive(Debug)]
