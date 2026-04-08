@@ -908,6 +908,11 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
                 self.stmts.push(Stmt::Exts(res, expr));
                 res
             }
+            (Type::F64, Type::F32) => {
+                let res = self.new_tmp();
+                self.stmts.push(Stmt::Truncd(res, expr));
+                res
+            }
             _ => expr,
         }
     }

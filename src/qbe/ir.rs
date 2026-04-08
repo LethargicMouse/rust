@@ -178,6 +178,7 @@ pub enum Stmt {
     Dtosi(Type, Tmp, Tmp),
     Swtof(Type, Tmp, Tmp),
     Exts(Tmp, Tmp),
+    Truncd(Tmp, Tmp),
     Extub(Tmp, Tmp),
     Extsw(Tmp, Tmp),
     Alloc(Tmp, u32, u32),
@@ -223,6 +224,7 @@ impl Display for Stmt {
             Stmt::Extsw(t, t2) => write!(f, "%t{t} =l extsw %t{t2}"),
             Stmt::Swtof(typ, t, t2) => write!(f, "%t{t} ={typ} swtof %t{t2}"),
             Stmt::Stoui(typ, t, t2) => write!(f, "%t{t} ={typ} stoui %t{t2}"),
+            Stmt::Truncd(t, t2) => write!(f, "%t{t} =s truncd %t{t2}"),
         }
     }
 }
