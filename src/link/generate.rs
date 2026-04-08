@@ -114,6 +114,7 @@ impl<'a> Generate<'a> {
     fn unsigned(&self, typ: &Type<'a>) -> Unsigned {
         match typ {
             Type::U8 => Unsigned::Byte,
+            Type::Bool => Unsigned::Byte,
             Type::Cold(id) => self.unsigned(&self.asg.info.types[*id]),
             _ => self.base(typ).into(),
         }
@@ -639,6 +640,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     fn signed(&self, typ: &Type<'a>) -> Signed {
         match typ {
             Type::U8 => Signed::UnsignedByte,
+            Type::Bool => Signed::UnsignedByte,
             _ => self.sup.base(typ).into(),
         }
     }
