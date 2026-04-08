@@ -702,7 +702,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let resized_condition = self.new_tmp();
         self.stmts.push(Stmt::Extub(resized_condition, condition));
         self.stmts
-            .push(Stmt::Jnz(condition, then_label, else_label));
+            .push(Stmt::Jnz(resized_condition, then_label, else_label));
         self.stmts.push(Stmt::Label(then_label));
         let then_expr = self.expr(&if_expr.then_expr);
         let typ = self.heat_up(&if_expr.typ);
