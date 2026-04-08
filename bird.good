@@ -192,7 +192,7 @@ impl display for i64 {
 struct non_null {i64}
 
 fn non_null(i64) non_null
-  do non_null {i64};
+  do non_null {i64}
 
 impl display for non_null {
   fn wprint<w: writer>(w, self) {
@@ -208,7 +208,7 @@ fn c2str(&u8) str
   do str {
     ptr: u8 as *u8,
     size: 1
-  };
+  }
 
 fn eprint<s: display>(s) 
   do stderr.wprint(s);
@@ -305,7 +305,7 @@ fn rand() u64 {
 }
 
 fn vec2(x: f32, y: f32) vec2
-  do vec2 {x, y};
+  do vec2 {x, y}
 
 struct pipe {
   x: i32,
@@ -335,7 +335,7 @@ fn as_slice<t>(vec<t>) [t]
   do slice {
     ptr: vec.ptr,
     size: vec.size
-  };
+  }
 
 fn is_some_and<t>(maybe<t>, fn(t) bool) bool
   do maybe.match {

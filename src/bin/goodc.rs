@@ -1,12 +1,13 @@
 use std::{
     env::{self, args},
     fmt::Display,
+    fs::{create_dir, exists},
 };
 
 use russ::{
     die::{Mortal, die},
     display::colors::{Blue, Red, Reset},
-    file::{self},
+    file::{self, create},
     link::{analyse, generate, lex, parse},
     process::{self, call},
     qbe::ir::IR,
@@ -33,8 +34,15 @@ fn run(path: String, cc_args: Vec<String>, args: env::Args) {
 fn compile(path: String, cc_args: Vec<String>) {
     let source = read_source(path);
     let ir = process(source);
+    create_build_dir();
     dump(ir);
     postcompile(cc_args);
+}
+
+fn create_build_dir() {
+    if !exists(".build/").unwrap() {
+        create_dir(".build/").or_die_with(|e| create::Error(".build/", e))
+    }
 }
 
 fn get_args() -> Args {
@@ -136,6 +144,6 @@ fn dump(ir: IR) {
     file::dump(ir, OUT_IR);
 }
 
-const OUT_IR: &str = "out.qbe";
-const OUT: &str = "./out";
-const OUT_ASM: &str = "out.s";
+const OUT_IR: &str = ".build/out.qbe";
+const OUT: &str = "./.build/out";
+const OUT_ASM: &str = ".build/out.s";

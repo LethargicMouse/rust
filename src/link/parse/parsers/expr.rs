@@ -207,7 +207,7 @@ impl<'a> Parse<'a> {
                 Ok(Postfix::Get(expr))
             },
             |p| {
-                p.expect_(Name("to"))?;
+                p.expect_(Name("to")).or_else(|_| p.expect_(Name("as")))?;
                 Ok(Postfix::Cast(p.typ()?))
             },
             |p| {

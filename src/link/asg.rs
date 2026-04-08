@@ -253,6 +253,7 @@ pub struct Tuple<'a> {
 #[derive(Debug)]
 pub struct Loop<'a> {
     pub body: Block<'a>,
+    pub typ: Type<'a>,
 }
 
 #[derive(Debug)]

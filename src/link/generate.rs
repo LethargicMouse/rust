@@ -404,6 +404,9 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let start = self.new_label();
         let end = self.new_label();
         let res = self.new_tmp();
+        let typ = self.heat_up(&loop_expr.typ);
+        let typ = self.sup.base(&typ);
+        self.stmts.push(Stmt::Copy(res, typ, Value::Int(0)));
         self.loop_ends.push(end);
         self.loop_ress.push(res);
         self.stmts.push(Stmt::Label(start));

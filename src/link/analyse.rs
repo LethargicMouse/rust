@@ -894,8 +894,11 @@ impl<'a> Analyse<'a> {
 
     fn loop_expr(&mut self, loop_expr: Loop<'a>) -> Typed<'a, asg::Loop<'a>> {
         self.break_types.push(Type::Unreachable);
+        let location = loop_expr.body.location();
         let body = self.block(loop_expr.body.into()).sup;
-        typed(asg::Loop { body }, self.break_types.pop().unwrap())
+        let typ = self.break_types.pop().unwrap();
+        let asg_typ = self.asg_type(location, &typ);
+        typed(asg::Loop { body, typ: asg_typ }, typ)
     }
 
     fn new_expr(&mut self, new: New<'a>, is_const: bool) -> Typed<'a, asg::Expr<'a>> {
