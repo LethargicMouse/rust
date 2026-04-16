@@ -1,4 +1,4 @@
-use crate::link::{
+use crate::good::{
     lex::Lexeme::Comma,
     parse::{Parse, error::Fail, parsers::Parser},
 };

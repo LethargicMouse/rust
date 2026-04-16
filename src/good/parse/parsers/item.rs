@@ -1,4 +1,4 @@
-use crate::link::{
+use crate::good::{
     ast::{
         self, Const, Enum, Extern, FunType, Header, Impl, Item, Prime, Struct, Trait, Type,
         TypeAlias, Variant,

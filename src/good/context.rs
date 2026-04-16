@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::link::analyse::DEBUG;
+use crate::good::analyse::DEBUG;
 
 pub struct Context<'a, T> {
     pub sup: Vec<HashMap<&'a str, T>>,

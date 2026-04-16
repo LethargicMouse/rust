@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::link::analyse::Info;
+use crate::good::analyse::Info;
 
 #[derive(Debug)]
 pub struct Block<'a> {

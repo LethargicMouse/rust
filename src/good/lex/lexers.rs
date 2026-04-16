@@ -1,6 +1,6 @@
 use crate::{
     die,
-    link::lex::{
+    good::lex::{
         Lex, Token,
         error::Unclosed,
         lexeme::{

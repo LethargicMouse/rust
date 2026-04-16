@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::{
     Location,
-    link::{
+    good::{
         ast::{Ast, Constraint, Field, FunType, Generic, Item, Lame, Prime, Type},
         lex::lexeme::Lexeme::{self, *},
         parse::{Fail, Parse, Result},

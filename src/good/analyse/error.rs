@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     Location,
     display::colors::{Blue, Red, Reset},
-    link::analyse::{Constraint, Type},
+    good::analyse::{Constraint, Type},
 };
 
 pub struct NotDeclared<'a> {

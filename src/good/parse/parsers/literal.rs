@@ -1,4 +1,4 @@
-use crate::link::{
+use crate::good::{
     ast::{Lame, Literal, Type},
     lex::Lexeme::*,
     parse::{Parse, error::Fail},

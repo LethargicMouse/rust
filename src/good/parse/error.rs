@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fmt::Display};
 
 use crate::{
     display::colors::{Blue, Red, Reset},
-    link::{lex::Lexeme, parse::Parse},
+    good::{lex::Lexeme, parse::Parse},
     location::Location,
 };
 

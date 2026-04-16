@@ -1,6 +1,6 @@
 use crate::{
     Location,
-    link::{
+    good::{
         ast::{
             Array, Assign, BinOp, Binary, Block, Break, Call, Cast, Deref, Expr, FieldExpr, For,
             Get, If, Let, Loop, Match, Negate, New, NewField, Pattern, PatternMatch, Postfix, Ref,

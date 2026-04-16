@@ -4,7 +4,7 @@ mod parsers;
 
 use crate::{
     die::Mortal,
-    link::{
+    good::{
         ast::Ast,
         lex::Token,
         parse::{error::Fail, parsers::Parser},

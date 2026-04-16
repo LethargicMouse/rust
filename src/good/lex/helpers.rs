@@ -1,5 +1,5 @@
 use crate::{
-    link::{
+    good::{
         ast::{Assign, BinOp, Binary, Expr},
         lex::{Lex, Token, lexeme::Lexeme},
     },

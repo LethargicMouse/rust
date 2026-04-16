@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    link::{Context, analyse::DEBUG, asg::*},
+    good::{Context, analyse::DEBUG, asg::*},
     qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Unsigned, Value},
 };
 

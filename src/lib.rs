@@ -4,7 +4,7 @@ pub use die::die;
 pub mod display;
 pub mod either;
 pub mod file;
-pub mod link;
+pub mod good;
 pub mod location;
 pub use location::Location;
 pub mod mem;

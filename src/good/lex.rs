@@ -5,7 +5,7 @@ pub use lexeme::Lexeme;
 mod lexers;
 
 use crate::{
-    link::lex::{
+    good::lex::{
         lexeme::{LexList, Lexeme::*},
         lexers::LIST,
     },

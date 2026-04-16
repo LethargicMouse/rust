@@ -10,7 +10,7 @@ use error::Error;
 use crate::{
     Location, die,
     display::Sep,
-    link::{
+    good::{
         Asg, Context,
         analyse::error::{
             CantMatch, CheckError, CheckErrorKind, Fail, MultImpls, NoCast, NoField, NoMethod,

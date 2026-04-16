@@ -8,7 +8,7 @@ use russ::{
     die::{Mortal, die},
     display::colors::{Blue, Red, Reset},
     file::{self, create},
-    link::{analyse, generate, lex, parse},
+    good::{analyse, generate, lex, parse},
     process::{self, call},
     qbe::ir::IR,
     source::{Source, read_source},
