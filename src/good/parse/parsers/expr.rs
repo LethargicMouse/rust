@@ -193,6 +193,13 @@ impl<'a> Parse<'a> {
                     }
                     .into()
                 }
+                Postfix::Ref(location) => {
+                    res = Ref {
+                        expr: res,
+                        location,
+                    }
+                    .into()
+                }
             }
         }
         Ok(res)
@@ -209,6 +216,12 @@ impl<'a> Parse<'a> {
             |p| {
                 p.expect_(Name("to")).or_else(|_| p.expect_(Name("as")))?;
                 Ok(Postfix::Cast(p.typ()?))
+            },
+            |p| {
+                p.expect_(Dot)?;
+                let location = p.here();
+                p.expect_(Ampersand)?;
+                Ok(Postfix::Ref(location))
             },
             |p| {
                 p.expect_(Dot)?;

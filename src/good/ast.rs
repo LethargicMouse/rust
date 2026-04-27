@@ -433,6 +433,7 @@ pub enum Postfix<'a> {
     Call(Call<'a>),
     Field(Lame<'a>),
     Cast(Type<'a>),
+    Ref(Location<'a>),
 }
 
 impl<'a> From<Call<'a>> for Postfix<'a> {

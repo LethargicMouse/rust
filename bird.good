@@ -149,7 +149,7 @@ fn random(min: u64, max: u64) u64
   do min + (max - min) * rand() / rand_mod;
 
 fn push<t>(&vec<t>, t) {
-  if (vec.size == vec.size)
+  if (vec.size == vec.cap)
     do vec.grow();
   vec.ptr[vec.size] = t;
   vec.size += 1;

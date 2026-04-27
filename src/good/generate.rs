@@ -927,21 +927,19 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
         match (a, b) {
             (Type::Cold(id), t) => self.unify(&self.sup.asg.info.types[*id], t),
-            (Type::Generic(g), t) => {
+            (Type::Generic(g), t)
                 if self.unify(
                     &self.typ_generics.last().unwrap_or(&HashMap::new())[g].clone(),
                     t,
-                ) {
-                    *self
-                        .typ_generics
-                        .last_mut()
-                        .unwrap_or(&mut HashMap::new())
-                        .get_mut(g)
-                        .unwrap() = t.clone();
-                    true
-                } else {
-                    false
-                }
+                ) =>
+            {
+                *self
+                    .typ_generics
+                    .last_mut()
+                    .unwrap_or(&mut HashMap::new())
+                    .get_mut(g)
+                    .unwrap() = t.clone();
+                true
             }
             (Type::Unknown, _) => true,
             (_, Type::Unknown) => true,
