@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    good::{Context, analyse::DEBUG, asg::*},
+    good::{Context, asg::*},
     qbe::ir::{self, Const, IR, Signed, Stmt, Tmp, Unsigned, Value},
 };
 
-pub fn generate(asg: &Asg) -> IR {
-    Generate::new(asg).run()
+pub fn generate(asg: &Asg, debug: bool) -> IR {
+    Generate::new(asg, debug).run()
 }
 
 pub struct TypeDeclInfo {
@@ -23,10 +23,11 @@ struct Generate<'a> {
     asg: &'a Asg<'a>,
     booked: HashSet<String>,
     context: Context<'a, (Value, Type<'a>)>,
+    debug: bool,
 }
 
 impl<'a> Generate<'a> {
-    fn new(asg: &'a Asg<'a>) -> Self {
+    fn new(asg: &'a Asg<'a>, debug: bool) -> Self {
         Self {
             types: Vec::new(),
             consts: Vec::new(),
@@ -34,13 +35,14 @@ impl<'a> Generate<'a> {
             type_infos: HashMap::new(),
             booked: HashSet::new(),
             asg,
-            context: Context::new(),
+            context: Context::new(debug),
+            debug,
         }
     }
 
     fn run(mut self) -> IR {
         for (name, (typ, const_)) in self.asg.consts.iter() {
-            if DEBUG {
+            if self.debug {
                 eprintln!("> const {name}")
             }
             let id = self.eval_const(const_, typ);
@@ -102,7 +104,7 @@ impl<'a> Generate<'a> {
     }
 
     fn data_type(&self, typ: &Type<'a>) -> ir::DataType {
-        if DEBUG {
+        if self.debug {
             eprintln!("> data_type {typ:?}");
         }
         match typ {
@@ -186,7 +188,7 @@ impl<'a> Generate<'a> {
             Expr::Literal(literal) => self.const_add_literal(literal, typ, contents),
             Expr::Tuple(tuple) => self.const_add_tuple(tuple, contents),
             Expr::Var(name) => {
-                if DEBUG {
+                if self.debug {
                     eprintln!("> const var {name}");
                 }
                 self.const_add_expr(&self.asg.consts[name].1, &self.asg.consts[name].0, contents)
@@ -228,14 +230,14 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn run(mut self, name: &str, fun: &'a Fun<'a>) -> ir::Fun {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> generating fn {name}");
         }
         let params = fun
             .params
             .iter()
             .map(|(name, typ)| {
-                if DEBUG {
+                if self.sup.debug {
                     eprintln!("> param {name}");
                 }
 
@@ -254,13 +256,13 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         }
         let tmp = self.expr(&fun.body);
         self.stmts.push(Stmt::Ret(tmp));
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> ret type");
         }
         let typ = self.heat_up(&fun.ret_type);
         let ret_type = self.abi_type(&typ);
         self.sup.context.pop_layer();
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> out fn {name}");
         }
         ir::Fun {
@@ -272,7 +274,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn abi_type(&self, typ: &Type<'a>) -> ir::AbiType {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> abi_type {typ:?}");
         }
         match typ {
@@ -309,7 +311,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn match_expr(&mut self, match_expr: &Match<'a>) -> Tmp {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> match expr")
         }
         let expr_tmp = self.expr(&match_expr.expr);
@@ -318,7 +320,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         let end = self.new_label();
         let typ = self.heat_up(&match_expr.typ);
         for pm in &match_expr.pattern_matches {
-            if DEBUG {
+            if self.sup.debug {
                 eprintln!("> variant {}", pm.label);
             }
             let val = self.int(pm.label as i64, &Type::U8);
@@ -418,7 +420,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn tuple(&mut self, tuple: &Tuple<'a>) -> Tmp {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> tuple")
         }
         let tmp = self.new_tmp();
@@ -476,7 +478,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn size(&mut self, typ: &Type<'a>) -> u32 {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> size {typ:?}");
         }
         match typ {
@@ -503,7 +505,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn align(&mut self, typ: &Type<'a>) -> u32 {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> align {typ:?}");
         }
         match typ {
@@ -523,7 +525,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         if self.sup.type_infos.contains_key(&full_name) {
             return;
         }
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> making typ {full_name}");
         }
         let struct_ = &self.sup.asg.structs[name];
@@ -608,7 +610,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn field_ref(&mut self, field: &Field<'a>) -> Tmp {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> {field:?}");
         }
         let from = self.expr_ref(&field.from, &field.from_type);
@@ -722,7 +724,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn var_ref(&mut self, name: &str) -> (Tmp, Type<'a>) {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> var ref {name}");
         }
         self.stmts.push(Stmt::Comment(format!("ref var {name}")));
@@ -745,18 +747,18 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn call(&mut self, call: &Call<'a>) -> Tmp {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> {call:?}");
         }
         let name_tmp = self.expr(&call.expr);
         let tmp = self.new_tmp();
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> ret type");
         }
         let ret_type = self.heat_up(&call.ret_type);
         self.size(&ret_type); // for type decls on extern funs
         let ret_type = self.abi_type(&ret_type);
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> args");
         }
         let args = call
@@ -781,7 +783,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn heat_up(&self, typ: &Type<'a>) -> Type<'a> {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> heat up {typ:?}");
         }
         match typ {
@@ -819,7 +821,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn bin_op(&self, bin_op: &BinOp, typ: &Type<'a>) -> ir::BinOp {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> binop {typ:?}");
         }
         match bin_op {
@@ -922,7 +924,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn unify(&mut self, a: &Type<'a>, b: &Type<'a>) -> bool {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> unify {a:?} {b:?}")
         }
         match (a, b) {
@@ -952,7 +954,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
     }
 
     fn fun_ref(&mut self, fun_ref: &FunRef<'a>) -> Tmp {
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> fun ref {}", fun_ref.name);
             eprintln!("> generics");
         }
@@ -968,7 +970,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
                 // FIXME this does not work and will never work because all the codebase is cursed!!!
                 self.typ_generics
                     .push(impl_.generics.iter().map(|n| (*n, Type::Unknown)).collect());
-                if DEBUG {
+                if self.sup.debug {
                     eprintln!("> candidate self");
                 }
                 if self.unify(&impl_.typ, &generics[*gc])
@@ -996,7 +998,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
         } else {
             name = fun_ref.name.into();
         }
-        if DEBUG {
+        if self.sup.debug {
             eprintln!("> got name {name}");
         }
         let name = Value::Fun(name);

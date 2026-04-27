@@ -22,8 +22,6 @@ use crate::{
     },
 };
 
-pub const DEBUG: bool = false;
-
 #[derive(Clone, PartialEq, Debug)]
 struct Constraint<'a> {
     pub name: &'a str,
@@ -186,8 +184,8 @@ fn typed<'a, T>(sup: T, typ: Type<'a>) -> Typed<'a, T> {
     Typed { sup, typ }
 }
 
-pub fn analyse(ast: Ast) -> Asg {
-    Analyse::new().run(ast)
+pub fn analyse(ast: Ast, debug: bool) -> Asg {
+    Analyse::new(debug).run(ast)
 }
 
 #[derive(Clone)]
@@ -234,19 +232,20 @@ struct Analyse<'a> {
     impls: HashMap<&'a str, Vec<Impl<'a>>>,
     labels: HashMap<&'a str, (&'a str, u8, Option<Type<'a>>)>,
     global_funs: HashMap<&'a str, (FunType<'a>, Location<'a>)>,
+    debug: bool,
 }
 
 impl<'a> Analyse<'a> {
-    fn new() -> Self {
+    fn new(debug: bool) -> Self {
         Self {
             structs: HashMap::new(),
             ast_structs: HashMap::new(),
-            context: Context::new(),
+            context: Context::new(debug),
             errors: Vec::new(),
             corrupt: HashSet::new(),
             cold_types: Vec::new(),
             types: Vec::new(),
-            type_context: Context::new(),
+            type_context: Context::new(debug),
             asg_structs: HashMap::new(),
             type_aliases: HashMap::new(),
             ret_type: Type::Unknown,
@@ -257,7 +256,8 @@ impl<'a> Analyse<'a> {
             global_funs: HashMap::new(),
             traits: HashMap::new(),
             constraints: Vec::new(),
-            g_constraints: Context::new(),
+            g_constraints: Context::new(debug),
+            debug,
         }
     }
 
@@ -357,7 +357,7 @@ impl<'a> Analyse<'a> {
                 for g in &trait_.generics {
                     typ.generics.insert(0, self.generic(g));
                 }
-                if DEBUG {
+                if self.debug {
                     eprintln!("> new global fun `{}`: {}", header.lame.name, typ)
                 }
                 self.global_funs
@@ -407,7 +407,7 @@ impl<'a> Analyse<'a> {
         }
         for const_ in ast.consts {
             let location = const_.expr.location();
-            if DEBUG {
+            if self.debug {
                 eprintln!("> const {}", const_.lame.name)
             }
             let expr = self.const_expr(const_.expr);
@@ -531,7 +531,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn constrain(&mut self, location: Location<'a>, typ: Type<'a>, mut constraint: Constraint<'a>) {
-        if DEBUG {
+        if self.debug {
             eprintln!("> constrain {typ}: {constraint}");
         }
         let mut ttyp = typ.clone();
@@ -556,7 +556,7 @@ impl<'a> Analyse<'a> {
         let mut res = None;
         let mut defs = Vec::new();
         for mut impl_ in self.impls[constraint.name].clone() {
-            if DEBUG {
+            if self.debug {
                 eprintln!("> candidate {}", impl_.typ);
             }
             self.type_context.new_layer();
@@ -721,7 +721,7 @@ impl<'a> Analyse<'a> {
             .zip(&self.enums[name])
             .map(|(t, g)| (g.name, t))
             .collect();
-        if DEBUG {
+        if self.debug {
             for (n, t) in &generics {
                 eprintln!("> {n} = {t}")
             }
@@ -730,7 +730,7 @@ impl<'a> Analyse<'a> {
             .pattern_matches
             .into_iter()
             .map(|p| {
-                if DEBUG {
+                if self.debug {
                     eprintln!("> pattern {}", p.pattern.name);
                 }
                 let location = p.expr.location();
@@ -831,7 +831,7 @@ impl<'a> Analyse<'a> {
     fn cast_typ(&mut self, location: Location<'a>, from: Type<'a>, to: Type<'a>) -> Type<'a> {
         match (from, to) {
             (Type::Var(id), to) if self.types[id] == Type::Number && to.is_number() => {
-                if DEBUG {
+                if self.debug {
                     eprintln!("{id} = {to}");
                 }
                 self.types[id] = to;
@@ -850,7 +850,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn ret(&mut self, ret: Return<'a>) -> Typed<'a, asg::Return<'a>> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> return")
         }
         let location = ret.expr.location();
@@ -902,7 +902,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn new_expr(&mut self, new: New<'a>, is_const: bool) -> Typed<'a, asg::Expr<'a>> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> new {}", new.lame.name);
         }
         let typ = self.typ(&ast::Type::name(new.lame));
@@ -925,7 +925,7 @@ impl<'a> Analyse<'a> {
         let mut fields = self.structs[name].fields.clone();
         exprs.resize_with(new.fields.len(), Default::default);
         for field in new.fields {
-            if DEBUG {
+            if self.debug {
                 eprintln!("> new field {}", field.lame.name);
             }
             let location = field.expr.location();
@@ -989,7 +989,7 @@ impl<'a> Analyse<'a> {
     fn field(&mut self, field_expr: ast::FieldExpr<'a>) -> Result<Typed<'a, asg::Field<'a>>, Fail> {
         let location = field_expr.expr.location();
         let (expr, mut typ) = self.expr(field_expr.expr).into();
-        if DEBUG {
+        if self.debug {
             eprintln!("> field {} of {typ}", field_expr.lame.name)
         }
         let is_ref = self.is_ref(&typ);
@@ -1064,7 +1064,7 @@ impl<'a> Analyse<'a> {
             let typ = generics.get(index).cloned().unwrap_or_else(|| {
                 let id = self.types.len();
                 self.types.push(Type::Unknown);
-                if DEBUG {
+                if self.debug {
                     eprintln!("{id} = {}", self.types[id]);
                 }
                 Type::Var(id)
@@ -1074,7 +1074,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn type_name(&self, typ: Type<'a>) -> Option<Option<(&'a str, Vec<Type<'a>>)>> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> type name of {typ}");
         }
         match typ {
@@ -1088,7 +1088,7 @@ impl<'a> Analyse<'a> {
 
     fn fail(&mut self, error: impl Into<CheckError<'a>>) -> Fail {
         let error = error.into();
-        if DEBUG {
+        if self.debug {
             eprintln!("> new fail {error}");
         }
         self.errors.push(error);
@@ -1104,7 +1104,7 @@ impl<'a> Analyse<'a> {
             typ_ = self.unify(location, typ, typ_);
         }
         let typ = self.asg_type(location, &typ_);
-        if DEBUG {
+        if self.debug {
             eprintln!("{name} = {typ_}");
         }
         self.context
@@ -1209,7 +1209,7 @@ impl<'a> Analyse<'a> {
         expected: Type<'a>,
         found: Type<'a>,
     ) -> Result<Type<'a>, Box<CheckErrorKind<'a>>> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> unify {expected} {found}");
         }
         match (expected, found) {
@@ -1217,7 +1217,7 @@ impl<'a> Analyse<'a> {
             (Type::Var(id), b) => {
                 let a = self.types[id].clone();
                 self.types[id] = self.try_unify(location, a, b)?;
-                if DEBUG {
+                if self.debug {
                     eprintln!("{id} = {}", self.types[id]);
                 }
                 Ok(Type::Var(id))
@@ -1225,7 +1225,7 @@ impl<'a> Analyse<'a> {
             (a, Type::Var(id)) => {
                 let b = self.types[id].clone();
                 self.types[id] = self.try_unify(location, a, b)?;
-                if DEBUG {
+                if self.debug {
                     eprintln!("{id} = {}", self.types[id]);
                 }
                 Ok(Type::Var(id))
@@ -1323,7 +1323,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn reveal(&mut self, typ: &mut Type<'a>) {
-        if DEBUG {
+        if self.debug {
             eprintln!("> reveal {typ}")
         }
         match typ {
@@ -1524,7 +1524,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn specify(&mut self, typ: &mut Type<'a>) {
-        if DEBUG {
+        if self.debug {
             eprintln!("> specify {typ}");
         }
         match typ {
@@ -1550,7 +1550,7 @@ impl<'a> Analyse<'a> {
                 let mut typ = std::mem::take(&mut self.types[*id]);
                 self.specify(&mut typ);
                 self.types[*id] = typ;
-                if DEBUG {
+                if self.debug {
                     eprintln!("{id} = {}", self.types[*id]);
                 }
             }
@@ -1563,7 +1563,7 @@ impl<'a> Analyse<'a> {
             Type::Unknown => {}
             Type::Ref(typ) => self.specify(typ),
         }
-        if DEBUG {
+        if self.debug {
             eprintln!("> specified to {typ}")
         }
     }
@@ -1581,17 +1581,17 @@ impl<'a> Analyse<'a> {
     }
 
     fn var(&mut self, lame: Lame<'a>) -> Typed<'a, asg::Expr<'a>> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> var {}", lame.name);
         }
         if let Some((typ, _)) = self.context.get(lame.name) {
-            if DEBUG {
+            if self.debug {
                 eprintln!("> from context")
             }
             return typed(lame.name.into(), typ.clone());
         }
         if let Some((typ, _)) = self.global_funs.get(lame.name) {
-            if DEBUG {
+            if self.debug {
                 eprintln!("> global function")
             }
             let mut typ = typ.clone();
@@ -1627,7 +1627,7 @@ impl<'a> Analyse<'a> {
             return typed(asg::FunRef { name, generics }.into(), typ.into());
         }
         if let Some((name, label, _)) = self.labels.get(lame.name).cloned() {
-            if DEBUG {
+            if self.debug {
                 eprintln!("> label of {name}")
             }
             let mut generics = Vec::with_capacity(self.enums[name].len());
@@ -1788,14 +1788,14 @@ impl<'a> Analyse<'a> {
     fn new_type_var(&mut self, typ: Type<'a>) -> Type<'a> {
         let id = self.types.len();
         self.types.push(typ);
-        if DEBUG {
+        if self.debug {
             eprintln!("{id} = {}", self.types[id]);
         }
         Type::Var(id)
     }
 
     fn lame_type(&mut self, lame: Lame<'a>, generics: &[ast::Type<'a>]) -> Type<'a> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> got {}", lame.name);
         }
         let mut generics: Vec<_> = generics.iter().map(|t| self.typ(t)).collect();
@@ -1910,7 +1910,7 @@ impl<'a> Analyse<'a> {
             ast::Type::Ptr(t, _) => Type::Ptr(Box::new(self.typ(t))),
             ast::Type::Name(lame, generics) => {
                 let res = self.lame_type(*lame, generics);
-                if DEBUG {
+                if self.debug {
                     eprintln!("> made {res}");
                 }
                 res
@@ -1937,7 +1937,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn fun(&mut self, fun: Fun<'a>) -> asg::Fun<'a> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> fun {}", fun.header.lame.name);
         }
         self.context.new_layer();
@@ -1995,7 +1995,7 @@ impl<'a> Analyse<'a> {
         self.context.pop_layer();
         self.type_context.pop_layer();
         self.g_constraints.pop_layer();
-        if DEBUG {
+        if self.debug {
             eprintln!("> generated {:?}", body);
         }
         asg::Fun {
@@ -2006,7 +2006,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn asg_type(&mut self, location: Location<'a>, typ: &Type<'a>) -> asg::Type<'a> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> asg type {typ}")
         }
         match self.try_hot_type(typ) {
@@ -2016,7 +2016,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn try_hot_type(&self, typ: &Type<'a>) -> Option<asg::Type<'a>> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> try hot {typ}");
         }
         match typ {
@@ -2049,7 +2049,7 @@ impl<'a> Analyse<'a> {
     }
 
     fn new_cold_type(&mut self, location: Location<'a>, typ: Type<'a>) -> asg::Type<'a> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> made cold {typ}");
         }
         let id = self.cold_types.len();

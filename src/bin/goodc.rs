@@ -17,7 +17,7 @@ use russ::{
 fn main() {
     let args = get_args();
     match args.command {
-        Command::Run(path) => run(path, args.cc_args, args.rest),
+        Command::Run(path) => run(path, args.options),
         Command::Clean => clean(),
     }
 }
@@ -26,17 +26,29 @@ fn clean() {
     call("rm", &[OUT, OUT_ASM, OUT_IR]).unwrap_or(());
 }
 
-fn run(path: String, cc_args: Vec<String>, args: env::Args) {
-    compile(path, cc_args);
-    run_out(args);
+#[derive(Default)]
+struct Options {
+    compile_options: CompileOptions,
+    rest: Vec<String>,
 }
 
-fn compile(path: String, cc_args: Vec<String>) {
+fn run(path: String, options: Options) {
+    compile(path, options.compile_options);
+    run_out(options.rest);
+}
+
+#[derive(Default)]
+struct CompileOptions {
+    cc_args: Vec<String>,
+    debug: bool,
+}
+
+fn compile(path: String, options: CompileOptions) {
     let source = read_source(path);
-    let ir = process(source);
+    let ir = process(source, options.debug);
     create_build_dir();
     dump(ir);
-    postcompile(cc_args);
+    postcompile(options.cc_args);
 }
 
 fn create_build_dir() {
@@ -49,7 +61,7 @@ fn get_args() -> Args {
     let mut args = args();
     args.next();
     let command = get_command(&mut args);
-    let mut cc_args = Vec::new();
+    let mut options = Options::default();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--" => break,
@@ -58,18 +70,15 @@ fn get_args() -> Args {
                     if &arg == "cc-" {
                         break;
                     }
-                    cc_args.push(arg);
+                    options.compile_options.cc_args.push(arg);
                 }
             }
+            "-debug" => options.compile_options.debug = true,
             _ => die(Unexpected("argument", arg)),
         }
     }
-    let rest = args;
-    Args {
-        command,
-        cc_args,
-        rest,
-    }
+    options.rest = args.collect();
+    Args { command, options }
 }
 
 fn get_command(args: &mut env::Args) -> Command {
@@ -113,8 +122,7 @@ impl Display for ArgsError {
 
 struct Args {
     command: Command,
-    cc_args: Vec<String>,
-    rest: env::Args,
+    options: Options,
 }
 
 enum Command {
@@ -129,15 +137,15 @@ fn postcompile(cc_args: Vec<String>) {
     call("cc", &args).or_die();
 }
 
-fn run_out(args: env::Args) {
+fn run_out(args: Vec<String>) {
     process::run(OUT, args);
 }
 
-fn process(source: Source) -> IR {
+fn process(source: Source, debug: bool) -> IR {
     let tokens = lex(&source);
     let ast = parse(tokens);
-    let asg = analyse(ast);
-    generate(&asg)
+    let asg = analyse(ast, debug);
+    generate(&asg, debug)
 }
 
 fn dump(ir: IR) {

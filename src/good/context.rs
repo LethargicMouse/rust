@@ -1,15 +1,14 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::good::analyse::DEBUG;
-
 pub struct Context<'a, T> {
     pub sup: Vec<HashMap<&'a str, T>>,
+    pub debug: bool,
 }
 
 impl<'a, T: Debug> Context<'a, T> {
-    pub fn new() -> Self {
+    pub fn new(debug: bool) -> Self {
         let sup = vec![HashMap::new()];
-        Self { sup }
+        Self { sup, debug }
     }
 
     pub fn get(&self, key: &str) -> Option<&T> {
@@ -17,29 +16,23 @@ impl<'a, T: Debug> Context<'a, T> {
     }
 
     pub fn insert(&mut self, key: &'a str, value: T) {
-        if DEBUG {
+        if self.debug {
             eprintln!("> {key} = {value:?}");
         }
         self.sup.last_mut().unwrap().insert(key, value);
     }
 
     pub fn new_layer(&mut self) {
-        if DEBUG {
+        if self.debug {
             eprintln!("> new layer");
         }
         self.sup.push(HashMap::new());
     }
 
     pub fn pop_layer(&mut self) -> HashMap<&'a str, T> {
-        if DEBUG {
+        if self.debug {
             eprintln!("> pop layer");
         }
         self.sup.pop().unwrap()
-    }
-}
-
-impl<'a, T: Debug> Default for Context<'a, T> {
-    fn default() -> Self {
-        Self::new()
     }
 }
