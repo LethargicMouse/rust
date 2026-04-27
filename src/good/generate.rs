@@ -829,7 +829,7 @@ impl<'a, 'b, 'c> GenFun<'a, 'b, 'c> {
             BinOp::Multiply => ir::BinOp::Multiply,
             BinOp::Equal => ir::BinOp::Equal(self.sup.base(typ)),
             BinOp::Less => ir::BinOp::Less(self.sup.base(typ)),
-            BinOp::NotEqual => ir::BinOp::Inequal,
+            BinOp::NotEqual => ir::BinOp::Inequal(self.sup.base(typ)),
             BinOp::Modulo => ir::BinOp::Urem,
             BinOp::Divide => ir::BinOp::Div,
             BinOp::And => ir::BinOp::And,
